@@ -1,0 +1,46 @@
+test.sh
+/.env
+*.key
+keys.json
+*.conf
+*.log
+*.log.[0-9]*
+*.log.[0-9]*.gz
+*.sqlite
+.docker/
+.local/
+.cache
+py_envs/
+.python_history
+__pycache__/
+.Trash-1000/
+ddns/*.txt
+ddns/*.log
+
+# NPM data
+nginx-proxy-manager/data/
+nginx-proxy-manager/letsencrypt/
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Admin panel
+.bash_history
+.bash_logout
+.bashrc
+.config/
+.gitconfig
+.lesshst
+.profile
+.selected_editor
+.ssh/
+.sudo_as_admin_successful
+.viminfo
