@@ -2,32 +2,25 @@
 
 Repository hosting the infrastructure for all the Pis (installation + proxypi package + components).
 
-
-## Objectives
-
-Roles and components associated:
-- `LIGHTHOUSE` : accepts connections on the specified range and controls them
-- `PROXY` : connects to a lighthouse
-- `SCRAPER` : uses its scraper component
-- `NAS` : joins the lighthouse storage infrastructure
-
-You can be both lighthouse and proxy for an extented network.
-
 ## TO DO
 
+- You can be both lighthouse and proxy for an extented network (not possible for now, wireguard configuration is overwritten for the steps of LIGHTHOUSE and PROXY)
 - forwarding websites (livebox/# and ahoonepi.fr:81 (nginx proxy manager) for distant access) and 8080 and 8000 (broker and scraper)
+- Nginx Proxy Manager web interface is accessible on localhost, port `81`, but is not exposed to the internet for security reasons.
+- Should add a crontab jobs and a small logs files to automatically ping the proxies to get their status.
 
 ## Initialization
 
 ### Download
 
-```bash
-git clone https://github.com/ahoone/ahoonepi-proxypi .
-```
-
 **The repository is supposed to be then entire `/home/admin` folder!**
 
-### `.env`
+```bash
+git clone https://github.com/ahoone/ahoonepi-proxypi .
+cd ahoonepi-proxy
+```
+
+#### `.env`
 
 ```bash
 ALLOWED_NETWORKS_BROKER="placeholder"
@@ -40,8 +33,8 @@ HTTP_PORT_SCRAPER="8000"
 LIGHTHOUSE_DUMMY_USER=""
 LIGHTHOUSE_IP=""
 LIGHTHOUSE_SSH_PORT=""
-LIGHTHOUSE_WIREGUARD_PUBLIC_KEY=""
 LIGHTHOUSE_WIREGUARD_LISTEN_PORT=""
+LIGHTHOUSE_WIREGUARD_PUBLIC_KEY=""
 NODE_ROLE="LIGHTHOUSE,SCRAPER,DDNS_UPKEEPER"
 OVH_HOST=""
 OVH_PASS=""
@@ -49,13 +42,19 @@ OVH_USER=""
 PROXY_ID=""
 ```
 
-### Scripts
+Roles and components associated:
+- `LIGHTHOUSE` : accepts connections on the specified range and controls them
+- `PROXY` : connects to a lighthouse
+- `SCRAPER` : uses its scraper component
+- `NAS` : joins the lighthouse storage infrastructure
 
 ```bash
 ./init.sh
+sudo reboot
 ```
 
-Nginx Proxy Manager web interface is accessible on localhost, port `81`, but is not exposed to the internet for security reasons.
+
+### Scripts
 
 ## Access remote to the server
 
@@ -77,75 +76,18 @@ sudo fusermount -u /mnt/remote
 
 ### Proxies management
 
-**Both SSH and Wireguard are active.**
-
-To connect to a remote proxy from the lighthouse, you need to add the public key:
-```bash
-ssh-copy-id -i ~/.ssh/id_proxy_access.pub -p 22XX user@localhost
-```
-
-And then you can connect to it through:
-```bash
-ssh -i /home/user/.ssh/id_proxy_access -p 22XX user@localhost
-```
-
 Add the alias for the `proxypi` library:
 ```bash
 source .bash_aliases
-```
-
-```bash
-proxypi ping
-```
-
-```
-proxypi.sh - ProxyPi Management Tool
-====================================
-
-	apt-update                                    Test if proxies' apt are up-to-date                                                                                             
-
-	apt-upgrade                                   Upgrades the proxies                                                                                                            
-
-	git-pull                                      Upgrades the reference repository                                                                                               
-
-	load-wireguard                                Add to the lighthouse the peer proxies keys                                                                                     
-
-	ping                                          Check connectivity and status of all proxies                                                                                    
-
-	ping-wireguard [-a]                           Check connectivity through Wireguard. -a for getting just the available ips address for the scraper component.                  
-
-	swarm-execute  <timeout> <command>            Run a command on ALL proxies   
+proxypi
 ```
 
 > **It is absolutely normal for wireguard ping to be ~3ms, about 150 times faster than SSH connection, which includes much more steps.**
 
-**Should add a crontab jobs and a small logs files to automatically ping the proxies to get their status.**
-
 > **Wireguard default VPN host is 10.0.0.1 so the first ahoonepi proxy is 10.0.0.2 (ahoonepi-proxy-2).**
 
-> If you run the docker initialization script with the proxypi swarm method, be aware that `bash` and `./` are **not** equivalent:
-> ```
-> xxx@ahoonepi:~ $ proxypi --swarm-execute 120 "sudo bash /ahoonepi-proxy/init_docker.sh"
-> ┌─────────────────────────────────────────────────────────────────────────────┒
-> │HOSTNAME                │PORT    │COMMAND STATUS    │COMMAND LATENCY (ms)    ┃
-> │────────────────────────┼────────┼──────────────────┼────────────────────────┃
-> │ahoonepi-proxy-14       │2214    │✗ Failed.         │10                      ┃
-> │ahoonepi-proxy-3        │2203    │✗ Failed.         │9                       ┃
-> │ahoonepi-proxy-2        │2202    │✗ Failed.         │9                       ┃
-> ┕━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
-> xxx@ahoonepi:~ $ proxypi --swarm-execute 120 "sudo ./ahoonepi-proxy/init_docker.sh"
-> ┌─────────────────────────────────────────────────────────────────────────────┒
-> │HOSTNAME                │PORT    │COMMAND STATUS    │COMMAND LATENCY (ms)    ┃
-> │────────────────────────┼────────┼──────────────────┼────────────────────────┃
-> │ahoonepi-proxy-3        │2203    │✓ Success.        │7690                    ┃
-> │ahoonepi-proxy-14       │2214    │✓ Success.        │7724                    ┃
-> │ahoonepi-proxy-2        │2202    │✓ Success.        │7757                    ┃
-> ┕━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
-> ```
 
 #### Ideas for proxypi
-
-- Flags :
 
 | Arg.                                  | For:                                                                  |
 |---------------------------------------|-----------------------------------------------------------------------|
@@ -187,10 +129,6 @@ They all connect by `autossh` (reverse tunnel) towards the `proxypi` user of the
 However, all proxies are accessible **from any user of the lighthouse** through an opened port on `admin@localhost`.
 
 The number of the opened port is decided by concatenate the prefix `22` and the proxy's ID (from `02` to `99`, `00` and `01` referring to the lighthouse).
-
-Broker is accessible on port 8080.
-
-Scraper is accesible on port 8000.
 
 
 ## To format the python code

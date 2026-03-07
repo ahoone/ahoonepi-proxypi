@@ -43,7 +43,7 @@ declare -A FCT_DESCR=(
     [load-wireguard]="Add to the lighthouse the peer proxies keys"
     [ping]="Check connectivity and status of all proxies"
     [ping-wireguard]="Check connectivity through Wireguard. -a for getting just the available ips address for the scraper component."
-    [swarm-execute]="Run a command on ALL proxies"
+    [swarm-execute]="Run a command on ALL proxies. For script execution 'bash' and './' are not equivalent"
 )
 
 declare -A FCT_FLAGS=(

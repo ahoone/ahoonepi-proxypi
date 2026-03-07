@@ -2,18 +2,22 @@ test.sh
 /.env
 *.key
 keys.json
+
+# Logs
 *.conf
 *.log
 *.log.[0-9]*
 *.log.[0-9]*.gz
 *.sqlite
-.docker/
-.local/
-.cache
+
+.Trash-1000/
+
+# Python
 py_envs/
 .python_history
 __pycache__/
-.Trash-1000/
+
+# DDNS data
 ddns/*.txt
 ddns/*.log
 
@@ -44,3 +48,6 @@ nginx-proxy-manager/letsencrypt/
 .ssh/
 .sudo_as_admin_successful
 .viminfo
+.docker/
+.local/
+.cache

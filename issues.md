@@ -28,3 +28,24 @@ Hit:3 http://deb.debian.org/debian-security trixie-security InRelease
 Hit:4 http://archive.raspberrypi.com/debian trixie InRelease     
 3 packages can be upgraded. Run 'apt list --upgradable' to see them.
 ```
+
+- If you run the docker initialization script with the proxypi swarm method, be aware that `bash` and `./` are **not** equivalent:
+
+```
+xxx@ahoonepi:~ $ proxypi --swarm-execute 120 "sudo bash /ahoonepi-proxy/init_docker.sh"
+┌─────────────────────────────────────────────────────────────────────────────┒
+│HOSTNAME                │PORT    │COMMAND STATUS    │COMMAND LATENCY (ms)    ┃
+│────────────────────────┼────────┼──────────────────┼────────────────────────┃
+│ahoonepi-proxy-14       │2214    │✗ Failed.         │10                      ┃
+│ahoonepi-proxy-3        │2203    │✗ Failed.         │9                       ┃
+│ahoonepi-proxy-2        │2202    │✗ Failed.         │9                       ┃
+┕━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+xxx@ahoonepi:~ $ proxypi --swarm-execute 120 "sudo ./ahoonepi-proxy/init_docker.sh"
+┌─────────────────────────────────────────────────────────────────────────────┒
+│HOSTNAME                │PORT    │COMMAND STATUS    │COMMAND LATENCY (ms)    ┃
+│────────────────────────┼────────┼──────────────────┼────────────────────────┃
+│ahoonepi-proxy-3        │2203    │✓ Success.        │7690                    ┃
+│ahoonepi-proxy-14       │2214    │✓ Success.        │7724                    ┃
+│ahoonepi-proxy-2        │2202    │✓ Success.        │7757                    ┃
+┕━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+```
