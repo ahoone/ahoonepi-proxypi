@@ -9,6 +9,7 @@ keys.json
 *.log.[0-9]*
 *.log.[0-9]*.gz
 *.sqlite
+*.db
 
 .Trash-1000/
 

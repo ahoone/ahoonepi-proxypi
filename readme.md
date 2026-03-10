@@ -1,4 +1,4 @@
-# ahoonepi-lighthouse
+# ahoonepi-proxypi
 
 Repository hosting the infrastructure for all the Pis (installation + proxypi package + components).
 
@@ -8,6 +8,15 @@ Repository hosting the infrastructure for all the Pis (installation + proxypi pa
 - forwarding websites (livebox/# and ahoonepi.fr:81 (nginx proxy manager) for distant access) and 8080 and 8000 (broker and scraper)
 - Nginx Proxy Manager web interface is accessible on localhost, port `81`, but is not exposed to the internet for security reasons.
 - Should add a crontab jobs and a small logs files to automatically ping the proxies to get their status.
+
+| Arg.                                  | For:                                                                  |
+|---------------------------------------|-----------------------------------------------------------------------|
+| -h                                    | human readable                                                        |
+| -l                                    | logs                                                                  |
+| -nwrg                                 | warnings (terminal window too small)                                  |
+| swarm-execute -o                      | get output                                                            |
+| info                                  | Collect the specs of the network. (not yet implemented)               |
+| ping-cloudflare                       | Test if the proxy is able to bypass cloudflare. (nyi)                 |
 
 ## Initialization
 
@@ -86,17 +95,6 @@ proxypi
 
 > **Wireguard default VPN host is 10.0.0.1 so the first ahoonepi proxy is 10.0.0.2 (ahoonepi-proxy-2).**
 
-
-#### Ideas for proxypi
-
-| Arg.                                  | For:                                                                  |
-|---------------------------------------|-----------------------------------------------------------------------|
-| -h                                    | human readable                                                        |
-| -l                                    | logs                                                                  |
-| -nwrg                                 | warnings (terminal window too small)                                  |
-| swarm-execute -o                      | get output                                                            |
-| info                                  | Collect the specs of the network. (not yet implemented)               |
-| ping-cloudflare                       | Test if the proxy is able to bypass cloudflare. (nyi)                 |
 
 ### Scraper component
 

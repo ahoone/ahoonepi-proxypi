@@ -5,17 +5,16 @@
 source ui.sh
 source .env
 
-
 WIREGUARD_NETWORK_PREFIX="10.0.0"
-WIREGUARD_LIGHTHOUSE_ID=1
+WIREGUARD_LIGHTHOUSE_ID="1"
 PROXYPI_RANGE_REGEX="22[0-9]{2}"
 
 PROXYPI_USER="admin"
 LIGHTHOUSE_PRIVATE_KEY_PATH="/home/admin/.ssh/id_proxy_access"
 
 WIREGUARD_DEFAULT_PING_SAMPLE_SIZE="1"
-DEFAULT_SSH_CONNECTION_PLUS_INSTRUCTIONS_TIMEOUT=16
-TCP_CONNECTION_TIMEOUT=8
+DEFAULT_SSH_CONNECTION_PLUS_INSTRUCTIONS_TIMEOUT="16"
+TCP_CONNECTION_TIMEOUT="8"
 
 
 #######################################
@@ -526,6 +525,12 @@ wireguard::load() {
 
 #######################################
 #######################################
+
+
+# no fucking idea if this working to stop the execution when sourced
+if [[ "${BASH_SOURCE[0]}" != "${0}" ]]; then
+    return
+fi
 
 
 if [[ $# -eq 0 ]]; then

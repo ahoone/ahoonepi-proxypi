@@ -49,3 +49,14 @@ xxx@ahoonepi:~ $ proxypi --swarm-execute 120 "sudo ./ahoonepi-proxy/init_docker.
 │ahoonepi-proxy-2        │2202    │✓ Success.        │7757                    ┃
 ┕━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 ```
+
+another problem with swarm execute on `;;`
+```
+admin@ahoonepi:~ $ proxypi swarm-execute 120 "cd ahoonepi-proxypi;; echo NODE_ROLE=PROXY,SCRAPER\nLIGHTHOUSE_IP=ahoonepi.fr > .env"
+HOSTNAME                │PORT    │COMMAND STATUS    │COMMAND LATENCY (ms)    
+────────────────────────┼────────┼──────────────────┼────────────────────────
+                        │2202    │                  │0                       
+                        │2203    │                  │0                       
+                        │2214    │                  │0                       
+```
+AND NO FUCKING IDEA OF WHY THE ECHO > IS NOT WORKING TROUGH SWARM-EXECUTE

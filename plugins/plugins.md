@@ -2,6 +2,8 @@ Plugins are the pieces of code that may be used by multiple docker services.
 
 So far it includes the Broker and the Scraper.
 
+# should it have its own requirements file ?
+
 # ghost folder
 
 The problem is that :

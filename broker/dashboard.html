@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;600&family=IBM+Plex+Sans:wght@300;400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="dashboard.css">
+</head>
+<body>
+
+<header>
+<!--   <div class="brand">
+    <div class="brand-icon">
+      <svg fill="none" viewBox="0 0 24 24" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25m18 0A2.25 2.25 0 0018.75 3H5.25A2.25 2.25 0 003 5.25m18 0H3"/></svg>
+    </div>
+    <h1>NET<span>/</span>WATCH</h1>
+  </div>
+ -->  <div class="meta">
+    <span><span class="live-dot"></span> &nbsp;live</span>
+    <span id="ts" class="ts">—</span>
+  </div>
+</header>
+
+<div class="stats-row" id="stats">
+  <div class="stat-card c-total">
+    <div class="stat-label">Total Nodes</div>
+    <div class="stat-value" id="s-total">—</div>
+  </div>
+  <div class="stat-card c-online">
+    <div class="stat-label">Online</div>
+    <div class="stat-value" id="s-online">—</div>
+  </div>
+  <div class="stat-card c-ssh">
+    <div class="stat-label">Avg SSH RTT</div>
+    <div class="stat-value" id="s-ssh">—<span class="unit">ms</span></div>
+  </div>
+  <div class="stat-card c-net">
+    <div class="stat-label">Avg Internet</div>
+    <div class="stat-value" id="s-net">—<span class="unit">ms</span></div>
+  </div>
+</div>
+
+<div class="table-wrap">
+  <div class="table-header">
+    <span class="table-title">Nodes</span>
+    <button class="refresh-btn" id="refreshBtn" onclick="fetchData()">
+      <svg fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"/>
+      </svg>
+      Refresh
+    </button>
+  </div>
+  <div id="table-container">
+    <div class="empty-state">Loading…</div>
+  </div>
+</div>
+
+<div class="table-wrap">
+  <div class="table-header">
+    <span class="table-title">Broker</span>
+    <div class="meta">
+      <span><span class="live-dot"></span> &nbsp;live</span>
+      <span id="ts" class="ts">—</span>
+    </div>
+  </div>
+  <div id="table-container">
+    <div class="empty-state">Loading…</div>
+  </div>
+</div>
+
+<script>
+  // ── CONFIG ──────────────────────────────────────
+  const API_URL = '/nodes';          // ← change to your FastAPI endpoint
+  const AUTO_REFRESH_MS = 30_000;    // 0 to disable
+  // ────────────────────────────────────────────────
+
+  function stripAnsi(str) {
+    return str.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '').replace(/\x1b\([BJ]/g, '');
+  }
+
+  function parseRows(lines) {
+    const rows = [];
+    for (const raw of lines) {
+      const clean = stripAnsi(raw);
+      if (/^─/.test(clean.trim()) || clean.trim().startsWith('HOSTNAME')) continue;
+      const parts = clean.split('│').map(p => p.trim());
+      if (parts.length < 5) continue;
+      rows.push({
+        hostname : parts[0],
+        port     : parts[1],
+        ipv6     : parts[2],
+        ssh      : parts[3] === '' ? null : parseInt(parts[3]),
+        internet : parts[4] === '' ? null : parseInt(parts[4]),
+      });
+    }
+    // Sort alphabetically by hostname (case-insensitive)
+    rows.sort((a, b) => a.hostname.toLowerCase().localeCompare(b.hostname.toLowerCase()));
+    return rows;
+  }
+
+  function latClass(ms) {
+    if (ms === null) return 'lat-none';
+    if (ms < 200) return 'lat-good';
+    if (ms < 400) return 'lat-ok';
+    return 'lat-bad';
+  }
+
+  function fillClass(ms) {
+    if (ms === null) return '';
+    if (ms < 200) return 'fill-good';
+    if (ms < 400) return 'fill-ok';
+    return 'fill-bad';
+  }
+
+  function latPct(ms, max = 600) {
+    if (ms === null) return 0;
+    return Math.min(100, (ms / max) * 100);
+  }
+
+  function avg(arr) {
+    const vals = arr.filter(v => v !== null);
+    if (!vals.length) return null;
+    return Math.round(vals.reduce((a,b) => a+b, 0) / vals.length);
+  }
+
+  function renderTable(rows) {
+    if (!rows.length) {
+      document.getElementById('table-container').innerHTML = '<div class="empty-state">No data returned.</div>';
+      return;
+    }
+
+    const tbody = rows.map((r) => {
+      const isLighthouse = r.hostname.includes('lighthouse');
+      const hostClean = r.hostname.replace(/\(lighthouse\)/i, '').trim();
+      const dotClass = isLighthouse ? 'lighthouse' : (r.ssh !== null || r.internet !== null ? 'online' : 'offline');
+
+      const sshCell = r.ssh !== null
+        ? `<span class="latency ${latClass(r.ssh)}">${r.ssh}<span style="color:var(--text-dim);font-size:.65rem">ms</span>
+            <span class="latency-bar"><span class="latency-fill ${fillClass(r.ssh)}" style="width:${latPct(r.ssh)}%"></span></span>
+           </span>`
+        : `<span class="lat-none">—</span>`;
+
+      const netCell = r.internet !== null
+        ? `<span class="latency ${latClass(r.internet)}">${r.internet}<span style="color:var(--text-dim);font-size:.65rem">ms</span>
+            <span class="latency-bar"><span class="latency-fill ${fillClass(r.internet)}" style="width:${latPct(r.internet)}%"></span></span>
+           </span>`
+        : `<span class="lat-none">—</span>`;
+
+      return `<tr>
+        <td>
+          <div class="host-cell">
+            <span class="host-dot ${dotClass}"></span>
+            ${hostClean}
+            ${isLighthouse ? '<span class="badge badge-lh">LIGHTHOUSE</span>' : ''}
+          </div>
+        </td>
+        <td class="port-cell">${r.port || '—'}</td>
+        <td class="ipv6-cell" title="${r.ipv6}">${r.ipv6}</td>
+        <td>${sshCell}</td>
+        <td>${netCell}</td>
+      </tr>`;
+    }).join('');
+
+    document.getElementById('table-container').innerHTML = `
+      <table>
+        <thead>
+          <tr>
+            <th>Hostname</th>
+            <th>Port</th>
+            <th>IPv6 Address</th>
+            <th>SSH RTT</th>
+            <th>Internet</th>
+          </tr>
+        </thead>
+        <tbody>${tbody}</tbody>
+      </table>`;
+
+    // stats
+    document.getElementById('s-total').textContent = rows.length;
+    document.getElementById('s-online').textContent = rows.filter(r => r.ssh !== null || r.internet !== null).length;
+    const avgSSH = avg(rows.map(r => r.ssh));
+    const avgNet = avg(rows.map(r => r.internet));
+    document.getElementById('s-ssh').innerHTML = avgSSH !== null ? `${avgSSH}<span class="unit">ms</span>` : `—<span class="unit">ms</span>`;
+    document.getElementById('s-net').innerHTML = avgNet !== null ? `${avgNet}<span class="unit">ms</span>` : `—<span class="unit">ms</span>`;
+
+    document.getElementById('ts').textContent = 'updated ' + new Date().toLocaleTimeString();
+  }
+
+  async function fetchData() {
+    const btn = document.getElementById('refreshBtn');
+    btn.classList.add('spinning');
+    try {
+      const res = await fetch(API_URL);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
+      const rows = parseRows(json.output || []);
+      renderTable(rows);
+    } catch (e) {
+      document.getElementById('table-container').innerHTML =
+        `<div class="error-state">⚠ Failed to fetch: ${e.message}</div>`;
+    } finally {
+      btn.classList.remove('spinning');
+    }
+  }
+
+  fetchData()
+  if (AUTO_REFRESH_MS > 0) setInterval(fetchData, AUTO_REFRESH_MS);
+</script>
+</body>
+</html>

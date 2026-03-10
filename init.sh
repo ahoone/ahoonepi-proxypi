@@ -2,8 +2,6 @@
 source ui.sh
 source .env
 
-set -euo pipefail
-
 
 #######################################
 #######################################
@@ -57,13 +55,16 @@ if "$bool_missing_required_env_var"; then
     exit
 fi
 
-if [[ "$NODE_ROLE" = *"LIGHTHOUSE"* ]] || [[ "$NODE_ROLE" = *"PROXY"* ]]; then
+if [[ "$NODE_ROLE" = *"LIGHTHOUSE"* ]] && [[ "$NODE_ROLE" = *"PROXY"* ]]; then
     echob "duck off, incompatible roles of proxy and lighthouse for now"; exit
 fi
 
 
 #######################################
 #######################################
+
+
+set -euo pipefail
 
 
 echob "upgrading..."

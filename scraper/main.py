@@ -7,7 +7,6 @@ import ipaddress
 import nodriver as uc
 import os
 import random
-import socket
 import sys
 from typing import List, Dict, Callable
 
@@ -15,13 +14,12 @@ sys.path.insert(0, "/plugins")
 import fast_api_ip_middleware
 
 
+# -------------------------------------------------------------------------------- #
+# -------------------------------------------------------------------------------- #
+
+
 NODE_ROLE = os.getenv("NODE_ROLE").split(",")
-
 assert "SCRAPER" in NODE_ROLE, "The node should be a scraper to launch this image"
-
-
-# -------------------------------------------------------------------------------- #
-# -------------------------------------------------------------------------------- #
 
 
 LIFESPAN_BROWSER = 1  # in hours

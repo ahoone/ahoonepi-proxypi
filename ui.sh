@@ -75,6 +75,24 @@ clean() {
 
 
 #######################################
+# Get the *displayed* string length
+# Globals:
+#   None
+# Arguments:
+#   $*: string
+# Outputs:
+#   Length to stdout
+# Returns:
+#   0 on success
+#######################################
+len() {
+    local sequence=$*
+    local clear=$(clean "$sequence")
+    echo "${#clear}"
+}
+
+
+#######################################
 # Arguments:
 #   $1: string
 #   $2: times
@@ -91,26 +109,6 @@ function repeat_string() {
         local -r result="$(printf "%${times}s")"
         echo -e "${result// /${string}}"
     fi
-}
-
-
-
-
-#######################################
-# Get the *displayed* string length
-# Globals:
-#   None
-# Arguments:
-#   $*: string
-# Outputs:
-#   Length to stdout
-# Returns:
-#   0 on success
-#######################################
-len() {
-    local sequence=$*
-    local clear=$(clean "$sequence")
-    echo "${#clear}"
 }
 
 
