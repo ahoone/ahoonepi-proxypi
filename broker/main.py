@@ -6,10 +6,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 import ipaddress
 import os
+from pydantic import HttpUrl
 import random
 import sqlite3
 import sys
-from typing import List, Dict, Callable
+from typing import Any, Callable, Dict, List, Literal, Union 
 
 sys.path.insert(0, "/plugins")
 import fast_api_ip_middleware
@@ -26,9 +27,47 @@ assert "LIGHTHOUSE" in NODE_ROLE, "The node should be a lighthouse (ie includes 
 BROKER_DATABASE="broker.db"
 BROKER_CLEAR_DB_ON_STARTUP=True
 
+DB_TABLE_URIS_TARGETS="uris_targets"
+DB_TABLE_URIS_RESPONSES="uris_responses"
+
 
 # -------------------------------------------------------------------------------- #
 # -------------------------------------------------------------------------------- #
+
+
+class TabImage:
+
+    def __init__(self) -> None:
+        self.id: int = None
+        self.uri: str = None
+        self.status: Literal["idle", "requesting"] = None
+
+
+class BrowserInstanceImage:
+
+    def __init__(self) -> None:
+        self.id: int = None
+        self.start_timestamp: datetime.datetime = None
+        self.end_timestamp: datetime.datetime = None
+        self.status: Literal["idle", "requesting"] = None
+        self.camera = None
+        self.browsing_history: List[str] = []
+        self.tabs: List[TabImage] = []
+
+
+class ScraperImage:
+
+    def __init__(self, vpn_address: str) -> None:
+        self.online: bool = True
+        self.vpn_address: str = vpn_address
+        self.hostname: str = None
+        self.port: str = None
+        self.ipv6: str = None
+        self.ssh_latency: int = None
+        self.internet_latency: int = None
+        self.vpn_latency: int = None
+        self.spotted: bool = None
+        self.browser_instances: List[BrowserInstanceImage] = []
 
 
 class Broker:
@@ -36,29 +75,58 @@ class Broker:
     def __init__(
         self,
     ) -> None:
-        self._initialized: bool = False
-        self.scrapers: List[str] = []
+        self.scrapers: List[ScraperImage] = []
         self.db_con = None
+
 
     # __INIT__ CAN NOT BE ASYNC IN PYTHON
     @classmethod
     async def create(cls) -> "Broker":
         broker = cls()
-        await broker.initialize()
+        await broker.__initialize()
         return broker
 
-    async def initialize(self) -> None:
-        if not self._initialized:
-            await self.update_scrapers()
-            self.db_con = sqlite3.connect(BROKER_DATABASE)
-            self.db_cur = self.db_con.cursor()
-            self._initialized = True
+
+    async def __initialize(self) -> None:
+        await self.update()
+        self.db_con = sqlite3.connect(BROKER_DATABASE)
+        self.db_cur = self.db_con.cursor()
+        self.initialize_db_tables()
 
 
-    async def update_scrapers(self) -> None:
-        # take a look at /proxypi.sh wireguard::ping
-        self.scrapers = (await proxypi.run("ping-wireguard -a")).splitlines()
+    def initialize_db_tables(self) -> None:
+        response = self.db_cur.execute("SELECT name FROM sqlite_master")
+        if response and DB_TABLE_URIS_TARGETS not in response.fetchall():
+            self.db_cur.execute(f"CREATE TABLE {DB_TABLE_URIS_TARGETS}(uris, timestamp)")
+        if response and DB_TABLE_URIS_RESPONSES not in response.fetchall():
+            self.db_cur.execute(f"CREATE TABLE {DB_TABLE_URIS_RESPONSES}(uris, response, request_timestamp, response_timestamp)")
 
+
+    def promise_scrape(self, uris: Union[str, List[str]]) -> None:
+        data = [(uris, datetime.datetime.now())] if isinstance(uris, str) else [(uri, datetime.datetime.now()) for uri in uris]
+        query = f"INSERT INTO {DB_TABLE_URIS_TARGETS} VALUES (?, ?)"
+        self.db_cur.executemany(query, data)
+        self.db_con.commit()
+
+
+    def get_table_uris_targets(self) -> List[Dict[str, Any]]:
+        query = f"SELECT * FROM {DB_TABLE_URIS_TARGETS}"
+        self.db_cur.execute(query)
+        columns = [desc[0] for desc in self.db_cur.description]
+        return [dict(zip(columns, row)) for row in self.db_cur.fetchall()]
+
+
+    async def update(self) -> None:
+
+        vpn_addresses_availables = (await proxypi.run("ping-wireguard -a")).splitlines()
+
+        for vpn_address in vpn_addresses_availables:
+            if vpn_address not in [_.vpn_address for _ in self.scrapers]:
+                self.scrapers.append(ScraperImage(vpn_address))
+
+        for scraper in self.scrapers:
+            if scraper.vpn_address not in vpn_addresses_availables:
+                scraper.online = False
 
 
 # -------------------------------------------------------------------------------- #
@@ -79,8 +147,9 @@ ALLOWED_NETWORKS = [
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    if BROKER_CLEAR_DB_ON_STARTUP:
+    if BROKER_CLEAR_DB_ON_STARTUP and os.path.exists(BROKER_DATABASE):
         os.remove(BROKER_DATABASE)
+        # automatically created by sqlite3.connect(BROKER_DATABASE)
     app.state.broker = await Broker.create()
     yield
     sqlite3.close(app.state.broker.db_con)
@@ -88,7 +157,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Broker API",
-    description="Scraper",
+    description="Broker",
     version="1.0.0",
     lifespan=lifespan,
 )
@@ -119,17 +188,6 @@ app.add_middleware(
 # -------------------------------------------------------------------------------- #
 
 
-@app.get("/wireguard-status")
-async def wireguard_status():
-    try:
-        return {"output": app.state.broker.scrapers}
-    except Exception as e:
-        line = sys.exc_info()[2].tb_lineno
-        raise HTTPException(
-            status_code=500, detail=f"{type(e).__name__} at line {line}: {str(e)}"
-        )
-
-
 @app.get("/")
 async def home():
     return FileResponse("dashboard.html")
@@ -137,6 +195,41 @@ async def home():
 @app.get("/dashboard.css")
 async def css():
     return FileResponse("dashboard.css")
+
+
+
+@app.post("/scrape/")
+async def promise_scrape(uris: Union[str, List[str]]):
+# async def promise_scrape(uris: Union[HttpUrl, List[HttpUrl]]):
+    try:
+        app.state.broker.promise_scrape(uris)
+    except Exception as e:
+        line = sys.exc_info()[2].tb_lineno
+        raise HTTPException(
+            status_code=500, detail=f"{type(e).__name__} at line {line}: {str(e)}"
+        )
+
+
+@app.get("/table-uris-targets")
+async def get_table_uris_targets():
+    try:
+        return app.state.broker.get_table_uris_targets()
+    except Exception as e:
+        line = sys.exc_info()[2].tb_lineno
+        raise HTTPException(
+            status_code=500, detail=f"{type(e).__name__} at line {line}: {str(e)}"
+        )
+
+
+@app.get("/wireguard-status")
+async def wireguard_status():
+    try:
+        return [_.__dict__ for _ in app.state.broker.scrapers]
+    except Exception as e:
+        line = sys.exc_info()[2].tb_lineno
+        raise HTTPException(
+            status_code=500, detail=f"{type(e).__name__} at line {line}: {str(e)}"
+        )
 
 
 @app.get("/nodes")

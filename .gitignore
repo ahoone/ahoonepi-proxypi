@@ -1,4 +1,6 @@
-test.sh
+scraper/issues.md
+
+test.*
 /.env
 *.key
 keys.json

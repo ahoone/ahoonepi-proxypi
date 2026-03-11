@@ -11,6 +11,7 @@ Repository hosting the infrastructure for all the Pis (installation + proxypi pa
 
 | Arg.                                  | For:                                                                  |
 |---------------------------------------|-----------------------------------------------------------------------|
+| -w (ping...)                          | web format (list of dictionnaries)                                    |
 | -h                                    | human readable                                                        |
 | -l                                    | logs                                                                  |
 | -nwrg                                 | warnings (terminal window too small)                                  |
