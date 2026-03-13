@@ -9,6 +9,8 @@ Repository hosting the infrastructure for all the Pis (installation + proxypi pa
 - Nginx Proxy Manager web interface is accessible on localhost, port `81`, but is not exposed to the internet for security reasons.
 - Should add a crontab jobs and a small logs files to automatically ping the proxies to get their status.
 
+*It is ducking not good because flags' parameters are also treated as flags (not arguments for the function)*
+
 | Arg.                                  | For:                                                                  |
 |---------------------------------------|-----------------------------------------------------------------------|
 | -w (ping...)                          | web format (list of dictionnaries)                                    |

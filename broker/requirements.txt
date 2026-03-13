@@ -12,9 +12,9 @@ pydantic==2.12.5
 pydantic_core==2.41.5
 starlette==0.50.0
 pydantic==2.12.5
-pysqlite3==0.6.0
 typing-inspection==0.4.2
 typing_extensions==4.15.0
 uvicorn==0.38.0
 websockets==16.0
 wrapt==2.1.1
+requests==2.32.5

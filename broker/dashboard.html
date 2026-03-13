@@ -10,19 +10,6 @@
 </head>
 <body>
 
-<header>
-<!--   <div class="brand">
-    <div class="brand-icon">
-      <svg fill="none" viewBox="0 0 24 24" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25m18 0A2.25 2.25 0 0018.75 3H5.25A2.25 2.25 0 003 5.25m18 0H3"/></svg>
-    </div>
-    <h1>NET<span>/</span>WATCH</h1>
-  </div>
- -->  <div class="meta">
-    <span><span class="live-dot"></span> &nbsp;live</span>
-    <span id="ts" class="ts">—</span>
-  </div>
-</header>
-
 <div class="stats-row" id="stats">
   <div class="stat-card c-total">
     <div class="stat-label">Total Nodes</div>
@@ -33,19 +20,19 @@
     <div class="stat-value" id="s-online">—</div>
   </div>
   <div class="stat-card c-ssh">
-    <div class="stat-label">Avg SSH RTT</div>
-    <div class="stat-value" id="s-ssh">—<span class="unit">ms</span></div>
+    <div class="stat-label">Offline</div>
+    <div class="stat-value" id="s-offline">—</div>
   </div>
   <div class="stat-card c-net">
-    <div class="stat-label">Avg Internet</div>
-    <div class="stat-value" id="s-net">—<span class="unit">ms</span></div>
+    <div class="stat-label">Browser Instances</div>
+    <div class="stat-value" id="s-browsers">—</div>
   </div>
 </div>
 
 <div class="table-wrap">
   <div class="table-header">
     <span class="table-title">Nodes</span>
-    <button class="refresh-btn" id="refreshBtn" onclick="fetchData()">
+    <button class="refresh-btn" id="refreshBtn" onclick="fetchNodes()">
       <svg fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"/>
       </svg>
@@ -53,7 +40,7 @@
     </button>
   </div>
   <div id="table-container">
-    <div class="empty-state">Loading…</div>
+    <div class="empty-state">Loading...</div>
   </div>
 </div>
 
@@ -62,151 +49,244 @@
     <span class="table-title">Broker</span>
     <div class="meta">
       <span><span class="live-dot"></span> &nbsp;live</span>
-      <span id="ts" class="ts">—</span>
+      <span id="ts-broker" class="ts">—</span>
     </div>
   </div>
-  <div id="table-container">
-    <div class="empty-state">Loading…</div>
+  <div id="broker-container">
+    <div class="empty-state">Loading...</div>
   </div>
 </div>
 
 <script>
   // ── CONFIG ──────────────────────────────────────
-  const API_URL = '/nodes';          // ← change to your FastAPI endpoint
-  const AUTO_REFRESH_MS = 30_000;    // 0 to disable
+  const API_URL = '/nodes';
+  const AUTO_REFRESH_MS = 1_000;
   // ────────────────────────────────────────────────
 
-  function stripAnsi(str) {
-    return str.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '').replace(/\x1b\([BJ]/g, '');
-  }
+  // ── Generic in-place table upsert ───────────────
+  // Updates existing rows/cells without recreating DOM nodes,
+  // so CSS animations (blinking dots) never restart.
+  function upsertTable(container, rows, rowKey, columns) {
+    let table = container.querySelector('table');
 
-  function parseRows(lines) {
-    const rows = [];
-    for (const raw of lines) {
-      const clean = stripAnsi(raw);
-      if (/^─/.test(clean.trim()) || clean.trim().startsWith('HOSTNAME')) continue;
-      const parts = clean.split('│').map(p => p.trim());
-      if (parts.length < 5) continue;
-      rows.push({
-        hostname : parts[0],
-        port     : parts[1],
-        ipv6     : parts[2],
-        ssh      : parts[3] === '' ? null : parseInt(parts[3]),
-        internet : parts[4] === '' ? null : parseInt(parts[4]),
-      });
+    // First render — build skeleton
+    if (!table) {
+      container.innerHTML =
+        '<table><thead><tr>' +
+        columns.map(c => '<th>' + c.label + '</th>').join('') +
+        '</tr></thead><tbody></tbody></table>';
+      table = container.querySelector('table');
     }
-    // Sort alphabetically by hostname (case-insensitive)
-    rows.sort((a, b) => a.hostname.toLowerCase().localeCompare(b.hostname.toLowerCase()));
-    return rows;
+
+    const tbody = table.querySelector('tbody');
+    const seen  = new Set();
+
+    rows.forEach(function(r, idx) {
+      const key = String(rowKey(r));
+      seen.add(key);
+
+      let tr = tbody.querySelector('[data-key="' + key + '"]');
+
+      if (!tr) {
+        tr = document.createElement('tr');
+        tr.dataset.key = key;
+        columns.forEach(function() { tr.appendChild(document.createElement('td')); });
+        tbody.appendChild(tr);
+      }
+
+      // Keep row in sorted order without moving it if already correct
+      const siblings = [...tbody.children];
+      if (siblings.indexOf(tr) !== idx) {
+        tbody.insertBefore(tr, tbody.children[idx] || null);
+      }
+
+      // Update only cells whose content actually changed
+      columns.forEach(function(col, i) {
+        const next = col.render(r);
+        if (tr.children[i].innerHTML !== next) {
+          tr.children[i].innerHTML = next;
+        }
+      });
+
+      // Sync row-level classes
+      const isLighthouse = r.node_id === 1;
+    });
+
+    // Remove rows that no longer exist in the data
+    [...tbody.querySelectorAll('tr')].forEach(function(tr) {
+      if (!seen.has(tr.dataset.key)) tr.remove();
+    });
   }
 
-  function latClass(ms) {
-    if (ms === null) return 'lat-none';
-    if (ms < 200) return 'lat-good';
-    if (ms < 400) return 'lat-ok';
-    return 'lat-bad';
-  }
+  // ── Nodes ────────────────────────────────────────
+  const NODE_COLUMNS = [
+    {
+      label: 'Hostname',
+      render: function(r) {
+        const isLighthouse    = r.node_id === 1;
+        const dotClass     = (isLighthouse) ? 'lighthouse' : (r.online ? 'online' : 'offline');
+        return '<div class="host-cell">' +
+          '<span class="host-dot ' + dotClass + '"></span>' +
+          r.hostname +
+          (isLighthouse ? ' <span class="badge badge-lh">LIGHTHOUSE</span>' : '') +
+          '</div>';
+      }
+    },
+    {
+      label: 'Node ID ↓',
+      render: function(r) {
+        return r.node_id === 1
+          ? '<span class="node-id">' + r.node_id + '</span>'
+          : '<span class="node-id">' + (r.node_id != null ? r.node_id : '—') + '</span>';
+      }
+    },
+    {
+      label: 'IPv6',
+      render: function(r) {
+        return '<span class="ipv6-cell" title="' + (r.ipv6 || '') + '">' + (r.ipv6 || '—') + '</span>';
+      }
+    },
+    {
+      label: 'Status',
+      render: function(r) {
+        return r.status
+          ? '<span class="badge badge-status">' + r.status + '</span>'
+          : '<span class="lat-none">—</span>';
+      }
+    },
+    {
+      label: 'Browsers',
+      render: function(r) {
+        const n = Array.isArray(r.browser_instances) ? r.browser_instances.length : 0;
+        return n > 0
+          ? '<span class="browser-count">' + n + '</span>'
+          : '<span class="lat-none">0</span>';
+      }
+    }
+  ];
 
-  function fillClass(ms) {
-    if (ms === null) return '';
-    if (ms < 200) return 'fill-good';
-    if (ms < 400) return 'fill-ok';
-    return 'fill-bad';
-  }
+  function renderNodes(rawRows) {
+    const container = document.getElementById('table-container');
+    const rows = rawRows.filter(function(r) { return r && typeof r.hostname === 'string'; });
 
-  function latPct(ms, max = 600) {
-    if (ms === null) return 0;
-    return Math.min(100, (ms / max) * 100);
-  }
-
-  function avg(arr) {
-    const vals = arr.filter(v => v !== null);
-    if (!vals.length) return null;
-    return Math.round(vals.reduce((a,b) => a+b, 0) / vals.length);
-  }
-
-  function renderTable(rows) {
     if (!rows.length) {
-      document.getElementById('table-container').innerHTML = '<div class="empty-state">No data returned.</div>';
+      container.innerHTML = '<div class="empty-state">No data returned.</div>';
       return;
     }
 
-    const tbody = rows.map((r) => {
-      const isLighthouse = r.hostname.includes('lighthouse');
-      const hostClean = r.hostname.replace(/\(lighthouse\)/i, '').trim();
-      const dotClass = isLighthouse ? 'lighthouse' : (r.ssh !== null || r.internet !== null ? 'online' : 'offline');
+    rows.sort(function(a, b) { return (a.node_id != null ? a.node_id : Infinity) - (b.node_id != null ? b.node_id : Infinity); });
+    upsertTable(container, rows, function(r) { return r.node_id; }, NODE_COLUMNS);
 
-      const sshCell = r.ssh !== null
-        ? `<span class="latency ${latClass(r.ssh)}">${r.ssh}<span style="color:var(--text-dim);font-size:.65rem">ms</span>
-            <span class="latency-bar"><span class="latency-fill ${fillClass(r.ssh)}" style="width:${latPct(r.ssh)}%"></span></span>
-           </span>`
-        : `<span class="lat-none">—</span>`;
-
-      const netCell = r.internet !== null
-        ? `<span class="latency ${latClass(r.internet)}">${r.internet}<span style="color:var(--text-dim);font-size:.65rem">ms</span>
-            <span class="latency-bar"><span class="latency-fill ${fillClass(r.internet)}" style="width:${latPct(r.internet)}%"></span></span>
-           </span>`
-        : `<span class="lat-none">—</span>`;
-
-      return `<tr>
-        <td>
-          <div class="host-cell">
-            <span class="host-dot ${dotClass}"></span>
-            ${hostClean}
-            ${isLighthouse ? '<span class="badge badge-lh">LIGHTHOUSE</span>' : ''}
-          </div>
-        </td>
-        <td class="port-cell">${r.port || '—'}</td>
-        <td class="ipv6-cell" title="${r.ipv6}">${r.ipv6}</td>
-        <td>${sshCell}</td>
-        <td>${netCell}</td>
-      </tr>`;
-    }).join('');
-
-    document.getElementById('table-container').innerHTML = `
-      <table>
-        <thead>
-          <tr>
-            <th>Hostname</th>
-            <th>Port</th>
-            <th>IPv6 Address</th>
-            <th>SSH RTT</th>
-            <th>Internet</th>
-          </tr>
-        </thead>
-        <tbody>${tbody}</tbody>
-      </table>`;
-
-    // stats
-    document.getElementById('s-total').textContent = rows.length;
-    document.getElementById('s-online').textContent = rows.filter(r => r.ssh !== null || r.internet !== null).length;
-    const avgSSH = avg(rows.map(r => r.ssh));
-    const avgNet = avg(rows.map(r => r.internet));
-    document.getElementById('s-ssh').innerHTML = avgSSH !== null ? `${avgSSH}<span class="unit">ms</span>` : `—<span class="unit">ms</span>`;
-    document.getElementById('s-net').innerHTML = avgNet !== null ? `${avgNet}<span class="unit">ms</span>` : `—<span class="unit">ms</span>`;
-
-    document.getElementById('ts').textContent = 'updated ' + new Date().toLocaleTimeString();
+    // Stats
+    const onlineCount   = rows.filter(function(r) { return r.online; }).length;
+    const totalBrowsers = rows.reduce(function(s, r) { return s + (Array.isArray(r.browser_instances) ? r.browser_instances.length : 0); }, 0);
+    document.getElementById('s-total').textContent    = rows.length;
+    document.getElementById('s-online').textContent   = onlineCount;
+    document.getElementById('s-offline').textContent  = rows.length - onlineCount;
+    document.getElementById('s-browsers').textContent = totalBrowsers;
+    // document.getElementById('ts').textContent         = 'updated ' + new Date().toLocaleTimeString();
   }
 
-  async function fetchData() {
+  async function fetchNodes() {
     const btn = document.getElementById('refreshBtn');
     btn.classList.add('spinning');
     try {
-      const res = await fetch(API_URL);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const res  = await fetch(API_URL);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
       const json = await res.json();
-      const rows = parseRows(json.output || []);
-      renderTable(rows);
+      renderNodes(Array.isArray(json) ? json : (json.output || []));
     } catch (e) {
       document.getElementById('table-container').innerHTML =
-        `<div class="error-state">⚠ Failed to fetch: ${e.message}</div>`;
+        '<div class="error-state">Failed to fetch: ' + e.message + '</div>';
     } finally {
       btn.classList.remove('spinning');
     }
   }
 
-  fetchData()
-  if (AUTO_REFRESH_MS > 0) setInterval(fetchData, AUTO_REFRESH_MS);
+  // ── Broker ───────────────────────────────────────
+  const BROKER_COLUMNS = [
+    { label: 'URI',       render: function(r) { return '<span class="uri-cell">'  + (r.uri       || '—') + '</span>'; } },
+    { label: 'Timestamp ↓', render: function(r) { return '<span class="ts-cell">'   + (r.timestamp || '—') + '</span>'; } },
+    { 
+      label: 'Tag', 
+      render: function(r) { 
+        if (!r.tag) {
+          return '<span class="ts-cell">—</span>';
+        }
+        const dynamicStyle = getTagStyle(r.tag);
+        return `<span class="badge" style="${dynamicStyle}">${r.tag}</span>`;
+      } 
+    }
+  ];
+
+  function getTagStyle(tag) {
+    if (!tag) return '';
+
+    // Generate a hash from the tag string
+    let hash = 0;
+    for (let i = 0; i < tag.length; i++) {
+      hash = tag.charCodeAt(i) + ((hash << 5) - hash);
+    }
+
+    // Use the hash to pick a Hue (0-360)
+    const h = Math.abs(hash % 360);
+    
+    // S=80%, L=65% gives a vibrant "neon" color that works well in dark mode
+    const color = `hsl(${h}, 80%, 65%)`;
+    
+    return `
+      background: hsla(${h}, 80%, 65%, 0.1); 
+      color: ${color}; 
+      border: 1px solid hsla(${h}, 80%, 65%, 0.2);
+    `;
+  }
+
+  function getTagColor(tag) {
+    if (!tag) return '';
+    
+    // Generate a simple hash from the string
+    let hash = 0;
+    for (let i = 0; i < tag.length; i++) {
+      hash = tag.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    
+    // Use HSL for "vibrant but readable" colors
+    // Hue: 0-360, Saturation: 70%, Lightness: 85% (pastel look)
+    const h = Math.abs(hash % 360);
+    return `background: hsl(${h}, 70%, 90%); color: hsl(${h}, 80%, 25%); border: 1px solid hsl(${h}, 70%, 80%);`;
+  }
+
+  function renderBroker(rawRows) {
+    const container = document.getElementById('broker-container');
+
+    if (!rawRows.length) {
+      container.innerHTML = '<div class="empty-state">No data returned.</div>';
+      return;
+    }
+
+    upsertTable(container, rawRows, function(r) { return r.id; }, BROKER_COLUMNS);
+    document.getElementById('ts-broker').textContent = 'updated ' + new Date().toLocaleTimeString();
+  }
+
+  async function fetchBroker() {
+    try {
+      const res  = await fetch('/scraping-list');
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const json = await res.json();
+      renderBroker(Array.isArray(json) ? json : (json.output || []));
+    } catch (e) {
+      document.getElementById('broker-container').innerHTML =
+        '<div class="error-state">Failed to fetch: ' + e.message + '</div>';
+    }
+  }
+
+  // ── Boot ─────────────────────────────────────────
+  fetchNodes();
+  fetchBroker();
+  if (AUTO_REFRESH_MS > 0) {
+    setInterval(fetchNodes,   AUTO_REFRESH_MS);
+    setInterval(fetchBroker, AUTO_REFRESH_MS);
+  }
 </script>
 </body>
 </html>
