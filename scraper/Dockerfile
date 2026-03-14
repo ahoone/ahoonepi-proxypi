@@ -48,4 +48,9 @@ COPY . /app/
 
 RUN chmod +x /app/start.sh
 
+# fix for nodirver (running as root || not running sandbox)
+RUN groupadd -r chrome && useradd -r -g chrome -m chrome
+COPY --chown=chrome:chrome . /app
+USER chrome
+
 CMD ["/app/start.sh"]
