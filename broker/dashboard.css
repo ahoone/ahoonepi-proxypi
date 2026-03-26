@@ -62,7 +62,7 @@ header {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: 1rem;
-  margin-bottom: 2rem;
+  margin-bottom: 1.25rem;
 }
 
 .stat-card {
@@ -139,7 +139,7 @@ header {
   color: var(--text-dim);
 }
 
-.refresh-btn {
+/*.refresh-btn {
   background: none;
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -168,7 +168,7 @@ header {
   animation: spin .6s linear infinite;
 }
 
-@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes spin { to { transform: rotate(360deg); } }*/
 
 table {
   width: 100%;
@@ -248,6 +248,44 @@ td {
   color: #6b82a8;
   font-size: .75rem;
 }
+
+.ram-cell {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+}
+
+.ram-specs {
+  flex: 1;
+  text-align: right;
+  color: var(--text-dim);
+  font-size: .75rem;
+}
+
+.ram-divider {
+  color: var(--border);
+  flex-shrink: 0;
+}
+
+.ram-usage {
+  flex: 1;
+  text-align: left;
+  font-size: .72rem;
+  font-weight: 600;
+}
+
+.col-ram {
+  text-align: center;
+}
+
+th.col-ram {
+  text-align: center;
+}
+
+.ram-green  { color: var(--green);  }
+.ram-yellow { color: var(--yellow); }
+.ram-orange { color: #ff9f43;       }
+.ram-red    { color: var(--red);    }
 
 .ipv6-cell {
   color: #6b82a8;

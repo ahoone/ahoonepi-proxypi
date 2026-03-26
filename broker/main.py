@@ -35,6 +35,7 @@ DB_TABLE_URIS_RESPONSES = "uris_responses"
 
 PROXYPI_COMMAND_INFO = Template("info $node_id")
 PROXYPI_COMMAND_AVAILABLE_NODES = "ping-wireguard -a"
+PROXYPI_COMMAND_RAM = Template("ram $node_id")
 
 DISPLAY_LIMIT_SCRAPING_LIST = 200
 
@@ -51,7 +52,7 @@ class TabImage:
         self.status: Literal["idle", "requesting"] = None
 
 
-class BrowserInstanceImage:
+class BrowserImage:
 
     def __init__(self) -> None:
         self.id: int = None
@@ -72,15 +73,16 @@ class ScraperImage:
         self.hostname: str = None
         self.port: str = None
         self.ipv6: str = None
-        # self.ram: ?
+        self.ram_specs: str = None
+        self.ram_usage: str = None
         # self.device_spec: ?
         # self.electricity_consumption: ?
         # self.ssh_latency: int = None
         # self.internet_latency: int = None
         # self.vpn_latency: int = None
         # self.spotted: bool = None
-        self.status: Literal["idle", "requesting"] = None
-        self.browser_instances: List[BrowserInstanceImage] = []
+        # self.status: Literal["idle", "requesting"] = None
+        self.browsers: List[BrowserImage] = []
 
 
     # __INIT__ CAN NOT BE ASYNC IN PYTHON
@@ -100,8 +102,9 @@ class ScraperImage:
         # The update of the ipv6 is not raised by the proxy (ie need to refresh manually)
 
 
-    def update(self) -> None:
-        return
+    async def update(self) -> None:
+        response = await proxypi.run(PROXYPI_COMMAND_RAM.safe_substitute(node_id=self.node_id))
+        self.__dict__.update(json.loads(response))
 
 
 class Broker:
@@ -182,13 +185,13 @@ class Broker:
                 scraper.online = True
 
 
-    def update_nodes(self) -> None:
-        [scraper.update() if scraper.online else None for scraper in self.scrapers]
+    async def update_nodes(self) -> None:
+        [await scraper.update() if scraper.online else None for scraper in self.scrapers]
 
 
     async def update(self) -> None:
         await self.update_available_nodes()
-        self.update_nodes()
+        await self.update_nodes()
         
 
 # -------------------------------------------------------------------------------- #
@@ -210,7 +213,7 @@ ALLOWED_NETWORKS = [
 async def background_broker_update(app):
     while True:
         if hasattr(app.state, "broker"):
-            app.state.broker.update()
+            await app.state.broker.update()
         else:
             raise ValueError("app.state.broker missing")
         await asyncio.sleep(1)

@@ -16,6 +16,8 @@ services:
     environment:
       NODE_ROLE: ${NODE_ROLE}
       DISPLAY: :99
+      # not sure if those are useful (those arguments are also set in main.py)
+      # (which initiates the browser including those)
       CHROME_EXTRA_ARGS: >-
         --no-sandbox
         --disable-setuid-sandbox

@@ -27,6 +27,7 @@ declare -A FCT_MAP=(
     [connect]="ssh::connect"
     [git-pull]="git::pull"
     [info]="ssh::info"
+    [ram]="ssh::ram"
     [load-ssh]="ssh::copy_keys"
     [load-wireguard]="wireguard::load"
     [ping]="ssh::ping"
@@ -40,6 +41,7 @@ declare -A FCT_DESCR=(
     [connect]="Connects the sheel to the proxy"
     [git-pull]="Upgrades the reference repository"
     [info]="same use as ping -w but properly done (1 is the lighthouse)"
+    [ram]="get RAM and usage %"
     [load-ssh]="Retrieve ssh keys for easy access"
     [load-wireguard]="Add to the lighthouse the peer proxies keys"
     [ping]="Check connectivity and status of all proxies. -w for getting the info formatted for the web (list of dictionaries)."
@@ -55,6 +57,7 @@ declare -A FCT_FLAGS=(
 declare -A FCT_ARGS=(
     [connect]="proxy_id"
     [info]="node_id"
+    [ram]="node_id"
     [swarm-execute]="timeout command"
 )
 
@@ -524,6 +527,45 @@ ssh::info() {
 
 
 #######################################
+# Get the RAM usage
+# Arguments:
+#   $1: proxy id
+# Outputs:
+#   Dictionnary to stdout
+# Returns:
+#   0 on success
+#   1 on unknown port
+#   2 on unresponsive ip
+#######################################
+ssh::ram() {
+    local proxy_id=$1
+    local port="22$(printf "%02d" $proxy_id)"
+
+    if [[ "$proxy_id" == "1" ]]; then
+        echo "{\"ram_specs\": \"$(free -h | awk '/^Mem:/{print $2}')\", \"ram_usage\": \"$(free | awk '/^Mem:/{printf "%.0f%%", $3/$2*100}')\"}"
+        return
+    fi
+
+    if ! [[ "$(_proxypi_listen_ssh)" =~ "$port" ]]; then
+        return 1
+    fi
+
+    if ! [[ "$(./proxypi.sh ping-wireguard -a)" =~ "10.0.0.$proxy_id" ]]; then
+        return 2
+    fi
+
+    local instructions="echo \
+        \$(free -h | awk '/^Mem:/{print \$2}') \
+        \$(free | awk '/^Mem:/{printf \"\%.0f%%\", \$3/\$2*100}')
+    "
+
+    ssh_result=$(_proxypi_execute_command "$port" "$instructions")
+    read ram ram_usage <<< "$ssh_result"
+    echo "{\"ram_specs\": \"$ram\", \"ram_usage\": \"$ram_usage\"}"
+}
+
+
+#######################################
 # Ping proxys through VPN
 # Globals:
 #   WIREGUARD_NETWORK_PREFIX
@@ -706,6 +748,19 @@ while [[ $# -gt 0 ]]; do
 
             "${FCT_MAP[$fct]}" "$proxy_id"
             ;;
+
+        ram)
+            if [[ -z "$1" || ! "$1" =~ ^([1-9]|[1-9][0-9])$ ]]; then
+                echob "Error: the id specified is outside the range 1-99"
+                echob "Example: $0 connect 2"
+                help; exit $EXIT_CODE_WRONG_PARAMETERS
+            fi
+
+            proxy_id="$1"; shift
+
+            "${FCT_MAP[$fct]}" "$proxy_id"
+            ;;
+
 
         swarm-execute)
 

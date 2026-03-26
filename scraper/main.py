@@ -1,14 +1,17 @@
 import asyncio
 import datetime
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request, HTTPException, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import StreamingResponse, HTMLResponse, JSONResponse
 import ipaddress
 import nodriver as uc
 import os
+from pydantic import BaseModel
 import random
+import subprocess
 import sys
-from typing import List, Dict, Callable
+from typing import Tuple, List, Dict, Callable, Optional, Union
+
 
 sys.path.insert(0, "/plugins")
 import fast_api_ip_middleware
@@ -27,6 +30,18 @@ PAGE_LOADING_UNIFORM_RANGE = (2, 4)  # in seconds
 PAGE_SCROLLING_UNIFORM_RANGE = (200, 400)  # 100 <=> height of the browser window
 PERIOD_CLEANUP_LOOP = 300  # in seconds
 
+
+STREAM_DISPLAY = ":99"
+STREAM_WIDTH = 1920
+STREAM_HEIGHT = 1080
+STREAM_FPS = 48
+
+
+DISPLAY_DEPTH=24
+DISPLAY_CLOSE_TIMEOUT=6
+BROWSER_DEFAULT_ID="default"
+BROWSER_DEFAULT_LIFESPAN=3600  # 1 hour in seconds
+BROWSER_DEFAULT_WINDOW=[1920, 1080]
 
 # -------------------------------------------------------------------------------- #
 # -------------------------------------------------------------------------------- #
@@ -72,6 +87,207 @@ app.add_middleware(
 # -------------------------------------------------------------------------------- #
 
 
+# class Profile:
+# Should be sent by the Broker
+#     def __init__(self) -> None:
+#         self.mouse_movements = None
+#         self.scrolling_speed = None
+
+
+class Browser:
+
+    display = 100  # First Xvfb (instead of 99)
+
+    def __init__(self) -> None:
+        self.window_size: Tuple[int, int] = None
+        self.display = None
+        self.__display_process = None
+        self.__driver = None
+        self.created_at = None
+        self.expires_at = None
+        self.access_history: List[Dict] = []
+
+
+    @classmethod
+    async def create(
+        cls,
+        lifespan_in_seconds: int,
+        window_size: Tuple[int, int],
+    ) -> "Browser":
+        browser = cls()
+        await browser.__initialize(
+            lifespan_in_seconds,
+            window_size,
+        )
+        return browser
+
+
+    async def __create_driver(self):
+        return await uc.start(
+                headless=False,  # If headerless, Cloudflare spots us.
+                browser_args=[
+                    "--no-sandbox",
+                    "--disable-setuid-sandbox",
+                    "--disable-blink-features=AutomationControlled",
+                    "--disable-features=IsolateOrigins,site-per-process",
+                    f"--window-size={self.window_size[0]},{self.window_size[1]}",
+                    "--window-position=0,0",
+                ],  # If images are blocked, Cloudflare spots us.
+                sandbox=False,
+                env={**os.environ, "DISPLAY": self.display},
+            )
+
+
+    def __create_display(self) -> None:
+        self.display = f":{Browser.display}"
+        Browser.display += 1
+
+        command = [
+            "Xvfb",
+            self.display,
+            f"-screen"
+            "0",
+            f"{self.window_size[0]}x{self.window_size[1]}x{DISPLAY_DEPTH}",
+        ]
+
+        self.__display_process = subprocess.Popen(
+            command,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+
+    def __close_display(self) -> None:
+        # This version does not account for Xvfb creating its own child processes
+        if not self.__display_process:
+            return None
+
+        self.__display_process.terminate()
+        try:
+            self.__display_process.wait(timeout=DISPLAY_CLOSE_TIMEOUT)
+        except subprocess.TimeoutExpired:
+            self.__display_process.kill()
+
+
+    async def __initialize(
+        self,
+        lifespan_in_seconds: int,
+        window_size: Tuple[int, int],
+    ) -> None:
+        self.window_size = window_size
+        self.__create_display()
+        self.__driver = await self.__create_driver()
+        self.created_at = datetime.datetime.now()
+        self.expires_at = self.created_at + datetime.timedelta(seconds=lifespan_in_seconds)
+
+
+    def kill(self) -> None:
+        self.__close_display()
+        self.__driver.stop()
+
+
+class NewInstanceRequest(BaseModel):
+    instance_id: str = BROWSER_DEFAULT_ID
+    lifespan_in_seconds: int = BROWSER_DEFAULT_LIFESPAN
+    window_size: Union[List[int], Tuple[int, int]] = BROWSER_DEFAULT_WINDOW
+
+
+class KillRequest(BaseModel):
+    instance_id: str
+
+
+class Scraper:
+
+    def __init__(self) -> None:
+        self.browsers: Dict[str, Browser] = {}
+
+    def browser_exists(self, instance_id: str) -> bool:
+        return instance_id in scraper.browsers.keys()
+
+    async def new_instance(self, request: Optional[NewInstanceRequest]) -> None:
+        self.browsers[request.instance_id] = await Browser.create(request.lifespan_in_seconds, request.window_size)
+
+    def kill(self, instance_id: str) -> None:
+        self.browsers[instance_id].kill()
+        del self.browsers[instance_id]
+
+
+# -------------------------------------------------------------------------------- #
+# -------------------------------------------------------------------------------- #
+
+
+scraper = Scraper()
+
+
+@app.post("/new_instance")
+async def new_instance(request: Optional[NewInstanceRequest] = NewInstanceRequest()):
+    if scraper.browser_exists(request.instance_id):
+        raise HTTPException(
+            status_code=409, detail=f"Browser instance with id {request.instance_id} already exists"
+        )
+
+    try:
+        await scraper.new_instance(request)
+    except Exception as e:
+        line = sys.exc_info()[2].tb_lineno
+        raise HTTPException(
+            status_code=500, detail=f"{type(e).__name__} at line {line}: {str(e)}"
+        )
+
+
+@app.post("/kill")
+async def kill(request: KillRequest):
+    if not scraper.browser_exists(request.instance_id):
+        raise HTTPException(
+            status_code=409, detail=f"No browser instance with id {request.instance_id}"
+        )
+
+    try:
+        scraper.kill(request.instance_id)
+    except Exception as e:
+        line = sys.exc_info()[2].tb_lineno
+        raise HTTPException(
+            status_code=500, detail=f"{type(e).__name__} at line {line}: {str(e)}"
+        )
+
+
+
+@app.get("/browser_stats")
+async def browser_stats():
+    try:
+        return [
+            {instance_id: {
+                "window_size": browser.window_size,
+                "display": browser.display,
+                "created_at": browser.created_at,
+                "expires_at": browser.expires_at,
+                "access_history": browser.access_history,
+            }}
+            for instance_id, browser in scraper.browsers.items()
+        ]
+    except Exception as e:
+        line = sys.exc_info()[2].tb_lineno
+        raise HTTPException(
+            status_code=500, detail=f"{type(e).__name__} at line {line}: {str(e)}"
+        )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 class BrowserInstance:
 
     def __init__(
@@ -99,6 +315,7 @@ class BrowserInstance:
                     "--disable-blink-features=AutomationControlled",
                     "--disable-features=IsolateOrigins,site-per-process",
                     "--window-size=1920,1080",
+                    "--window-position=0,0",
                 ],  # If images are blocked, Cloudflare spots us.
                 sandbox=False,
             )
@@ -119,7 +336,14 @@ class BrowserInstance:
         try:
             page = await self.browser.get(url)
             await page.sleep(random.uniform(*PAGE_LOADING_UNIFORM_RANGE))
-            await page.scroll_down(random.randint(*PAGE_SCROLLING_UNIFORM_RANGE))
+
+            SCROLL_JUMP = 20
+            for _ in range(random.randint(*PAGE_SCROLLING_UNIFORM_RANGE)):
+                if _ % SCROLL_JUMP == 0:
+                    await page.scroll_down(SCROLL_JUMP)
+            await page.scroll_down(SCROLL_JUMP)
+
+
             html_content = await page.get_content()
 
             access_record["status"] = "success"
@@ -166,6 +390,64 @@ class BrowserInstance:
             "failed_requests": failed_requests,
             "access_history": self.access_history,
         }
+
+    def _capture_frame(self) -> bytes | None:
+        """
+        Capture a single JPEG frame from the Xvfb display using ffmpeg x11grab.
+        Runs synchronously — called via asyncio.to_thread to avoid blocking.
+        Returns raw JPEG bytes, or None on failure.
+        """
+        cmd = [
+            "ffmpeg",
+            "-loglevel", "quiet",        # Suppress ffmpeg output
+            "-f", "x11grab",             # X11 screen capture input
+            "-framerate", str(STREAM_FPS),
+            "-video_size", f"{STREAM_WIDTH}x{STREAM_HEIGHT}",
+            "-i", STREAM_DISPLAY,        # Xvfb display
+            "-vframes", "1",             # Capture exactly one frame
+            "-f", "image2",
+            "-vcodec", "mjpeg",
+            "-q:v", "5",                 # JPEG quality (2=best, 31=worst)
+            "pipe:1",                    # Output to stdout
+        ]
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                timeout=2,               # Fail fast if ffmpeg hangs
+                env={**os.environ, "DISPLAY": STREAM_DISPLAY},
+            )
+            if result.returncode == 0 and result.stdout:
+                return result.stdout
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            pass
+        return None
+
+    async def stream_screen(self, fps: int = STREAM_FPS):
+        """
+        Async generator that yields MJPEG multipart frames for FastAPI StreamingResponse.
+
+        Usage in FastAPI:
+            StreamingResponse(
+                instance.stream_screen(),
+                media_type="multipart/x-mixed-replace; boundary=frame"
+            )
+        """
+        frame_interval = 1.0 / fps
+        while True:
+            frame_start = asyncio.get_event_loop().time()
+            jpeg_bytes = await asyncio.to_thread(self._capture_frame)
+
+            if jpeg_bytes:
+                yield (
+                    b"--frame\r\n"
+                    b"Content-Type: image/jpeg\r\n"
+                    b"\r\n" + jpeg_bytes + b"\r\n"
+                )
+
+            elapsed = asyncio.get_event_loop().time() - frame_start
+            sleep_time = max(0.0, frame_interval - elapsed)
+            await asyncio.sleep(sleep_time)
 
 
 # -------------------------------------------------------------------------------- #
@@ -238,25 +520,25 @@ async def scrape_endpoint(url: str, instance_id: str = "default"):
         )
 
 
-@app.post("/close-instance")
-def close_instance(instance_id: str):
-    """Manually close a browser instance"""
-    try:
-        if instance_id in pool.instances:
-            stats = pool.instances[instance_id].get_stats()
-            pool.instances[instance_id].close()
-            del pool.instances[instance_id]
-            return {
-                "status": "closed",
-                "instance_id": instance_id,
-                "final_stats": stats,
-            }
-        return {"status": "not_found", "instance_id": instance_id}
-    except Exception as e:
-        line = sys.exc_info()[2].tb_lineno
-        raise HTTPException(
-            status_code=500, detail=f"{type(e).__name__} at line {line}: {str(e)}"
-        )
+# @app.post("/close-instance")
+# def close_instance(instance_id: str):
+#     """Manually close a browser instance"""
+#     try:
+#         if instance_id in pool.instances:
+#             stats = pool.instances[instance_id].get_stats()
+#             pool.instances[instance_id].close()
+#             del pool.instances[instance_id]
+#             return {
+#                 "status": "closed",
+#                 "instance_id": instance_id,
+#                 "final_stats": stats,
+#             }
+#         return {"status": "not_found", "instance_id": instance_id}
+#     except Exception as e:
+#         line = sys.exc_info()[2].tb_lineno
+#         raise HTTPException(
+#             status_code=500, detail=f"{type(e).__name__} at line {line}: {str(e)}"
+#         )
 
 
 @app.get("/instances")
@@ -308,6 +590,50 @@ async def get_global_stats():
         "failed_requests": total_failed,
         "instances": all_stats,
     }
+
+
+@app.get("/browser/{instance_id}/stream")
+async def stream_browser_screen(instance_id: str, fps: int = STREAM_FPS):
+    """
+    Stream the live browser screen as an MJPEG stream.
+    Renderable directly in a browser <img> tag or via VLC/ffplay.
+    """
+    instance = pool.instances[instance_id]
+
+    fps = max(1, min(fps, 24))
+
+    return StreamingResponse(
+        instance.stream_screen(fps=fps),
+        media_type="multipart/x-mixed-replace; boundary=frame",
+        headers={
+            # Prevent proxies/CDNs from buffering the stream
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "X-Accel-Buffering": "no",  # Disable Nginx buffering if behind Nginx
+        },
+    )
+
+
+@app.get("/stream/{instance_id}", response_class=HTMLResponse)
+async def stream_browser_viewer(instance_id: str):
+    """
+    Convenience endpoint: a minimal HTML page to view the stream in a browser tab.
+    Navigate to /browser/{id}/stream/viewer to watch live.
+    """
+    return f"""
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>Browser Stream — {instance_id}</title>
+        <style>
+          body {{ margin: 0; background: #111; display: flex; justify-content: center; align-items: center; height: 100vh; }}
+          img {{ max-width: 100%; max-height: 100vh; }}
+        </style>
+      </head>
+      <body>
+        <img src="/browser/{instance_id}/stream" alt="Live browser stream" />
+      </body>
+    </html>
+    """
 
 
 @app.on_event("startup")

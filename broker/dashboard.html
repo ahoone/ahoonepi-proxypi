@@ -32,12 +32,6 @@
 <div class="table-wrap">
   <div class="table-header">
     <span class="table-title">Nodes</span>
-    <button class="refresh-btn" id="refreshBtn" onclick="fetchNodes()">
-      <svg fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"/>
-      </svg>
-      Refresh
-    </button>
   </div>
   <div id="table-container">
     <div class="empty-state">Loading...</div>
@@ -60,7 +54,7 @@
 <script>
   // ── CONFIG ──────────────────────────────────────
   const API_URL = '/nodes';
-  const AUTO_REFRESH_MS = 1_000;
+  const AUTO_REFRESH_MS = 5_000;
   // ────────────────────────────────────────────────
 
   // ── Generic in-place table upsert ───────────────
@@ -69,11 +63,10 @@
   function upsertTable(container, rows, rowKey, columns) {
     let table = container.querySelector('table');
 
-    // First render — build skeleton
     if (!table) {
       container.innerHTML =
         '<table><thead><tr>' +
-        columns.map(c => '<th>' + c.label + '</th>').join('') +
+        columns.map(c => '<th' + (c.cls ? ' class="' + c.cls + '"' : '') + '>' + c.label + '</th>').join('') +
         '</tr></thead><tbody></tbody></table>';
       table = container.querySelector('table');
     }
@@ -102,6 +95,11 @@
 
       // Update only cells whose content actually changed
       columns.forEach(function(col, i) {
+
+        if (tr.children[i].className !== (col.cls || '')) {
+          tr.children[i].className = col.cls || '';
+        }
+
         const next = col.render(r);
         if (tr.children[i].innerHTML !== next) {
           tr.children[i].innerHTML = next;
@@ -123,8 +121,8 @@
     {
       label: 'Hostname',
       render: function(r) {
-        const isLighthouse    = r.node_id === 1;
-        const dotClass     = (isLighthouse) ? 'lighthouse' : (r.online ? 'online' : 'offline');
+        const isLighthouse = r.node_id === 1;
+        const dotClass = (isLighthouse) ? 'lighthouse' : (r.online ? 'online' : 'offline');
         return '<div class="host-cell">' +
           '<span class="host-dot ' + dotClass + '"></span>' +
           r.hostname +
@@ -138,6 +136,23 @@
         return r.node_id === 1
           ? '<span class="node-id">' + r.node_id + '</span>'
           : '<span class="node-id">' + (r.node_id != null ? r.node_id : '—') + '</span>';
+      }
+    },
+    {
+      label: 'RAM',
+      cls: 'col-ram',
+      render: function(r) {
+        const usage = r.ram_usage != null ? parseFloat(r.ram_usage) : null;
+        const cls = usage === null ? ''
+                  : usage < 50 ? 'ram-green'
+                  : usage < 75 ? 'ram-yellow'
+                  : usage < 90 ? 'ram-orange'
+                  :               'ram-red';
+        return '<div class="ram-cell">' +
+          '<span class="ram-specs">'  + (r.ram_specs || '—') + '</span>' +
+          '<span class="ram-divider">|</span>' +
+          '<span class="ram-usage ' + cls + '">' + (usage !== null ? usage.toFixed(0) + '%' : '—') + '</span>' +
+        '</div>';
       }
     },
     {
@@ -188,8 +203,6 @@
   }
 
   async function fetchNodes() {
-    const btn = document.getElementById('refreshBtn');
-    btn.classList.add('spinning');
     try {
       const res  = await fetch(API_URL);
       if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -198,8 +211,6 @@
     } catch (e) {
       document.getElementById('table-container').innerHTML =
         '<div class="error-state">Failed to fetch: ' + e.message + '</div>';
-    } finally {
-      btn.classList.remove('spinning');
     }
   }
 
@@ -284,7 +295,7 @@
   fetchNodes();
   fetchBroker();
   if (AUTO_REFRESH_MS > 0) {
-    setInterval(fetchNodes,   AUTO_REFRESH_MS);
+    setInterval(fetchNodes, AUTO_REFRESH_MS);
     setInterval(fetchBroker, AUTO_REFRESH_MS);
   }
 </script>

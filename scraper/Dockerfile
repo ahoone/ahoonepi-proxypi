@@ -3,7 +3,7 @@ FROM python:3.10-slim
 USER root
 
 RUN apt-get update && apt-get install -y \
-    net-tools \
+    net-tools ffmpeg \
     wget gnupg xvfb ca-certificates \
     fonts-liberation libx11-xcb1 libxcomposite1 \
     libxcursor1 libxdamage1 libxext6 libxfixes3 \
