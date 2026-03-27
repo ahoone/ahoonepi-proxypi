@@ -75,7 +75,6 @@ class ScraperImage:
         self.ipv6: str = None
         self.ram_specs: str = None
         self.ram_usage: str = None
-        # self.device_spec: ?
         # self.electricity_consumption: ?
         # self.ssh_latency: int = None
         # self.internet_latency: int = None

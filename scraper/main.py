@@ -10,7 +10,8 @@ from pydantic import BaseModel
 import random
 import subprocess
 import sys
-from typing import Tuple, List, Dict, Callable, Optional, Union
+import threading
+from typing import Tuple, List, Dict, Callable, Optional, Union, BinaryIO, Any
 
 
 sys.path.insert(0, "/plugins")
@@ -34,7 +35,6 @@ PERIOD_CLEANUP_LOOP = 300  # in seconds
 STREAM_DISPLAY = ":99"
 STREAM_WIDTH = 1920
 STREAM_HEIGHT = 1080
-STREAM_FPS = 48
 
 
 DISPLAY_DEPTH=24
@@ -42,6 +42,13 @@ DISPLAY_CLOSE_TIMEOUT=6
 BROWSER_DEFAULT_ID="default"
 BROWSER_DEFAULT_LIFESPAN=3600  # 1 hour in seconds
 BROWSER_DEFAULT_WINDOW=[1920, 1080]
+STREAM_QUALITY=15  # 2=best 31=worst
+STREAM_FPS=12
+STREAM_CLOSE_TIMEOUT=6
+STREAM_CHUNK_SIZE=16384
+JPEG_MARKER_START=b"\xFF\xD8\xFF"
+JPEG_MARKER_END=b"\xFF\xD9"
+
 
 # -------------------------------------------------------------------------------- #
 # -------------------------------------------------------------------------------- #
@@ -103,6 +110,7 @@ class Browser:
         self.display = None
         self.__display_process = None
         self.__driver = None
+        self.__streaming_process = None
         self.created_at = None
         self.expires_at = None
         self.access_history: List[Dict] = []
@@ -123,6 +131,7 @@ class Browser:
 
 
     async def __create_driver(self):
+        os.environ["DISPLAY"] = self.display
         return await uc.start(
                 headless=False,  # If headerless, Cloudflare spots us.
                 browser_args=[
@@ -134,7 +143,7 @@ class Browser:
                     "--window-position=0,0",
                 ],  # If images are blocked, Cloudflare spots us.
                 sandbox=False,
-                env={**os.environ, "DISPLAY": self.display},
+                env={**os.environ},
             )
 
 
@@ -145,7 +154,7 @@ class Browser:
         command = [
             "Xvfb",
             self.display,
-            f"-screen"
+            "-screen",
             "0",
             f"{self.window_size[0]}x{self.window_size[1]}x{DISPLAY_DEPTH}",
         ]
@@ -160,7 +169,7 @@ class Browser:
     def __close_display(self) -> None:
         # This version does not account for Xvfb creating its own child processes
         if not self.__display_process:
-            return None
+            return
 
         self.__display_process.terminate()
         try:
@@ -182,8 +191,122 @@ class Browser:
 
 
     def kill(self) -> None:
+        self.__kill_streaming_process()
         self.__close_display()
         self.__driver.stop()
+
+
+    def __create_streaming_process(self) -> None:
+
+        if self.__streaming_process:
+            return
+
+        command = [
+            "ffmpeg",
+            "-loglevel", "quiet",
+            "-f", "x11grab",
+            "-framerate", str(STREAM_FPS),
+            "-video_size", f"{self.window_size[0]}x{self.window_size[1]}",
+            "-i", self.display,
+            "-f", "mjpeg",
+            "-q:v", str(STREAM_QUALITY),
+            "-flush_packets", "1",
+            "pipe:1",
+        ]
+
+        self.__streaming_process = subprocess.Popen(
+            command,
+            stdout = subprocess.PIPE,
+            stderr = subprocess.PIPE,
+            env = {**os.environ, "DISPLAY": self.display},
+        )
+
+
+    def __kill_streaming_process(self) -> None:
+        if not self.__streaming_process:
+            return
+
+        self.__streaming_process.terminate()
+        try:
+            self.__streaming_process.wait(timeout=STREAM_CLOSE_TIMEOUT)
+        except subprocess.TimeoutExpired:
+            self.__streaming_process.kill()
+
+
+    @staticmethod
+    def __unpack_frames(stream: BinaryIO) -> bytes:
+        buffer = b""
+        while chunk := stream.read(STREAM_CHUNK_SIZE):
+            buffer += chunk
+            while True:
+                pos_start = buffer.find(JPEG_MARKER_START)
+                pos_end = buffer.find(JPEG_MARKER_END)
+                if pos_start == -1 or pos_end == -1:
+                    break
+                yield buffer[pos_start:pos_end + len(JPEG_MARKER_END)]
+                buffer = buffer[pos_end + len(JPEG_MARKER_END):]
+
+
+    async def stream(self) -> bytes:
+        if not self.__streaming_process:
+            self.__create_streaming_process()
+
+        latest_frame = None
+        loop = asyncio.get_event_loop()
+        new_frame_event = asyncio.Event()
+
+        def __unpack_through_thread() -> None:
+            nonlocal latest_frame
+            for frame in self.__unpack_frames(self.__streaming_process.stdout):
+                latest_frame = frame
+                loop.call_soon_threadsafe(new_frame_event.set)
+
+        thread = threading.Thread(
+            target = __unpack_through_thread,
+            daemon = True,
+        )
+        thread.start()
+
+        try:
+            while True:
+                await new_frame_event.wait()
+                new_frame_event.clear()
+                yield (
+                    b"--frame\r\n"
+                    b"Content-Type: image/jpeg\r\n\r\n"
+                    + latest_frame +
+                    b"\r\n"
+                )
+        finally:
+            # self.__kill_streaming_process()
+            thread.join()
+
+
+    async def get(self, uri: str) -> str:
+        access_record = {
+            "uri": uri,
+            "timestamp": datetime.datetime.now().isoformat(),
+            "status": "in_progress",
+        }
+
+        try:
+            page = await self.__driver.get(uri)
+            html_content = await page.get_content()
+
+            access_record["status"] = "success"
+            access_record["content_length"] = len(html_content)
+            access_record["completed_at"] = datetime.datetime.now().isoformat()
+
+            self.access_history.append(access_record)
+            return html_content
+
+        except Exception as e:
+            access_record["status"] = "failed"
+            access_record["error"] = str(e)
+            access_record["completed_at"] = datetime.datetime.now().isoformat()
+
+            self.access_history.append(access_record)
+            raise
 
 
 class NewInstanceRequest(BaseModel):
@@ -194,6 +317,11 @@ class NewInstanceRequest(BaseModel):
 
 class KillRequest(BaseModel):
     instance_id: str
+
+
+class GetRequest(BaseModel):
+    instance_id: str
+    uri: str
 
 
 class Scraper:
@@ -210,6 +338,10 @@ class Scraper:
     def kill(self, instance_id: str) -> None:
         self.browsers[instance_id].kill()
         del self.browsers[instance_id]
+
+    async def get(self, request: GetRequest) -> Dict[Any, Any]:
+        browser = self.browsers[request.instance_id]
+        return await browser.get(request.uri)
 
 
 # -------------------------------------------------------------------------------- #
@@ -251,9 +383,8 @@ async def kill(request: KillRequest):
         )
 
 
-
-@app.get("/browser_stats")
-async def browser_stats():
+@app.get("/browsers")
+async def browsers():
     try:
         return [
             {instance_id: {
@@ -270,6 +401,50 @@ async def browser_stats():
         raise HTTPException(
             status_code=500, detail=f"{type(e).__name__} at line {line}: {str(e)}"
         )
+
+
+@app.get("/stream/{instance_id}")
+async def stream(instance_id: str):
+    if not scraper.browser_exists(instance_id):
+        raise HTTPException(
+            status_code=409, detail=f"No browser instance with id {instance_id}"
+        )
+
+    try:
+        return StreamingResponse( 
+            scraper.browsers[instance_id].stream(),
+            media_type = "multipart/x-mixed-replace; boundary=frame",
+            headers={"X-Accel-Buffering": "no"},
+        )
+    except Exception as e:
+        line = sys.exc_info()[2].tb_lineno
+        raise HTTPException(
+            status_code=500, detail=f"{type(e).__name__} at line {line}: {str(e)}"
+        )
+
+
+@app.post("/get")
+async def get(request: GetRequest):
+    if not scraper.browser_exists(request.instance_id):
+        raise HTTPException(
+            status_code=409, detail=f"No browser instance with id {request.instance_id}"
+        )
+
+    try:
+        return await scraper.get(request)
+    except Exception as e:
+        line = sys.exc_info()[2].tb_lineno
+        raise HTTPException(
+            status_code=500, detail=f"{type(e).__name__} at line {line}: {str(e)}"
+        )
+
+
+
+
+
+
+
+
 
 
 
@@ -397,7 +572,7 @@ class BrowserInstance:
         Runs synchronously — called via asyncio.to_thread to avoid blocking.
         Returns raw JPEG bytes, or None on failure.
         """
-        cmd = [
+        command = [
             "ffmpeg",
             "-loglevel", "quiet",        # Suppress ffmpeg output
             "-f", "x11grab",             # X11 screen capture input
@@ -412,7 +587,7 @@ class BrowserInstance:
         ]
         try:
             result = subprocess.run(
-                cmd,
+                command,
                 capture_output=True,
                 timeout=2,               # Fail fast if ffmpeg hangs
                 env={**os.environ, "DISPLAY": STREAM_DISPLAY},
@@ -421,7 +596,7 @@ class BrowserInstance:
                 return result.stdout
         except (subprocess.TimeoutExpired, FileNotFoundError):
             pass
-        return None
+        return
 
     async def stream_screen(self, fps: int = STREAM_FPS):
         """
@@ -636,13 +811,13 @@ async def stream_browser_viewer(instance_id: str):
     """
 
 
-@app.on_event("startup")
-async def startup_event():
-    """Cleanup expired instances regularly"""
+# @app.on_event("startup")
+# async def startup_event():
+#     """Cleanup expired instances regularly"""
 
-    async def cleanup_loop():
-        while True:
-            await asyncio.sleep(PERIOD_CLEANUP_LOOP)
-            await pool.cleanup_expired()
+#     async def cleanup_loop():
+#         while True:
+#             await asyncio.sleep(PERIOD_CLEANUP_LOOP)
+#             await pool.cleanup_expired()
 
-    asyncio.create_task(cleanup_loop())
+#     asyncio.create_task(cleanup_loop())
