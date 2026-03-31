@@ -32,7 +32,12 @@
 <div class="table-wrap">
   <div class="table-header">
     <span class="table-title">Nodes</span>
+    <div class="meta">
+      <span><span class="live-dot"></span> &nbsp;live</span>
+      <span id="ts-nodes" class="ts">—</span>
+    </div>
   </div>
+
   <div id="table-container">
     <div class="empty-state">Loading...</div>
   </div>
@@ -54,7 +59,7 @@
 <script>
   // ── CONFIG ──────────────────────────────────────
   const API_URL = '/nodes';
-  const AUTO_REFRESH_MS = 5_000;
+  const AUTO_REFRESH_MS = 2_000;
   // ────────────────────────────────────────────────
 
   // ── Generic in-place table upsert ───────────────
@@ -172,10 +177,9 @@
     {
       label: 'Browsers',
       render: function(r) {
-        const n = Array.isArray(r.browser_instances) ? r.browser_instances.length : 0;
-        return n > 0
-          ? '<span class="browser-count">' + n + '</span>'
-          : '<span class="lat-none">0</span>';
+        const instances = Array.isArray(r.browser_instances) ? r.browser_instances : [];
+        if (!instances.length) return '<span class="lat-none">—</span>';
+        return '<span class="browser-count" data-tooltip="' + instances.join('\n') + '">' + instances.length + '</span>';
       }
     }
   ];
@@ -183,23 +187,32 @@
   function renderNodes(rawRows) {
     const container = document.getElementById('table-container');
     const rows = rawRows.filter(function(r) { return r && typeof r.hostname === 'string'; });
-
     if (!rows.length) {
       container.innerHTML = '<div class="empty-state">No data returned.</div>';
       return;
     }
+
+    rows.forEach(function(r) {
+      if (typeof r.browsers === 'string') {
+        r.browser_instances = r.browsers
+          .split(',')
+          .map(function(s) { return s.trim(); })
+          .filter(Boolean);
+      } else if (!Array.isArray(r.browsers)) {
+        r.browser_instances = [];
+      }
+    });
 
     rows.sort(function(a, b) { return (a.node_id != null ? a.node_id : Infinity) - (b.node_id != null ? b.node_id : Infinity); });
     upsertTable(container, rows, function(r) { return r.node_id; }, NODE_COLUMNS);
 
     // Stats
     const onlineCount   = rows.filter(function(r) { return r.online; }).length;
-    const totalBrowsers = rows.reduce(function(s, r) { return s + (Array.isArray(r.browser_instances) ? r.browser_instances.length : 0); }, 0);
+    const totalBrowsers = rows.reduce(function(s, r) { return s + r.browser_instances.length; }, 0);
     document.getElementById('s-total').textContent    = rows.length;
     document.getElementById('s-online').textContent   = onlineCount;
     document.getElementById('s-offline').textContent  = rows.length - onlineCount;
     document.getElementById('s-browsers').textContent = totalBrowsers;
-    // document.getElementById('ts').textContent         = 'updated ' + new Date().toLocaleTimeString();
   }
 
   async function fetchNodes() {
@@ -208,6 +221,7 @@
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const json = await res.json();
       renderNodes(Array.isArray(json) ? json : (json.output || []));
+      document.getElementById('ts-nodes').textContent = 'updated ' + new Date().toLocaleTimeString();
     } catch (e) {
       document.getElementById('table-container').innerHTML =
         '<div class="error-state">Failed to fetch: ' + e.message + '</div>';

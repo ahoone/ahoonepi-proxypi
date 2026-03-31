@@ -15,6 +15,7 @@ services:
       - /tmp/proxypi.sock:/tmp/proxypi.sock
     environment:
       NODE_ROLE: ${NODE_ROLE}
+      HTTP_PORT_SCRAPER: ${HTTP_PORT_SCRAPER}
     restart: unless-stopped
     networks:
       - default

@@ -40,28 +40,29 @@ PROXYPI_COMMAND_RAM = Template("ram $node_id")
 DISPLAY_LIMIT_SCRAPING_LIST = 200
 
 
+HTTP_PORT_SCRAPER = os.getenv("HTTP_PORT_SCRAPER")
+
 # -------------------------------------------------------------------------------- #
 # -------------------------------------------------------------------------------- #
 
 
-class TabImage:
+# class TabImage:
 
-    def __init__(self) -> None:
-        self.id: int = None
-        self.uri: str = None
-        self.status: Literal["idle", "requesting"] = None
+#     def __init__(self) -> None:
+#         self.id: int = None
+#         self.uri: str = None
+#         self.status: Literal["idle", "requesting"] = None
 
 
 class BrowserImage:
 
-    def __init__(self) -> None:
-        self.id: int = None
-        self.start_timestamp: datetime.datetime = None
-        self.end_timestamp: datetime.datetime = None
-        self.status: Literal["idle", "requesting"] = None
-        self.camera = None
+    def __init__(self, scraper_response: Dict[str, Any]) -> None:
+        self.created_at: datetime.datetime = scraper_response["created_at"]
+        self.expires_at: datetime.datetime = scraper_response["expires_at"]
         self.browsing_history: List[str] = []
-        self.tabs: List[TabImage] = []
+        
+        self.status: Literal["idle", "requesting"] = None
+        # self.tabs: List[TabImage] = []
 
 
 class ScraperImage:
@@ -80,11 +81,11 @@ class ScraperImage:
         # self.internet_latency: int = None
         # self.vpn_latency: int = None
         # self.spotted: bool = None
-        # self.status: Literal["idle", "requesting"] = None
-        self.browsers: List[BrowserImage] = []
+        self.status: Literal["idle", "requesting"] = None
+        self.browsers: Dict[str, BrowserImage] = {}  # instance_id: browser
 
 
-    # __INIT__ CAN NOT BE ASYNC IN PYTHON
+    # __INIT__ CAN NOT BE ASYNC
     @classmethod
     async def create(cls, vpn_address: str) -> "ScraperImage":
         scraperImage = cls()
@@ -102,8 +103,25 @@ class ScraperImage:
 
 
     async def update(self) -> None:
-        response = await proxypi.run(PROXYPI_COMMAND_RAM.safe_substitute(node_id=self.node_id))
-        self.__dict__.update(json.loads(response))
+        ram_response = await proxypi.run(PROXYPI_COMMAND_RAM.safe_substitute(node_id=self.node_id))
+        self.__dict__.update(json.loads(ram_response))
+
+        self.browsers = {}
+        scraper_response = requests.get(f"http://{self.vpn_address}:{HTTP_PORT_SCRAPER}/browsers")
+        scraper_response_as_dict = json.loads(scraper_response.text)
+        if not scraper_response.ok:
+            return
+        for instance_id, browser_as_dict in scraper_response_as_dict.items():
+            self.browsers[instance_id] = BrowserImage(browser_as_dict)
+
+        # dropping outdated/killed instances
+        # emptying self.browsers may be too memory intensive because of the browsing history
+        # but the BrowserImage just on top is always reloading everything...
+        # for instance_id in self.browsers:
+        #     if instance_id not in scraper_response_as_dict:
+        #         del self.browsers[instance_id]
+
+        # self.browsers.update()
 
 
 class Broker:
@@ -185,7 +203,9 @@ class Broker:
 
 
     async def update_nodes(self) -> None:
-        [await scraper.update() if scraper.online else None for scraper in self.scrapers]
+        for scraper in self.scrapers:
+            if scraper.online:
+                await scraper.update()
 
 
     async def update(self) -> None:
@@ -209,12 +229,9 @@ ALLOWED_NETWORKS = [
 ]
 
 
-async def background_broker_update(app):
+async def background_update(app):
     while True:
-        if hasattr(app.state, "broker"):
-            await app.state.broker.update()
-        else:
-            raise ValueError("app.state.broker missing")
+        await app.state.broker.update()
         await asyncio.sleep(1)
 
 
@@ -223,7 +240,8 @@ async def lifespan(app: FastAPI):
     if BROKER_CLEAR_DB_ON_STARTUP and os.path.exists(BROKER_DATABASE):
         os.remove(BROKER_DATABASE)  # automatically created by sqlite3.connect(BROKER_DATABASE)
     app.state.broker = await Broker.create()
-    bg_task = asyncio.create_task(background_broker_update(app))
+
+    bg_task = asyncio.create_task(background_update(app))
     
     yield
     
@@ -308,7 +326,18 @@ async def get_table_uris_targets():
 @app.get("/nodes")
 async def nodes():
     try:
-        return [_.__dict__ for _ in app.state.broker.scrapers]
+        return [
+            {
+                "online": scraper.online,
+                "hostname": scraper.hostname,
+                "node_id": scraper.node_id,
+                "ram_specs": scraper.ram_specs,
+                "ram_usage": scraper.ram_usage,
+                "ipv6": scraper.ipv6,
+                "browsers": ",".join([_ for _ in scraper.browsers]),  # Somehow .browsers nor .browsers.keys() are not serializable
+            } 
+            for scraper in app.state.broker.scrapers
+        ]
     except Exception as e:
         line = sys.exc_info()[2].tb_lineno
         raise HTTPException(

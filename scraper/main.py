@@ -1,4 +1,5 @@
 import asyncio
+from contextlib import asynccontextmanager
 import datetime
 from fastapi import FastAPI, Request, HTTPException, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
@@ -26,17 +27,6 @@ NODE_ROLE = os.getenv("NODE_ROLE").split(",")
 assert "SCRAPER" in NODE_ROLE, "The node should be a scraper to launch this image"
 
 
-LIFESPAN_BROWSER = 1  # in hours
-PAGE_LOADING_UNIFORM_RANGE = (2, 4)  # in seconds
-PAGE_SCROLLING_UNIFORM_RANGE = (200, 400)  # 100 <=> height of the browser window
-PERIOD_CLEANUP_LOOP = 300  # in seconds
-
-
-STREAM_DISPLAY = ":99"
-STREAM_WIDTH = 1920
-STREAM_HEIGHT = 1080
-
-
 DISPLAY_DEPTH=24
 DISPLAY_CLOSE_TIMEOUT=6
 BROWSER_DEFAULT_ID="default"
@@ -48,46 +38,7 @@ STREAM_CLOSE_TIMEOUT=6
 STREAM_CHUNK_SIZE=16384
 JPEG_MARKER_START=b"\xFF\xD8\xFF"
 JPEG_MARKER_END=b"\xFF\xD9"
-
-
-# -------------------------------------------------------------------------------- #
-# -------------------------------------------------------------------------------- #
-
-
-ALLOWED_NETWORKS = [
-    ipaddress.ip_network("127.0.0.0/8"),  # localhost
-    # ipaddress.ip_network("10.0.0.0/24"),      # VPN network
-    ipaddress.ip_network("10.0.0.1/32"),  # Lighthouse through VPN
-    ipaddress.ip_network("172.16.0.0/12"),    # Docker bridge networks (for dev) (and includes 172.23.0.1 ie localnetwork)
-    ipaddress.ip_network(
-        "192.168.0.0/16"
-    ),  # Docker compose networks (for the proxypi socket)
-    ipaddress.ip_network("::1/128"),  # IPv6 localhost
-]
-
-
-app = FastAPI(title="Scraper API", description="Scraper", version="1.0.0")
-
-
-@app.get("/check-ip")
-async def check_ip(request: Request):
-    return await fast_api_ip_middleware.check_ip(request, ALLOWED_NETWORKS)
-
-
-@app.middleware("http")
-async def filter_ip_middleware(request: Request, call_next: Callable):
-    return await fast_api_ip_middleware.filter_ip_middleware(
-        request, call_next, ALLOWED_NETWORKS
-    )
-
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+FRAME_UNPACKING_SUBPROCESS_TIMEOUT=3
 
 
 # -------------------------------------------------------------------------------- #
@@ -113,7 +64,7 @@ class Browser:
         self.__streaming_process = None
         self.created_at = None
         self.expires_at = None
-        self.access_history: List[Dict] = []
+        self.browsing_history: List[Dict] = []
 
 
     @classmethod
@@ -250,10 +201,12 @@ class Browser:
     async def stream(self) -> bytes:
         if not self.__streaming_process:
             self.__create_streaming_process()
+        # The streaming subprocess only stops when the instance expires
 
         latest_frame = None
         loop = asyncio.get_event_loop()
         new_frame_event = asyncio.Event()
+        stop_event = asyncio.Event()
 
         def __unpack_through_thread() -> None:
             nonlocal latest_frame
@@ -279,7 +232,8 @@ class Browser:
                 )
         finally:
             # self.__kill_streaming_process()
-            thread.join()
+            stop_event.set()
+            await asyncio.to_thread(thread.join, timeout=FRAME_UNPACKING_SUBPROCESS_TIMEOUT)
 
 
     async def get(self, uri: str) -> str:
@@ -297,7 +251,7 @@ class Browser:
             access_record["content_length"] = len(html_content)
             access_record["completed_at"] = datetime.datetime.now().isoformat()
 
-            self.access_history.append(access_record)
+            self.browsing_history.append(access_record)
             return html_content
 
         except Exception as e:
@@ -305,7 +259,7 @@ class Browser:
             access_record["error"] = str(e)
             access_record["completed_at"] = datetime.datetime.now().isoformat()
 
-            self.access_history.append(access_record)
+            self.browsing_history.append(access_record)
             raise
 
 
@@ -330,7 +284,7 @@ class Scraper:
         self.browsers: Dict[str, Browser] = {}
 
     def browser_exists(self, instance_id: str) -> bool:
-        return instance_id in scraper.browsers.keys()
+        return instance_id in self.browsers.keys()
 
     async def new_instance(self, request: Optional[NewInstanceRequest]) -> None:
         self.browsers[request.instance_id] = await Browser.create(request.lifespan_in_seconds, request.window_size)
@@ -343,23 +297,90 @@ class Scraper:
         browser = self.browsers[request.instance_id]
         return await browser.get(request.uri)
 
+    def terminate(self) -> None:
+        [_.kill() for _ in self.browsers.values()]
+
+    def update(self) -> None:
+        # we must not iterate over the dictionary while editing it
+        expired = [instance_id for instance_id, browser in self.browsers.items() if datetime.datetime.now() >= browser.expires_at]
+        for instance_id in expired:
+            self.kill(instance_id)
+
 
 # -------------------------------------------------------------------------------- #
 # -------------------------------------------------------------------------------- #
 
 
-scraper = Scraper()
+ALLOWED_NETWORKS = [
+    ipaddress.ip_network("127.0.0.0/8"),     # localhost
+    # ipaddress.ip_network("10.0.0.0/24"),   # VPN network
+    ipaddress.ip_network("10.0.0.1/32"),     # Lighthouse through VPN
+    ipaddress.ip_network("172.16.0.0/12"),   # Docker bridge networks (for dev) (and includes 172.23.0.1 ie localnetwork)
+    ipaddress.ip_network("192.168.0.0/16"),  # Docker compose networks (for the proxypi socket)
+    ipaddress.ip_network("::1/128"),         # IPv6 localhost
+]
+
+
+async def background_update(app):
+    loop = asyncio.get_running_loop()
+    while True:
+        await loop.run_in_executor(None, app.state.scraper.update)
+        await asyncio.sleep(1)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    app.state.scraper = Scraper()
+    bg_task = asyncio.create_task(background_update(app))
+    yield
+    bg_task.cancel()
+    try:
+        await bg_task
+    except asyncio.CancelledError:
+        pass
+    app.state.scraper.terminate()
+
+
+app = FastAPI(
+    title="Scraper",
+    lifespan=lifespan,
+)
+
+
+@app.get("/check-ip")
+async def check_ip(request: Request):
+    return await fast_api_ip_middleware.check_ip(request, ALLOWED_NETWORKS)
+
+
+@app.middleware("http")
+async def filter_ip_middleware(request: Request, call_next: Callable):
+    return await fast_api_ip_middleware.filter_ip_middleware(
+        request, call_next, ALLOWED_NETWORKS
+    )
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# -------------------------------------------------------------------------------- #
+# -------------------------------------------------------------------------------- #
 
 
 @app.post("/new_instance")
 async def new_instance(request: Optional[NewInstanceRequest] = NewInstanceRequest()):
-    if scraper.browser_exists(request.instance_id):
+    if app.state.scraper.browser_exists(request.instance_id):
         raise HTTPException(
             status_code=409, detail=f"Browser instance with id {request.instance_id} already exists"
         )
 
     try:
-        await scraper.new_instance(request)
+        await app.state.scraper.new_instance(request)
     except Exception as e:
         line = sys.exc_info()[2].tb_lineno
         raise HTTPException(
@@ -369,13 +390,13 @@ async def new_instance(request: Optional[NewInstanceRequest] = NewInstanceReques
 
 @app.post("/kill")
 async def kill(request: KillRequest):
-    if not scraper.browser_exists(request.instance_id):
+    if not app.state.scraper.browser_exists(request.instance_id):
         raise HTTPException(
             status_code=409, detail=f"No browser instance with id {request.instance_id}"
         )
 
     try:
-        scraper.kill(request.instance_id)
+        app.state.scraper.kill(request.instance_id)
     except Exception as e:
         line = sys.exc_info()[2].tb_lineno
         raise HTTPException(
@@ -386,16 +407,16 @@ async def kill(request: KillRequest):
 @app.get("/browsers")
 async def browsers():
     try:
-        return [
-            {instance_id: {
+        return {
+            instance_id: {
                 "window_size": browser.window_size,
                 "display": browser.display,
                 "created_at": browser.created_at,
                 "expires_at": browser.expires_at,
-                "access_history": browser.access_history,
-            }}
-            for instance_id, browser in scraper.browsers.items()
-        ]
+                "remaining_lifespan": browser.expires_at - datetime.datetime.now(),
+                "browsing_history": browser.browsing_history,  # maybe we'll not always want this, response may be too large
+            } for instance_id, browser in app.state.scraper.browsers.items()
+        }
     except Exception as e:
         line = sys.exc_info()[2].tb_lineno
         raise HTTPException(
@@ -405,14 +426,14 @@ async def browsers():
 
 @app.get("/stream/{instance_id}")
 async def stream(instance_id: str):
-    if not scraper.browser_exists(instance_id):
+    if not app.state.scraper.browser_exists(instance_id):
         raise HTTPException(
             status_code=409, detail=f"No browser instance with id {instance_id}"
         )
 
     try:
         return StreamingResponse( 
-            scraper.browsers[instance_id].stream(),
+            app.state.scraper.browsers[instance_id].stream(),
             media_type = "multipart/x-mixed-replace; boundary=frame",
             headers={"X-Accel-Buffering": "no"},
         )
@@ -425,399 +446,16 @@ async def stream(instance_id: str):
 
 @app.post("/get")
 async def get(request: GetRequest):
-    if not scraper.browser_exists(request.instance_id):
+    if not app.state.scraper.browser_exists(request.instance_id):
         raise HTTPException(
             status_code=409, detail=f"No browser instance with id {request.instance_id}"
         )
 
     try:
-        return await scraper.get(request)
+        return await app.state.scraper.get(request)
     except Exception as e:
         line = sys.exc_info()[2].tb_lineno
         raise HTTPException(
             status_code=500, detail=f"{type(e).__name__} at line {line}: {str(e)}"
         )
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-class BrowserInstance:
-
-    def __init__(
-        self,
-        expiration_date: datetime.datetime = None,
-    ) -> None:
-        self.browser = None
-        self.expiration_date = None
-        self._initialized = False
-        self.created_at = datetime.datetime.now()
-        self.access_history: List[Dict] = []
-
-    # __INIT__ CAN NOT BE ASYNC IN PYTHON
-    async def initialize(self, expiration_date: datetime.datetime = None):
-        """Initialize the browser (called once)"""
-        self.expiration_date = expiration_date or (
-            datetime.datetime.now() + datetime.timedelta(hours=LIFESPAN_BROWSER)
-        )
-        if not self._initialized:
-            self.browser = await uc.start(
-                headless=False,  # If headerless, Cloudflare spots us.
-                browser_args=[
-                    "--no-sandbox",
-                    "--disable-setuid-sandbox",
-                    "--disable-blink-features=AutomationControlled",
-                    "--disable-features=IsolateOrigins,site-per-process",
-                    "--window-size=1920,1080",
-                    "--window-position=0,0",
-                ],  # If images are blocked, Cloudflare spots us.
-                sandbox=False,
-            )
-            self._initialized = True
-        return self
-
-    async def scrape(self, url: str) -> str:
-        """Scrape a URL using the persistent browser"""
-        if not self._initialized:
-            await self.initialize()
-
-        access_record = {
-            "url": url,
-            "timestamp": datetime.datetime.now().isoformat(),
-            "status": "in_progress",
-        }
-
-        try:
-            page = await self.browser.get(url)
-            await page.sleep(random.uniform(*PAGE_LOADING_UNIFORM_RANGE))
-
-            SCROLL_JUMP = 20
-            for _ in range(random.randint(*PAGE_SCROLLING_UNIFORM_RANGE)):
-                if _ % SCROLL_JUMP == 0:
-                    await page.scroll_down(SCROLL_JUMP)
-            await page.scroll_down(SCROLL_JUMP)
-
-
-            html_content = await page.get_content()
-
-            access_record["status"] = "success"
-            access_record["content_length"] = len(html_content)
-            access_record["completed_at"] = datetime.datetime.now().isoformat()
-
-            self.access_history.append(access_record)
-            return html_content
-
-        except Exception as e:
-            access_record["status"] = "failed"
-            access_record["error"] = str(e)
-            access_record["completed_at"] = datetime.datetime.now().isoformat()
-            self.access_history.append(access_record)
-            raise
-
-    def close(self):
-        """Explicitly close the browser"""
-        if self.browser:
-            self.browser.stop()
-            self._initialized = False
-
-    def is_expired(self) -> bool:
-        """Check if this instance has expired"""
-        return datetime.datetime.now() > self.expiration_date
-
-    def get_stats(self) -> Dict:
-        """Get statistics about this instance"""
-        total_requests = len(self.access_history)
-        successful_requests = sum(
-            1 for record in self.access_history if record["status"] == "success"
-        )
-        failed_requests = sum(
-            1 for record in self.access_history if record["status"] == "failed"
-        )
-
-        return {
-            "created_at": self.created_at.isoformat(),
-            "expiration_date": self.expiration_date.isoformat(),
-            "is_expired": self.is_expired(),
-            "is_initialized": self._initialized,
-            "total_requests": total_requests,
-            "successful_requests": successful_requests,
-            "failed_requests": failed_requests,
-            "access_history": self.access_history,
-        }
-
-    def _capture_frame(self) -> bytes | None:
-        """
-        Capture a single JPEG frame from the Xvfb display using ffmpeg x11grab.
-        Runs synchronously — called via asyncio.to_thread to avoid blocking.
-        Returns raw JPEG bytes, or None on failure.
-        """
-        command = [
-            "ffmpeg",
-            "-loglevel", "quiet",        # Suppress ffmpeg output
-            "-f", "x11grab",             # X11 screen capture input
-            "-framerate", str(STREAM_FPS),
-            "-video_size", f"{STREAM_WIDTH}x{STREAM_HEIGHT}",
-            "-i", STREAM_DISPLAY,        # Xvfb display
-            "-vframes", "1",             # Capture exactly one frame
-            "-f", "image2",
-            "-vcodec", "mjpeg",
-            "-q:v", "5",                 # JPEG quality (2=best, 31=worst)
-            "pipe:1",                    # Output to stdout
-        ]
-        try:
-            result = subprocess.run(
-                command,
-                capture_output=True,
-                timeout=2,               # Fail fast if ffmpeg hangs
-                env={**os.environ, "DISPLAY": STREAM_DISPLAY},
-            )
-            if result.returncode == 0 and result.stdout:
-                return result.stdout
-        except (subprocess.TimeoutExpired, FileNotFoundError):
-            pass
-        return
-
-    async def stream_screen(self, fps: int = STREAM_FPS):
-        """
-        Async generator that yields MJPEG multipart frames for FastAPI StreamingResponse.
-
-        Usage in FastAPI:
-            StreamingResponse(
-                instance.stream_screen(),
-                media_type="multipart/x-mixed-replace; boundary=frame"
-            )
-        """
-        frame_interval = 1.0 / fps
-        while True:
-            frame_start = asyncio.get_event_loop().time()
-            jpeg_bytes = await asyncio.to_thread(self._capture_frame)
-
-            if jpeg_bytes:
-                yield (
-                    b"--frame\r\n"
-                    b"Content-Type: image/jpeg\r\n"
-                    b"\r\n" + jpeg_bytes + b"\r\n"
-                )
-
-            elapsed = asyncio.get_event_loop().time() - frame_start
-            sleep_time = max(0.0, frame_interval - elapsed)
-            await asyncio.sleep(sleep_time)
-
-
-# -------------------------------------------------------------------------------- #
-# -------------------------------------------------------------------------------- #
-
-
-class BrowserInstancePool:
-
-    def __init__(self):
-        self.instances: dict[str, BrowserInstance] = {}
-
-    async def get_or_create_instance(self, instance_id: str) -> BrowserInstance:
-        """Get existing instance or create new one"""
-        if instance_id not in self.instances:
-            instance = BrowserInstance()
-            await instance.initialize()
-            self.instances[instance_id] = instance
-
-        instance = self.instances[instance_id]
-
-        if instance.is_expired():
-            instance.close()
-            instance = BrowserInstance()
-            await instance.initialize()
-            self.instances[instance_id] = instance
-
-        return instance
-
-    def cleanup_expired(self):
-        """Remove and close expired instances"""
-        expired_ids = [
-            instance_id
-            for instance_id, instance in self.instances.items()
-            if instance.is_expired()
-        ]
-        for instance_id in expired_ids:
-            self.instances[instance_id].close()
-            del self.instances[instance_id]
-
-    def get_all_stats(self) -> Dict:
-        """Get stats for all instances"""
-        return {
-            instance_id: instance.get_stats()
-            for instance_id, instance in self.instances.items()
-        }
-
-
-# -------------------------------------------------------------------------------- #
-# -------------------------------------------------------------------------------- #
-
-
-pool = BrowserInstancePool()
-
-
-@app.post("/scrape")
-async def scrape_endpoint(url: str, instance_id: str = "default"):
-    """Scrape a URL using a persistent browser instance"""
-    try:
-        instance = await pool.get_or_create_instance(instance_id)
-        content = await instance.scrape(url)
-        return {
-            "status": "success",
-            "content": content,
-            "instance_id": instance_id,
-        }
-    except Exception as e:
-        line = sys.exc_info()[2].tb_lineno
-        raise HTTPException(
-            status_code=500, detail=f"{type(e).__name__} at line {line}: {str(e)}"
-        )
-
-
-# @app.post("/close-instance")
-# def close_instance(instance_id: str):
-#     """Manually close a browser instance"""
-#     try:
-#         if instance_id in pool.instances:
-#             stats = pool.instances[instance_id].get_stats()
-#             pool.instances[instance_id].close()
-#             del pool.instances[instance_id]
-#             return {
-#                 "status": "closed",
-#                 "instance_id": instance_id,
-#                 "final_stats": stats,
-#             }
-#         return {"status": "not_found", "instance_id": instance_id}
-#     except Exception as e:
-#         line = sys.exc_info()[2].tb_lineno
-#         raise HTTPException(
-#             status_code=500, detail=f"{type(e).__name__} at line {line}: {str(e)}"
-#         )
-
-
-@app.get("/instances")
-async def list_instances():
-    """List all active instances with their access history"""
-    return {
-        "total_instances": len(pool.instances),
-        "instances": pool.get_all_stats(),
-    }
-
-
-@app.get("/instance/{instance_id}")
-async def get_instance_details(instance_id: str):
-    """Get detailed information about a specific instance"""
-    if instance_id not in pool.instances:
-        raise HTTPException(status_code=404, detail=f"Instance {instance_id} not found")
-
-    return {
-        "instance_id": instance_id,
-        **pool.instances[instance_id].get_stats(),
-    }
-
-
-@app.get("/instance/{instance_id}/history")
-async def get_instance_history(instance_id: str):
-    """Get access history for a specific instance"""
-    if instance_id not in pool.instances:
-        raise HTTPException(status_code=404, detail=f"Instance {instance_id} not found")
-
-    return {
-        "instance_id": instance_id,
-        "access_history": pool.instances[instance_id].access_history,
-    }
-
-
-@app.get("/stats")
-async def get_global_stats():
-    """Get global statistics across all instances"""
-    all_stats = pool.get_all_stats()
-
-    total_requests = sum(stats["total_requests"] for stats in all_stats.values())
-    total_successful = sum(stats["successful_requests"] for stats in all_stats.values())
-    total_failed = sum(stats["failed_requests"] for stats in all_stats.values())
-
-    return {
-        "total_instances": len(pool.instances),
-        "total_requests": total_requests,
-        "successful_requests": total_successful,
-        "failed_requests": total_failed,
-        "instances": all_stats,
-    }
-
-
-@app.get("/browser/{instance_id}/stream")
-async def stream_browser_screen(instance_id: str, fps: int = STREAM_FPS):
-    """
-    Stream the live browser screen as an MJPEG stream.
-    Renderable directly in a browser <img> tag or via VLC/ffplay.
-    """
-    instance = pool.instances[instance_id]
-
-    fps = max(1, min(fps, 24))
-
-    return StreamingResponse(
-        instance.stream_screen(fps=fps),
-        media_type="multipart/x-mixed-replace; boundary=frame",
-        headers={
-            # Prevent proxies/CDNs from buffering the stream
-            "Cache-Control": "no-cache, no-store, must-revalidate",
-            "X-Accel-Buffering": "no",  # Disable Nginx buffering if behind Nginx
-        },
-    )
-
-
-@app.get("/stream/{instance_id}", response_class=HTMLResponse)
-async def stream_browser_viewer(instance_id: str):
-    """
-    Convenience endpoint: a minimal HTML page to view the stream in a browser tab.
-    Navigate to /browser/{id}/stream/viewer to watch live.
-    """
-    return f"""
-    <!DOCTYPE html>
-    <html>
-      <head>
-        <title>Browser Stream — {instance_id}</title>
-        <style>
-          body {{ margin: 0; background: #111; display: flex; justify-content: center; align-items: center; height: 100vh; }}
-          img {{ max-width: 100%; max-height: 100vh; }}
-        </style>
-      </head>
-      <body>
-        <img src="/browser/{instance_id}/stream" alt="Live browser stream" />
-      </body>
-    </html>
-    """
-
-
-# @app.on_event("startup")
-# async def startup_event():
-#     """Cleanup expired instances regularly"""
-
-#     async def cleanup_loop():
-#         while True:
-#             await asyncio.sleep(PERIOD_CLEANUP_LOOP)
-#             await pool.cleanup_expired()
-
-#     asyncio.create_task(cleanup_loop())
