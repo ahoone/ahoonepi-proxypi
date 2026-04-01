@@ -59,7 +59,7 @@
 <script>
   // ── CONFIG ──────────────────────────────────────
   const API_URL = '/nodes';
-  const AUTO_REFRESH_MS = 2_000;
+  const AUTO_REFRESH_MS = 1_000;
   // ────────────────────────────────────────────────
 
   // ── Generic in-place table upsert ───────────────
@@ -167,19 +167,14 @@
       }
     },
     {
-      label: 'Status',
-      render: function(r) {
-        return r.status
-          ? '<span class="badge badge-status">' + r.status + '</span>'
-          : '<span class="lat-none">—</span>';
-      }
-    },
-    {
       label: 'Browsers',
       render: function(r) {
         const instances = Array.isArray(r.browser_instances) ? r.browser_instances : [];
         if (!instances.length) return '<span class="lat-none">—</span>';
-        return '<span class="browser-count" data-tooltip="' + instances.join('\n') + '">' + instances.length + '</span>';
+        return instances.map(function([name, data]) {
+          const status = data.status || 'idle';
+          return '<span class="browser-badge browser-badge--' + status + '">' + name + '</span>';
+        }).join(' ');
       }
     }
   ];
@@ -193,14 +188,9 @@
     }
 
     rows.forEach(function(r) {
-      if (typeof r.browsers === 'string') {
-        r.browser_instances = r.browsers
-          .split(',')
-          .map(function(s) { return s.trim(); })
-          .filter(Boolean);
-      } else if (!Array.isArray(r.browsers)) {
-        r.browser_instances = [];
-      }
+      r.browser_instances = (r.browsers && typeof r.browsers === 'object')
+        ? Object.entries(r.browsers)
+        : [];
     });
 
     rows.sort(function(a, b) { return (a.node_id != null ? a.node_id : Infinity) - (b.node_id != null ? b.node_id : Infinity); });

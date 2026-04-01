@@ -1,6 +1,7 @@
 - scraping work just sometimes on the initialization of a browser
 - usually i remove the container and then rebuilt it
 - but apparently using a different id is working
+- happened again when I rebooted the pi and the container was running but not responding
 ```
 admin@ahoonepi:~ $ curl -X POST "http://10.0.0.3:8000/scrape?url=https://boutique.magiccorporation.com/produit-38669-lorwyn-eclipse-montagne-a4-9-pocket-zippered-pro-binder-360-cartes-recto-verso.html"
 {"detail":"Exception at line 229: \n                ---------------------\n                Failed to connect to browser\n                ---------------------\n                One of the causes could be when you are running as root.\n                In that case you need to pass no_sandbox=True \n                "}admin@ahoonepi:~ $ curl -X POST "http://10.0.0.3:8000/scrape?url=https://boutique.magiccorporation.com/produit-38669-lorwyn-e

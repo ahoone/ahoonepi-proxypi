@@ -60,8 +60,7 @@ class BrowserImage:
         self.created_at: datetime.datetime = scraper_response["created_at"]
         self.expires_at: datetime.datetime = scraper_response["expires_at"]
         self.browsing_history: List[str] = []
-        
-        self.status: Literal["idle", "requesting"] = None
+        self.status: Literal["idle", "requesting", "spotted"] = scraper_response["status"]
         # self.tabs: List[TabImage] = []
 
 
@@ -81,7 +80,6 @@ class ScraperImage:
         # self.internet_latency: int = None
         # self.vpn_latency: int = None
         # self.spotted: bool = None
-        self.status: Literal["idle", "requesting"] = None
         self.browsers: Dict[str, BrowserImage] = {}  # instance_id: browser
 
 
@@ -104,7 +102,9 @@ class ScraperImage:
 
     async def update(self) -> None:
         ram_response = await proxypi.run(PROXYPI_COMMAND_RAM.safe_substitute(node_id=self.node_id))
-        self.__dict__.update(json.loads(ram_response))
+        data = json.loads(ram_response)
+        self.ram_specs = data['ram_specs']
+        self.ram_usage = data['ram_usage']
 
         self.browsers = {}
         scraper_response = requests.get(f"http://{self.vpn_address}:{HTTP_PORT_SCRAPER}/browsers")
@@ -112,6 +112,7 @@ class ScraperImage:
         if not scraper_response.ok:
             return
         for instance_id, browser_as_dict in scraper_response_as_dict.items():
+            print(browser_as_dict)
             self.browsers[instance_id] = BrowserImage(browser_as_dict)
 
         # dropping outdated/killed instances
@@ -334,7 +335,7 @@ async def nodes():
                 "ram_specs": scraper.ram_specs,
                 "ram_usage": scraper.ram_usage,
                 "ipv6": scraper.ipv6,
-                "browsers": ",".join([_ for _ in scraper.browsers]),  # Somehow .browsers nor .browsers.keys() are not serializable
+                "browsers": scraper.browsers,
             } 
             for scraper in app.state.broker.scrapers
         ]

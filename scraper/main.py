@@ -12,7 +12,7 @@ import random
 import subprocess
 import sys
 import threading
-from typing import Tuple, List, Dict, Callable, Optional, Union, BinaryIO, Any
+from typing import Tuple, List, Dict, Callable, Optional, Union, BinaryIO, Any, Literal
 
 
 sys.path.insert(0, "/plugins")
@@ -38,7 +38,8 @@ STREAM_CLOSE_TIMEOUT=6
 STREAM_CHUNK_SIZE=16384
 JPEG_MARKER_START=b"\xFF\xD8\xFF"
 JPEG_MARKER_END=b"\xFF\xD9"
-FRAME_UNPACKING_SUBPROCESS_TIMEOUT=3
+MAX_INSTANCES_PER_SCRAPER=4
+UNPACKING_CLOSE_TIMEOUT=6
 
 
 # -------------------------------------------------------------------------------- #
@@ -62,9 +63,14 @@ class Browser:
         self.__display_process = None
         self.__driver = None
         self.__streaming_process = None
+        self.__unpacking_frames_process = None
+        self.__latest_frame: bytes = None
+        self.__new_frame_available = asyncio.Event()
         self.created_at = None
         self.expires_at = None
         self.browsing_history: List[Dict] = []
+        self.__get_lock = asyncio.Lock()
+        self.spotted = False
 
 
     @classmethod
@@ -96,6 +102,8 @@ class Browser:
                 sandbox=False,
                 env={**os.environ},
             )
+        # Should stop the browser creation here if:
+        # Failed with status 500: {'detail': 'Exception at line 398: \n                ---------------------\n                Failed to connect to browser\n                ---------------------\n                One of the causes could be when you are running as root.\n                In that case you need to pass no_sandbox=True \n                '}
 
 
     def __create_display(self) -> None:
@@ -121,7 +129,6 @@ class Browser:
         # This version does not account for Xvfb creating its own child processes
         if not self.__display_process:
             return
-
         self.__display_process.terminate()
         try:
             self.__display_process.wait(timeout=DISPLAY_CLOSE_TIMEOUT)
@@ -139,16 +146,17 @@ class Browser:
         self.__driver = await self.__create_driver()
         self.created_at = datetime.datetime.now()
         self.expires_at = self.created_at + datetime.timedelta(seconds=lifespan_in_seconds)
+        self.__start_unpacking_frames_process()
 
 
     def kill(self) -> None:
         self.__kill_streaming_process()
+        self.__kill_unpacking_frames_process()
         self.__close_display()
         self.__driver.stop()
 
 
     def __create_streaming_process(self) -> None:
-
         if self.__streaming_process:
             return
 
@@ -176,7 +184,6 @@ class Browser:
     def __kill_streaming_process(self) -> None:
         if not self.__streaming_process:
             return
-
         self.__streaming_process.terminate()
         try:
             self.__streaming_process.wait(timeout=STREAM_CLOSE_TIMEOUT)
@@ -186,81 +193,95 @@ class Browser:
 
     @staticmethod
     def __unpack_frames(stream: BinaryIO) -> bytes:
-        buffer = b""
+        buffer = bytearray()
         while chunk := stream.read(STREAM_CHUNK_SIZE):
-            buffer += chunk
+            buffer.extend(chunk)
             while True:
-                pos_start = buffer.find(JPEG_MARKER_START)
-                pos_end = buffer.find(JPEG_MARKER_END)
-                if pos_start == -1 or pos_end == -1:
+                start = buffer.find(JPEG_MARKER_START)
+                if start == -1:
+                    buffer.clear()
                     break
-                yield buffer[pos_start:pos_end + len(JPEG_MARKER_END)]
-                buffer = buffer[pos_end + len(JPEG_MARKER_END):]
+                end = buffer.find(JPEG_MARKER_END, start)
+                if end == -1:
+                    if start > 0:
+                        del buffer[:start]
+                    break
+                end += len(JPEG_MARKER_END)
+                frame = bytes(buffer[start:end])
+                yield frame
+                del buffer[:end]
 
 
-    async def stream(self) -> bytes:
+    def __start_unpacking_frames_process(self) -> None:
         if not self.__streaming_process:
             self.__create_streaming_process()
-        # The streaming subprocess only stops when the instance expires
 
-        latest_frame = None
         loop = asyncio.get_event_loop()
-        new_frame_event = asyncio.Event()
-        stop_event = asyncio.Event()
 
         def __unpack_through_thread() -> None:
-            nonlocal latest_frame
             for frame in self.__unpack_frames(self.__streaming_process.stdout):
-                latest_frame = frame
-                loop.call_soon_threadsafe(new_frame_event.set)
+                self.__latest_frame = frame
+                self.__new_frame_available.set()
 
-        thread = threading.Thread(
+        self.__unpacking_frames_process = threading.Thread(
             target = __unpack_through_thread,
             daemon = True,
         )
-        thread.start()
+        self.__unpacking_frames_process.start()
 
-        try:
-            while True:
-                await new_frame_event.wait()
-                new_frame_event.clear()
+
+    def __kill_unpacking_frames_process(self) -> None:
+        if not self.__unpacking_frames_process:
+            return
+        self.__unpacking_frames_process.join(timeout=UNPACKING_CLOSE_TIMEOUT)
+
+
+    async def stream(self) -> bytes:
+        while True:
+            await self.__new_frame_available.wait()
+            if self.__latest_frame:
+                self.__new_frame_available.clear()
                 yield (
                     b"--frame\r\n"
                     b"Content-Type: image/jpeg\r\n\r\n"
-                    + latest_frame +
+                    + self.__latest_frame +
                     b"\r\n"
                 )
-        finally:
-            # self.__kill_streaming_process()
-            stop_event.set()
-            await asyncio.to_thread(thread.join, timeout=FRAME_UNPACKING_SUBPROCESS_TIMEOUT)
 
 
     async def get(self, uri: str) -> str:
-        access_record = {
-            "uri": uri,
-            "timestamp": datetime.datetime.now().isoformat(),
-            "status": "in_progress",
-        }
+        async with self.__get_lock:
+            access_record = {
+                "uri": uri,
+                "timestamp": datetime.datetime.now().isoformat(),
+            }
 
-        try:
-            page = await self.__driver.get(uri)
-            html_content = await page.get_content()
+            try:
+                page = await self.__driver.get(uri)
+                html_content = await page.get_content()
 
-            access_record["status"] = "success"
-            access_record["content_length"] = len(html_content)
-            access_record["completed_at"] = datetime.datetime.now().isoformat()
+                access_record["status"] = "success"
+                access_record["content_length"] = len(html_content)
+                access_record["completed_at"] = datetime.datetime.now().isoformat()
 
-            self.browsing_history.append(access_record)
-            return html_content
+                self.browsing_history.append(access_record)
+                return html_content
 
-        except Exception as e:
-            access_record["status"] = "failed"
-            access_record["error"] = str(e)
-            access_record["completed_at"] = datetime.datetime.now().isoformat()
+            except Exception as e:
+                access_record["status"] = "failed"
+                access_record["error"] = str(e)
+                access_record["completed_at"] = datetime.datetime.now().isoformat()
 
-            self.browsing_history.append(access_record)
-            raise
+                self.browsing_history.append(access_record)
+                raise
+
+    def status(self) -> Literal["idle", "requesting", "spotted"]:
+        if self.spotted:
+            return "spotted"
+        elif self.__get_lock.locked():
+            return "requesting"
+        else:
+            return "idle"
 
 
 class NewInstanceRequest(BaseModel):
@@ -414,6 +435,7 @@ async def browsers():
                 "created_at": browser.created_at,
                 "expires_at": browser.expires_at,
                 "remaining_lifespan": browser.expires_at - datetime.datetime.now(),
+                "status": browser.status(),
                 "browsing_history": browser.browsing_history,  # maybe we'll not always want this, response may be too large
             } for instance_id, browser in app.state.scraper.browsers.items()
         }
@@ -429,6 +451,11 @@ async def stream(instance_id: str):
     if not app.state.scraper.browser_exists(instance_id):
         raise HTTPException(
             status_code=409, detail=f"No browser instance with id {instance_id}"
+        )
+
+    if len(app.state.scraper.browsers) > MAX_INSTANCES_PER_SCRAPER:
+        raise HTTPException(
+            status_code=409, detail=f"Already too many opened instances {MAX_INSTANCES_PER_SCRAPER}"
         )
 
     try:
@@ -458,4 +485,3 @@ async def get(request: GetRequest):
         raise HTTPException(
             status_code=500, detail=f"{type(e).__name__} at line {line}: {str(e)}"
         )
-
