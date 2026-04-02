@@ -3,14 +3,16 @@ from contextlib import asynccontextmanager
 import datetime
 from fastapi import Body, FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, StreamingResponse
+import httpx
 import ipaddress
 import json
 import os
-from pydantic import HttpUrl
+from pydantic import HttpUrl, BaseModel
 import random
 import requests
 import sqlite3  # native // does not need to be in requirements.txt
+from starlette.background import BackgroundTask
 from string import Template
 import sys
 from typing import Any, Callable, Dict, List, Literal, Union 
@@ -68,10 +70,10 @@ class ScraperImage:
 
     def __init__(self) -> None:
         self.online: bool = None
-        self.vpn_address: str = None
-        self.node_id: int = None
-        self.hostname: str = None
-        self.port: str = None
+        self.vpn_address: str = None  # UNIQUE (primary key)
+        self.node_id: int = None  # UNIQUE (equivalent to primary key)
+        self.hostname: str = None  # UNIQUE
+        self.port: str = None  # UNIQUE (equivalent to primary key)
         self.ipv6: str = None
         self.ram_specs: str = None
         self.ram_usage: str = None
@@ -130,7 +132,7 @@ class Broker:
     def __init__(
         self,
     ) -> None:
-        self.scrapers: List[ScraperImage] = []
+        self.scrapers: Dict[str, ScraperImage] = {}  # vpn_address -> scraper
         self.db_con = None
 
 
@@ -193,10 +195,18 @@ class Broker:
         vpn_addresses_availables = (await proxypi.run(PROXYPI_COMMAND_AVAILABLE_NODES)).splitlines()
 
         for vpn_address in vpn_addresses_availables:
-            if vpn_address not in [_.vpn_address for _ in self.scrapers]:
-                self.scrapers.append(await ScraperImage.create(vpn_address))
+            if vpn_address not in self.scrapers.keys():
+                scraper = await ScraperImage.create(vpn_address)
+                if any([
+                    scraper.hostname in [_.hostname for _ in self.scrapers.values()],
+                    scraper.node_id in [_.node_id for _ in self.scrapers.values()],
+                    scraper.port in [_.port for _ in self.scrapers.values()],
+                ]):
+                    print("trying to create a scraper for a scraper id that already exists")
+                else:
+                    self.scrapers[vpn_address] = scraper
 
-        for scraper in self.scrapers:
+        for scraper in self.scrapers.values():
             if scraper.vpn_address not in vpn_addresses_availables:
                 scraper.online = False
             else:
@@ -204,7 +214,7 @@ class Broker:
 
 
     async def update_nodes(self) -> None:
-        for scraper in self.scrapers:
+        for scraper in self.scrapers.values():
             if scraper.online:
                 await scraper.update()
 
@@ -212,6 +222,13 @@ class Broker:
     async def update(self) -> None:
         await self.update_available_nodes()
         await self.update_nodes()
+
+
+    def get_scraper_from_hostname(self, hostname: str) -> Union[ScraperImage, None]:
+        for scraper in self.scrapers.values():
+            if scraper.hostname == hostname:
+                return scraper
+        return None
         
 
 # -------------------------------------------------------------------------------- #
@@ -336,11 +353,38 @@ async def nodes():
                 "ram_usage": scraper.ram_usage,
                 "ipv6": scraper.ipv6,
                 "browsers": scraper.browsers,
-            } 
-            for scraper in app.state.broker.scrapers
+            }
+            for scraper in app.state.broker.scrapers.values()
         ]
     except Exception as e:
         line = sys.exc_info()[2].tb_lineno
         raise HTTPException(
             status_code=500, detail=f"{type(e).__name__} at line {line}: {str(e)}"
         )
+
+
+@app.get("/stream/{hostname}/{instance_id}")
+async def stream(hostname: str, instance_id: str):
+    scraper = app.state.broker.get_scraper_from_hostname(hostname)
+    if not scraper:
+        raise HTTPException(
+            status_code=409, detail=f"No scraper with hostname {hostname}"
+        )
+
+    if instance_id not in scraper.browsers.keys():
+        raise HTTPException(
+            status_code=409, detail=f"No browser instance {instance_id} for scraper {hostname}"
+        )
+
+    url = f"http://{scraper.vpn_address}:{HTTP_PORT_SCRAPER}/stream/{instance_id}"
+
+    client = httpx.AsyncClient()
+    req = client.build_request("GET", url)
+    response = await client.send(req, stream=True)
+    
+    return StreamingResponse(
+        response.aiter_bytes(),
+        status_code=response.status_code,
+        headers=dict(response.headers),
+        background=BackgroundTask(client.aclose)
+    )

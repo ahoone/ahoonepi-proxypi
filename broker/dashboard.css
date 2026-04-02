@@ -307,6 +307,12 @@ th.col-ram {
   margin-right: .25rem;
 }
 
+.browser-badge:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  text-decoration: none;
+}
+
 .browser-badge--idle {
   background: rgba(0,229,160,.1);
   color: var(--green);

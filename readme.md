@@ -18,7 +18,6 @@ Repository hosting the infrastructure for all the Pis (installation + proxypi pa
 | -l                                    | logs                                                                  |
 | -nwrg                                 | warnings (terminal window too small)                                  |
 | swarm-execute -o                      | get output                                                            |
-| info                                  | Collect the specs of the network. (not yet implemented)               |
 | ping-cloudflare                       | Test if the proxy is able to bypass cloudflare. (nyi)                 |
 
 ## Initialization

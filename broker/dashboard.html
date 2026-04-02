@@ -173,7 +173,10 @@
         if (!instances.length) return '<span class="lat-none">—</span>';
         return instances.map(function([name, data]) {
           const status = data.status || 'idle';
-          return '<span class="browser-badge browser-badge--' + status + '">' + name + '</span>';
+          const url = '/stream/' + encodeURIComponent(r.hostname) + '/' + encodeURIComponent(name);
+          return '<a href="' + url + '" class="browser-badge browser-badge--' + status + '" target="_blank">' + 
+            name + 
+            '</a>';
         }).join(' ');
       }
     }
