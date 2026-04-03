@@ -287,14 +287,6 @@ th.col-ram {
 .ram-orange { color: #ff9f43;       }
 .ram-red    { color: var(--red);    }
 
-.ipv6-cell {
-  color: #6b82a8;
-  font-size: .72rem;
-  max-width: 200px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 .browser-badge {
   display: inline-flex;
   align-items: center;
@@ -360,22 +352,16 @@ th.col-ram {
   color: var(--text-dim);
 }
 
-.node-id {
+.background-cell {
   font-family: var(--mono);
   font-size: .75rem;
   color: var(--text-dim);
 }
 
-.uri-cell {
+.url-cell {
   color: #6b82a8;
   font-size: .75rem;
   max-width: 360px;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.ts-cell {
-  color: var(--text-dim);
-  font-size: .72rem;
-  white-space: nowrap;
 }

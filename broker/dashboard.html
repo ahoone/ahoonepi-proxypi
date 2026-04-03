@@ -139,8 +139,8 @@
       label: 'Node ID ↓',
       render: function(r) {
         return r.node_id === 1
-          ? '<span class="node-id">' + r.node_id + '</span>'
-          : '<span class="node-id">' + (r.node_id != null ? r.node_id : '—') + '</span>';
+          ? '<span class="background-cell">' + r.node_id + '</span>'
+          : '<span class="background-cell">' + (r.node_id != null ? r.node_id : '—') + '</span>';
       }
     },
     {
@@ -163,7 +163,7 @@
     {
       label: 'IPv6',
       render: function(r) {
-        return '<span class="ipv6-cell" title="' + (r.ipv6 || '') + '">' + (r.ipv6 || '—') + '</span>';
+        return '<span class="background-cell" title="' + (r.ipv6 || '') + '">' + (r.ipv6 || '—') + '</span>';
       }
     },
     {
@@ -223,13 +223,14 @@
 
   // ── Broker ───────────────────────────────────────
   const BROKER_COLUMNS = [
-    { label: 'URI',       render: function(r) { return '<span class="uri-cell">'  + (r.uri       || '—') + '</span>'; } },
-    { label: 'Timestamp ↓', render: function(r) { return '<span class="ts-cell">'   + (r.timestamp || '—') + '</span>'; } },
+    { label: 'URL',       render: function(r) { return '<span class="url-cell">'  + (r.url       || '—') + '</span>'; } },
+    { label: 'Antwortzeit ↓', render: function(r) { return '<span class="background-cell">' + (r.antwortzeit || '—') + '</span>'; } },
+    { label: 'Timestamp', render: function(r) { return '<span class="background-cell">' + (r.timestamp || '—') + '</span>'; } },
     { 
       label: 'Tag', 
       render: function(r) { 
         if (!r.tag) {
-          return '<span class="ts-cell">—</span>';
+          return '<span class="background-cell">—</span>';
         }
         const dynamicStyle = getTagStyle(r.tag);
         return `<span class="badge" style="${dynamicStyle}">${r.tag}</span>`;

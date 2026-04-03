@@ -13,9 +13,9 @@ import random
 import requests
 import sqlite3  # native // does not need to be in requirements.txt
 from starlette.background import BackgroundTask
-from string import Template
+from string import Template, ascii_letters, digits
 import sys
-from typing import Any, Callable, Dict, List, Literal, Union 
+from typing import Any, Callable, Dict, List, Literal, Union, Optional, Tuple
 
 sys.path.insert(0, "/plugins")
 import fast_api_ip_middleware
@@ -31,18 +31,14 @@ assert "LIGHTHOUSE" in NODE_ROLE, "The node should be a lighthouse (ie includes 
 
 BROKER_DATABASE = "broker.db"
 BROKER_CLEAR_DB_ON_STARTUP = True
-
-DB_TABLE_URIS_TARGETS = "uris_targets"
-DB_TABLE_URIS_RESPONSES = "uris_responses"
-
+DB_TABLE_URLS_TARGETS = "urls_targets"
+DB_TABLE_URLS_RESPONSES = "urls_responses"
 PROXYPI_COMMAND_INFO = Template("info $node_id")
 PROXYPI_COMMAND_AVAILABLE_NODES = "ping-wireguard -a"
 PROXYPI_COMMAND_RAM = Template("ram $node_id")
-
 DISPLAY_LIMIT_SCRAPING_LIST = 200
-
-
 HTTP_PORT_SCRAPER = os.getenv("HTTP_PORT_SCRAPER")
+
 
 # -------------------------------------------------------------------------------- #
 # -------------------------------------------------------------------------------- #
@@ -52,7 +48,7 @@ HTTP_PORT_SCRAPER = os.getenv("HTTP_PORT_SCRAPER")
 
 #     def __init__(self) -> None:
 #         self.id: int = None
-#         self.uri: str = None
+#         self.url: str = None
 #         self.status: Literal["idle", "requesting"] = None
 
 
@@ -72,8 +68,8 @@ class ScraperImage:
         self.online: bool = None
         self.vpn_address: str = None  # UNIQUE (primary key)
         self.node_id: int = None  # UNIQUE (equivalent to primary key)
-        self.hostname: str = None  # UNIQUE
         self.port: str = None  # UNIQUE (equivalent to primary key)
+        self.hostname: str = None  # UNIQUE
         self.ipv6: str = None
         self.ram_specs: str = None
         self.ram_usage: str = None
@@ -99,10 +95,9 @@ class ScraperImage:
         self.node_id = int(vpn_address.split(".")[-1])
         response = await proxypi.run(PROXYPI_COMMAND_INFO.safe_substitute(node_id=self.node_id))
         self.__dict__.update(json.loads(response))
-        # The update of the ipv6 is not raised by the proxy (ie need to refresh manually)
 
 
-    async def update(self) -> None:
+    async def __fetch(self) -> None:
         ram_response = await proxypi.run(PROXYPI_COMMAND_RAM.safe_substitute(node_id=self.node_id))
         data = json.loads(ram_response)
         self.ram_specs = data['ram_specs']
@@ -120,11 +115,45 @@ class ScraperImage:
         # dropping outdated/killed instances
         # emptying self.browsers may be too memory intensive because of the browsing history
         # but the BrowserImage just on top is always reloading everything...
-        # for instance_id in self.browsers:
-        #     if instance_id not in scraper_response_as_dict:
-        #         del self.browsers[instance_id]
 
-        # self.browsers.update()
+
+    async def update(self) -> None:
+        await self.__fetch()
+        # anything to update for the browsers?
+
+
+    async def available(self) -> bool:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(f"http://{self.vpn_address}:{HTTP_PORT_SCRAPER}/available")
+            if response.status_code != 200:
+                return False
+            return json.loads(response.text)["available"]
+
+
+    async def new_instance(
+        self,
+        instance_id: str,
+        lifespan_in_seconds: Optional[int] = None,
+        window_size: Optional[Union[List[int], Tuple[int, int]]] = None,
+    ) -> bool:
+        async with httpx.AsyncClient() as client:
+            payload={"instance_id": instance_id}
+            if lifespan_in_seconds:
+                payload["lifespan_in_seconds"] = lifespan_in_seconds
+            if window_size:
+                payload["window_size"] = window_size
+            response = await client.post(f"http://{self.vpn_address}:{HTTP_PORT_SCRAPER}/new_instance", json=payload)
+            return response.status_code == 200
+
+
+# -------------------------------------------------------------------------------- #
+# -------------------------------------------------------------------------------- #
+
+
+class ScrapeRequest(BaseModel):
+    url: HttpUrl
+    antwortzeit: datetime.datetime  # the time you hope the request to complete
+    tag: str
 
 
 class Broker:
@@ -133,7 +162,8 @@ class Broker:
         self,
     ) -> None:
         self.scrapers: Dict[str, ScraperImage] = {}  # vpn_address -> scraper
-        self.db_con = None
+        self.__db_con = None
+        self.__db_cur = None
 
 
     # __INIT__ CAN NOT BE ASYNC IN PYTHON
@@ -146,26 +176,27 @@ class Broker:
 
     async def __initialize(self) -> None:
         await self.update()
-        self.db_con = sqlite3.connect(BROKER_DATABASE)
-        self.db_cur = self.db_con.cursor()
-        self.initialize_db_tables()
+        self.__db_con = sqlite3.connect(BROKER_DATABASE)
+        self.__db_cur = self.__db_con.cursor()
+        self.__initialize_db_tables()
 
 
-    def initialize_db_tables(self) -> None:
-        response = self.db_cur.execute("SELECT name FROM sqlite_master")
-        if response and DB_TABLE_URIS_TARGETS not in response.fetchall():
-            self.db_cur.execute(f"""
-                CREATE TABLE {DB_TABLE_URIS_TARGETS} (
+    def __initialize_db_tables(self) -> None:
+        response = self.__db_cur.execute("SELECT name FROM sqlite_master")
+        if response and DB_TABLE_URLS_TARGETS not in response.fetchall():
+            self.__db_cur.execute(f"""
+                CREATE TABLE {DB_TABLE_URLS_TARGETS} (
                     id INTEGER PRIMARY KEY,
-                    uri TEXT,
+                    url TEXT,
+                    antwortzeit DATETIME,
                     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
                     tag TEXT
                 );
             """)
-        if response and DB_TABLE_URIS_RESPONSES not in response.fetchall():
-            self.db_cur.execute(f"""
-                CREATE TABLE {DB_TABLE_URIS_RESPONSES} (
-                    uri,
+        if response and DB_TABLE_URLS_RESPONSES not in response.fetchall():
+            self.__db_cur.execute(f"""
+                CREATE TABLE {DB_TABLE_URLS_RESPONSES} (
+                    url,
                     response,
                     request_timestamp,
                     response_timestamp
@@ -173,25 +204,27 @@ class Broker:
             """)
 
 
-    def promise_scrape(self, uris: Union[str, List[str]], tag: str = None) -> None:
-        data = [(uris, tag)] if isinstance(uris, str) else [(uri, tag) for uri in uris]
-        query = f"INSERT INTO {DB_TABLE_URIS_TARGETS} (uri, tag) VALUES (?, ?)"
-        self.db_cur.executemany(query, data)
-        self.db_con.commit()
+    def scrape(self, request: ScrapeRequest) -> None:
+        # data = [(request.urls, request.tag)] if isinstance(request.urls, str) else [(url, request.tag) for url in request.urls]
+        # NOT SUPPORTING MULTIPLE ELEMENTS AT ONCE
+        data = [(str(request.url), request.antwortzeit, request.tag)]
+        query = f"INSERT INTO {DB_TABLE_URLS_TARGETS} (url, antwortzeit, tag) VALUES (?, ?, ?)"
+        self.__db_cur.executemany(query, data)
+        self.__db_con.commit()
 
 
-    def get_table_uris_targets(self) -> List[Dict[str, Any]]:
-        self.db_cur.execute(f"""
+    def scraping_list(self) -> List[Dict[str, Any]]:
+        self.__db_cur.execute(f"""
             SELECT *
-            FROM {DB_TABLE_URIS_TARGETS}
-            ORDER BY timestamp ASC
+            FROM {DB_TABLE_URLS_TARGETS}
+            ORDER BY antwortzeit ASC
             LIMIT {DISPLAY_LIMIT_SCRAPING_LIST}
         """)
-        columns = [desc[0] for desc in self.db_cur.description]
-        return [dict(zip(columns, row)) for row in self.db_cur.fetchall()]
+        columns = [desc[0] for desc in self.__db_cur.description]
+        return [dict(zip(columns, row)) for row in self.__db_cur.fetchall()]
 
 
-    async def update_available_nodes(self) -> None:
+    async def __update_available_nodes(self) -> None:
         vpn_addresses_availables = (await proxypi.run(PROXYPI_COMMAND_AVAILABLE_NODES)).splitlines()
 
         for vpn_address in vpn_addresses_availables:
@@ -213,15 +246,67 @@ class Broker:
                 scraper.online = True
 
 
-    async def update_nodes(self) -> None:
-        for scraper in self.scrapers.values():
-            if scraper.online:
-                await scraper.update()
+    async def __update_nodes(self) -> None:
+        updates = [
+            scraper.update()
+            for scraper in self.scrapers.values()
+            if scraper.online
+        ]
+        await asyncio.gather(*updates)
+
+
+    @staticmethod
+    def __random_id():
+        return ''.join(random.choices(ascii_letters + digits, k=8))
+
+
+    async def __create_browser(self) -> bool:
+        """
+        returns true if successfully creates a browser
+        """
+        tasks = [
+            (vpn_address, scraper.available())
+            for vpn_address, scraper in self.scrapers.items()
+            if scraper.online
+        ]
+        results = await asyncio.gather(*[task for _, task in tasks])
+        availables = [
+            vpn_address 
+            for (vpn_address, _), result in zip(tasks, results)
+            if result
+        ]
+        if len(availables) == 0:
+            return False
+        await self.scrapers[random.choice(availables)].new_instance(self.__random_id())
+        return True
+
+
+    async def __get_available_browser(self) -> BrowserImage:
+        """
+        returns the object browser that can handle the job
+        """
+        def get_browsers():
+            browsers = []
+            [browsers.extend(scraper.browsers.values()) for scraper in self.scrapers.values() if scraper.online]
+            return browsers
+
+        browsers = get_browsers()
+        if (not browsers) and (await self.__create_browser()):
+            browsers = get_browsers()
+        return random.choice(browsers) if browsers else None
+
+
+    async def __distribute(self) -> None:
+        # url =
+        worker = await self.__get_available_browser() 
+        if not worker:
+            return
 
 
     async def update(self) -> None:
-        await self.update_available_nodes()
-        await self.update_nodes()
+        await self.__update_available_nodes()
+        await self.__update_nodes()
+        await self.__distribute()
 
 
     def get_scraper_from_hostname(self, hostname: str) -> Union[ScraperImage, None]:
@@ -229,7 +314,7 @@ class Broker:
             if scraper.hostname == hostname:
                 return scraper
         return None
-        
+
 
 # -------------------------------------------------------------------------------- #
 # -------------------------------------------------------------------------------- #
@@ -269,7 +354,7 @@ async def lifespan(app: FastAPI):
     except asyncio.CancelledError:
         pass
     
-    app.state.broker.db_con.close()
+    app.state.broker.__db_con.close()
 
 
 app = FastAPI(
@@ -314,15 +399,10 @@ async def css():
     return FileResponse("dashboard.css")
 
 
-
-@app.post("/scrape/")
-async def promise_scrape(
-    uris: Union[str, List[str]] = Body(...),
-    tag: str = Body(None),
-):
-# async def promise_scrape(uris: Union[HttpUrl, List[HttpUrl]]):
+@app.post("/scrape")
+async def scrape(request: ScrapeRequest):
     try:
-        app.state.broker.promise_scrape(uris, tag)
+        app.state.broker.scrape(request)
     except Exception as e:
         line = sys.exc_info()[2].tb_lineno
         raise HTTPException(
@@ -331,9 +411,9 @@ async def promise_scrape(
 
 
 @app.get("/scraping-list")
-async def get_table_uris_targets():
+async def scraping_list():
     try:
-        return app.state.broker.get_table_uris_targets()
+        return app.state.broker.scraping_list()
     except Exception as e:
         line = sys.exc_info()[2].tb_lineno
         raise HTTPException(

@@ -393,11 +393,27 @@ app.add_middleware(
 # -------------------------------------------------------------------------------- #
 
 
+@app.get("/available")
+async def available():
+    try:
+        return {"available": MAX_INSTANCES_PER_SCRAPER - len(app.state.scraper.browsers) > 0}
+    except Exception as e:
+        line = sys.exc_info()[2].tb_lineno
+        raise HTTPException(
+            status_code=500, detail=f"{type(e).__name__} at line {line}: {str(e)}"
+        )
+
+
 @app.post("/new_instance")
 async def new_instance(request: Optional[NewInstanceRequest] = NewInstanceRequest()):
     if app.state.scraper.browser_exists(request.instance_id):
         raise HTTPException(
             status_code=409, detail=f"Browser instance with id {request.instance_id} already exists"
+        )
+
+    if len(app.state.scraper.browsers) > MAX_INSTANCES_PER_SCRAPER:
+        raise HTTPException(
+            status_code=409, detail=f"Already too many opened instances {MAX_INSTANCES_PER_SCRAPER}"
         )
 
     try:
@@ -451,11 +467,6 @@ async def stream(instance_id: str):
     if not app.state.scraper.browser_exists(instance_id):
         raise HTTPException(
             status_code=409, detail=f"No browser instance with id {instance_id}"
-        )
-
-    if len(app.state.scraper.browsers) > MAX_INSTANCES_PER_SCRAPER:
-        raise HTTPException(
-            status_code=409, detail=f"Already too many opened instances {MAX_INSTANCES_PER_SCRAPER}"
         )
 
     try:
