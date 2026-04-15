@@ -1,11 +1,13 @@
 import asyncio
 from contextlib import asynccontextmanager
 import datetime
-from fastapi import FastAPI, Request, HTTPException, WebSocket
+from fastapi import FastAPI, status, Request, HTTPException, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, HTMLResponse, JSONResponse
 import ipaddress
+from math import exp
 import nodriver as uc
+import numpy as np
 import os
 from pydantic import BaseModel
 import random
@@ -40,6 +42,10 @@ JPEG_MARKER_START=b"\xFF\xD8\xFF"
 JPEG_MARKER_END=b"\xFF\xD9"
 MAX_INSTANCES_PER_SCRAPER=4
 UNPACKING_CLOSE_TIMEOUT=6
+SCORE_PARAMETER_LAMBDA = .5
+ERHOLUNGSZEIT_MINIMUM = 2000  # milliseconds
+ERHOLUNGSZEIT_MEAN = 5000  # milliseconds
+ERHOLUNGSZEIT_SPREAD = 0.5  # variance
 
 
 # -------------------------------------------------------------------------------- #
@@ -71,6 +77,7 @@ class Browser:
         self.browsing_history: List[Dict] = []
         self.__get_lock = asyncio.Lock()
         self.spotted = False
+        self.erholungszeit = datetime.datetime
 
 
     @classmethod
@@ -120,7 +127,7 @@ class Browser:
 
         self.__display_process = subprocess.Popen(
             command,
-            stdout=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
         )
 
@@ -134,6 +141,8 @@ class Browser:
             self.__display_process.wait(timeout=DISPLAY_CLOSE_TIMEOUT)
         except subprocess.TimeoutExpired:
             self.__display_process.kill()
+            self.__display_process.wait()
+        self.__display_process = None
 
 
     async def __initialize(
@@ -176,7 +185,7 @@ class Browser:
         self.__streaming_process = subprocess.Popen(
             command,
             stdout = subprocess.PIPE,
-            stderr = subprocess.PIPE,
+            stderr = subprocess.DEVNULL,
             env = {**os.environ, "DISPLAY": self.display},
         )
 
@@ -189,6 +198,8 @@ class Browser:
             self.__streaming_process.wait(timeout=STREAM_CLOSE_TIMEOUT)
         except subprocess.TimeoutExpired:
             self.__streaming_process.kill()
+            self.__streaming_process.wait()
+        self.__streaming_process = None
 
 
     @staticmethod
@@ -249,15 +260,26 @@ class Browser:
                 )
 
 
-    async def get(self, uri: str) -> str:
+    async def get(self, url: str) -> str:
+        def erholungszeit() -> int:
+            """
+            return waiting time in milliseconds
+            """
+            return max(
+                ERHOLUNGSZEIT_MINIMUM,
+                np.random.normal(loc=ERHOLUNGSZEIT_MEAN, scale=ERHOLUNGSZEIT_SPREAD),
+            )
+
         async with self.__get_lock:
+            # SHOULD WAIT HERE FOR ERHOLUNGSZEIT
             access_record = {
-                "uri": uri,
+                "url": url,
                 "timestamp": datetime.datetime.now().isoformat(),
             }
 
             try:
-                page = await self.__driver.get(uri)
+                page = await self.__driver.get(url)
+                self.erholungszeit = datetime.datetime.now() + datetime.timedelta(milliseconds=erholungszeit())
                 html_content = await page.get_content()
 
                 access_record["status"] = "success"
@@ -275,13 +297,32 @@ class Browser:
                 self.browsing_history.append(access_record)
                 raise
 
-    def status(self) -> Literal["idle", "requesting", "spotted"]:
+
+    def status(self) -> Literal["idle", "requesting", "spotted", "waiting"]:
         if self.spotted:
             return "spotted"
         elif self.__get_lock.locked():
             return "requesting"
+        elif self.erholungszeit > datetime.datetime.now():
+            return "waiting"
         else:
             return "idle"
+
+
+    def score(self) -> float:
+        def cost_function(access_record: dict) -> float:
+            """
+            density function of the exponential law
+            too unexponential
+            """
+            time_elapsed = (datetime.datetime.now() - datetime.datetime.fromisoformat(access_record["completed_at"])).total_seconds()
+            return SCORE_PARAMETER_LAMBDA * exp(- time_elapsed * SCORE_PARAMETER_LAMBDA)
+
+        return sum([
+            cost_function(access_record)
+            for access_record in self.browsing_history
+        ])
+
 
 
 class NewInstanceRequest(BaseModel):
@@ -296,7 +337,7 @@ class KillRequest(BaseModel):
 
 class GetRequest(BaseModel):
     instance_id: str
-    uri: str
+    url: str
 
 
 class Scraper:
@@ -316,7 +357,7 @@ class Scraper:
 
     async def get(self, request: GetRequest) -> Dict[Any, Any]:
         browser = self.browsers[request.instance_id]
-        return await browser.get(request.uri)
+        return await browser.get(request.url)
 
     def terminate(self) -> None:
         [_.kill() for _ in self.browsers.values()]
@@ -368,7 +409,7 @@ app = FastAPI(
 )
 
 
-@app.get("/check-ip")
+@app.get("/check-ip", include_in_schema=False)
 async def check_ip(request: Request):
     return await fast_api_ip_middleware.check_ip(request, ALLOWED_NETWORKS)
 
@@ -393,6 +434,14 @@ app.add_middleware(
 # -------------------------------------------------------------------------------- #
 
 
+@app.get("/")
+async def root():
+    """
+    health check for unit tests
+    """
+    return {}
+
+
 @app.get("/available")
 async def available():
     try:
@@ -400,20 +449,23 @@ async def available():
     except Exception as e:
         line = sys.exc_info()[2].tb_lineno
         raise HTTPException(
-            status_code=500, detail=f"{type(e).__name__} at line {line}: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"{type(e).__name__} at line {line}: {str(e)}",
         )
 
 
-@app.post("/new_instance")
+@app.post("/new_instance", status_code=status.HTTP_201_CREATED)
 async def new_instance(request: Optional[NewInstanceRequest] = NewInstanceRequest()):
     if app.state.scraper.browser_exists(request.instance_id):
         raise HTTPException(
-            status_code=409, detail=f"Browser instance with id {request.instance_id} already exists"
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Browser instance with id {request.instance_id} already exists",
         )
 
     if len(app.state.scraper.browsers) > MAX_INSTANCES_PER_SCRAPER:
         raise HTTPException(
-            status_code=409, detail=f"Already too many opened instances {MAX_INSTANCES_PER_SCRAPER}"
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Already too many opened instances {MAX_INSTANCES_PER_SCRAPER}",
         )
 
     try:
@@ -421,15 +473,17 @@ async def new_instance(request: Optional[NewInstanceRequest] = NewInstanceReques
     except Exception as e:
         line = sys.exc_info()[2].tb_lineno
         raise HTTPException(
-            status_code=500, detail=f"{type(e).__name__} at line {line}: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"{type(e).__name__} at line {line}: {str(e)}",
         )
 
 
-@app.post("/kill")
+@app.delete("/kill")
 async def kill(request: KillRequest):
     if not app.state.scraper.browser_exists(request.instance_id):
         raise HTTPException(
-            status_code=409, detail=f"No browser instance with id {request.instance_id}"
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"No browser instance with id {request.instance_id}",
         )
 
     try:
@@ -437,7 +491,8 @@ async def kill(request: KillRequest):
     except Exception as e:
         line = sys.exc_info()[2].tb_lineno
         raise HTTPException(
-            status_code=500, detail=f"{type(e).__name__} at line {line}: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"{type(e).__name__} at line {line}: {str(e)}",
         )
 
 
@@ -452,13 +507,15 @@ async def browsers():
                 "expires_at": browser.expires_at,
                 "remaining_lifespan": browser.expires_at - datetime.datetime.now(),
                 "status": browser.status(),
+                "score": browser.score(),
                 "browsing_history": browser.browsing_history,  # maybe we'll not always want this, response may be too large
             } for instance_id, browser in app.state.scraper.browsers.items()
         }
     except Exception as e:
         line = sys.exc_info()[2].tb_lineno
         raise HTTPException(
-            status_code=500, detail=f"{type(e).__name__} at line {line}: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"{type(e).__name__} at line {line}: {str(e)}",
         )
 
 
@@ -466,7 +523,8 @@ async def browsers():
 async def stream(instance_id: str):
     if not app.state.scraper.browser_exists(instance_id):
         raise HTTPException(
-            status_code=409, detail=f"No browser instance with id {instance_id}"
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"No browser instance with id {instance_id}",
         )
 
     try:
@@ -478,7 +536,8 @@ async def stream(instance_id: str):
     except Exception as e:
         line = sys.exc_info()[2].tb_lineno
         raise HTTPException(
-            status_code=500, detail=f"{type(e).__name__} at line {line}: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"{type(e).__name__} at line {line}: {str(e)}",
         )
 
 
@@ -486,7 +545,8 @@ async def stream(instance_id: str):
 async def get(request: GetRequest):
     if not app.state.scraper.browser_exists(request.instance_id):
         raise HTTPException(
-            status_code=409, detail=f"No browser instance with id {request.instance_id}"
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"No browser instance with id {request.instance_id}",
         )
 
     try:
@@ -494,5 +554,6 @@ async def get(request: GetRequest):
     except Exception as e:
         line = sys.exc_info()[2].tb_lineno
         raise HTTPException(
-            status_code=500, detail=f"{type(e).__name__} at line {line}: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"{type(e).__name__} at line {line}: {str(e)}",
         )

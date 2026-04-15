@@ -24,8 +24,6 @@ Repository hosting the infrastructure for all the Pis (installation + proxypi pa
 
 ### Download
 
-**The repository is supposed to be then entire `/home/admin` folder!**
-
 ```bash
 git clone https://github.com/ahoone/ahoonepi-proxypi .
 cd ahoonepi-proxy

@@ -1,14 +1,14 @@
 import asyncio
 from contextlib import asynccontextmanager
 import datetime
-from fastapi import Body, FastAPI, Request, HTTPException
+from fastapi import Body, FastAPI, status, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, StreamingResponse
 import httpx
 import ipaddress
 import json
 import os
-from pydantic import HttpUrl, BaseModel
+from pydantic import HttpUrl, BaseModel, Field
 import random
 import requests
 import sqlite3  # native // does not need to be in requirements.txt
@@ -31,25 +31,19 @@ assert "LIGHTHOUSE" in NODE_ROLE, "The node should be a lighthouse (ie includes 
 
 BROKER_DATABASE = "broker.db"
 BROKER_CLEAR_DB_ON_STARTUP = True
-DB_TABLE_URLS_TARGETS = "urls_targets"
-DB_TABLE_URLS_RESPONSES = "urls_responses"
+DB_TABLE_TARGETS = "targets"
+DB_TABLE_REQUESTS = "requests"
 PROXYPI_COMMAND_INFO = Template("info $node_id")
 PROXYPI_COMMAND_AVAILABLE_NODES = "ping-wireguard -a"
 PROXYPI_COMMAND_RAM = Template("ram $node_id")
 DISPLAY_LIMIT_SCRAPING_LIST = 200
 HTTP_PORT_SCRAPER = os.getenv("HTTP_PORT_SCRAPER")
+TIMEOUT_SCRAPER_FETCHING_INFO = 2
+THRESHOLD_SCORE = 300
 
 
 # -------------------------------------------------------------------------------- #
 # -------------------------------------------------------------------------------- #
-
-
-# class TabImage:
-
-#     def __init__(self) -> None:
-#         self.id: int = None
-#         self.url: str = None
-#         self.status: Literal["idle", "requesting"] = None
 
 
 class BrowserImage:
@@ -58,14 +52,15 @@ class BrowserImage:
         self.created_at: datetime.datetime = scraper_response["created_at"]
         self.expires_at: datetime.datetime = scraper_response["expires_at"]
         self.browsing_history: List[str] = []
-        self.status: Literal["idle", "requesting", "spotted"] = scraper_response["status"]
-        # self.tabs: List[TabImage] = []
+        self.status: Literal["idle", "requesting", "spotted", "waiting"] = scraper_response["status"]
+        self.score: float = scraper_response["score"]
 
 
 class ScraperImage:
 
     def __init__(self) -> None:
         self.online: bool = None
+        # self.id = Dict[str, Any] = {"vpn_address": None, "node": None, "port": None, "hostname": None}  # replacement for the keys
         self.vpn_address: str = None  # UNIQUE (primary key)
         self.node_id: int = None  # UNIQUE (equivalent to primary key)
         self.port: str = None  # UNIQUE (equivalent to primary key)
@@ -79,6 +74,7 @@ class ScraperImage:
         # self.vpn_latency: int = None
         # self.spotted: bool = None
         self.browsers: Dict[str, BrowserImage] = {}  # instance_id: browser
+        self.score: float = .0
 
 
     # __INIT__ CAN NOT BE ASYNC
@@ -97,19 +93,21 @@ class ScraperImage:
         self.__dict__.update(json.loads(response))
 
 
-    async def __fetch(self) -> None:
+    async def __fetch_info(self) -> None:
         ram_response = await proxypi.run(PROXYPI_COMMAND_RAM.safe_substitute(node_id=self.node_id))
         data = json.loads(ram_response)
         self.ram_specs = data['ram_specs']
         self.ram_usage = data['ram_usage']
 
         self.browsers = {}
-        scraper_response = requests.get(f"http://{self.vpn_address}:{HTTP_PORT_SCRAPER}/browsers")
+        scraper_response = requests.get(
+            f"http://{self.vpn_address}:{HTTP_PORT_SCRAPER}/browsers",
+            timeout=TIMEOUT_SCRAPER_FETCHING_INFO,
+        )
         scraper_response_as_dict = json.loads(scraper_response.text)
         if not scraper_response.ok:
             return
         for instance_id, browser_as_dict in scraper_response_as_dict.items():
-            print(browser_as_dict)
             self.browsers[instance_id] = BrowserImage(browser_as_dict)
 
         # dropping outdated/killed instances
@@ -118,7 +116,7 @@ class ScraperImage:
 
 
     async def update(self) -> None:
-        await self.__fetch()
+        await self.__fetch_info()
         # anything to update for the browsers?
 
 
@@ -151,8 +149,13 @@ class ScraperImage:
 
 
 class ScrapeRequest(BaseModel):
+    """
+    antwortzeit is the time you hope the response
+    default is the time of receiving the request
+    else is a isoformat string of datetime.datetime
+    """
     url: HttpUrl
-    antwortzeit: datetime.datetime  # the time you hope the request to complete
+    antwortzeit: Optional[datetime.datetime] = Field(default_factory=datetime.datetime.now())
     tag: str
 
 
@@ -162,6 +165,7 @@ class Broker:
         self,
     ) -> None:
         self.scrapers: Dict[str, ScraperImage] = {}  # vpn_address -> scraper
+        # self
         self.__db_con = None
         self.__db_cur = None
 
@@ -175,31 +179,35 @@ class Broker:
 
 
     async def __initialize(self) -> None:
-        await self.update()
         self.__db_con = sqlite3.connect(BROKER_DATABASE)
         self.__db_cur = self.__db_con.cursor()
         self.__initialize_db_tables()
+        await self.update()
 
 
     def __initialize_db_tables(self) -> None:
         response = self.__db_cur.execute("SELECT name FROM sqlite_master")
-        if response and DB_TABLE_URLS_TARGETS not in response.fetchall():
+        if response and DB_TABLE_TARGETS not in response.fetchall():
             self.__db_cur.execute(f"""
-                CREATE TABLE {DB_TABLE_URLS_TARGETS} (
-                    id INTEGER PRIMARY KEY,
-                    url TEXT,
-                    antwortzeit DATETIME,
-                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                CREATE TABLE {DB_TABLE_TARGETS} (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    url TEXT NOT NULL,
+                    antwortzeit DATETIME NOT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                     tag TEXT
                 );
             """)
-        if response and DB_TABLE_URLS_RESPONSES not in response.fetchall():
+        if response and DB_TABLE_REQUESTS not in response.fetchall():
             self.__db_cur.execute(f"""
-                CREATE TABLE {DB_TABLE_URLS_RESPONSES} (
-                    url,
-                    response,
-                    request_timestamp,
-                    response_timestamp
+                CREATE TABLE {DB_TABLE_REQUESTS} (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    {DB_TABLE_TARGETS}_id INTEGER NOT NULL,
+                    request_timestamp DATETIME NOT NULL,
+                    response_timestamp DATETIME,
+                    status_code INTEGER,
+                    success BOOLEAN,
+                    content BLOB,
+                    FOREIGN KEY ({DB_TABLE_TARGETS}_id) REFERENCES {DB_TABLE_TARGETS}(id)
                 );
             """)
 
@@ -208,7 +216,7 @@ class Broker:
         # data = [(request.urls, request.tag)] if isinstance(request.urls, str) else [(url, request.tag) for url in request.urls]
         # NOT SUPPORTING MULTIPLE ELEMENTS AT ONCE
         data = [(str(request.url), request.antwortzeit, request.tag)]
-        query = f"INSERT INTO {DB_TABLE_URLS_TARGETS} (url, antwortzeit, tag) VALUES (?, ?, ?)"
+        query = f"INSERT INTO {DB_TABLE_TARGETS} (url, antwortzeit, tag) VALUES (?, ?, ?)"
         self.__db_cur.executemany(query, data)
         self.__db_con.commit()
 
@@ -216,7 +224,7 @@ class Broker:
     def scraping_list(self) -> List[Dict[str, Any]]:
         self.__db_cur.execute(f"""
             SELECT *
-            FROM {DB_TABLE_URLS_TARGETS}
+            FROM {DB_TABLE_TARGETS}
             ORDER BY antwortzeit ASC
             LIMIT {DISPLAY_LIMIT_SCRAPING_LIST}
         """)
@@ -256,7 +264,7 @@ class Broker:
 
 
     @staticmethod
-    def __random_id():
+    def __random_id() -> str:
         return ''.join(random.choices(ascii_letters + digits, k=8))
 
 
@@ -283,11 +291,21 @@ class Broker:
 
     async def __get_available_browser(self) -> BrowserImage:
         """
-        returns the object browser that can handle the job
+        returns the object (BrowserImage) browser that can handle the job
         """
         def get_browsers():
             browsers = []
-            [browsers.extend(scraper.browsers.values()) for scraper in self.scrapers.values() if scraper.online]
+            [
+                browsers.extend(
+                    [
+                        browser
+                        for browser in scraper.browsers.values()
+                        if browser.status == "idle" and browser.score < THRESHOLD_SCORE
+                    ]
+                )
+                for scraper in self.scrapers.values()
+                if scraper.online
+            ]
             return browsers
 
         browsers = get_browsers()
@@ -296,11 +314,31 @@ class Broker:
         return random.choice(browsers) if browsers else None
 
 
+    def __get_top_request(self) -> Optional[Dict[str, Any]]:
+        self.__db_cur.execute(f"""
+            SELECT *
+            FROM {DB_TABLE_TARGETS}
+            ORDER BY antwortzeit ASC
+        """)
+        columns = [desc[0] for desc in self.__db_cur.description]
+        response = self.__db_cur.fetchone()
+        if not response:
+            return
+        return dict(zip(columns, response))
+
+
     async def __distribute(self) -> None:
-        # url =
+        request = self.__get_top_request()
+        if not request:
+            return
+        print(request)
+
         worker = await self.__get_available_browser() 
         if not worker:
             return
+
+        
+        # PROCESS THE REQUEST
 
 
     async def update(self) -> None:
@@ -309,7 +347,7 @@ class Broker:
         await self.__distribute()
 
 
-    def get_scraper_from_hostname(self, hostname: str) -> Union[ScraperImage, None]:
+    def get_scraper_from_hostname(self, hostname: str) -> Optional[ScraperImage]:
         for scraper in self.scrapers.values():
             if scraper.hostname == hostname:
                 return scraper
@@ -365,7 +403,7 @@ app = FastAPI(
 )
 
 
-@app.get("/check-ip")
+@app.get("/check-ip", include_in_schema=False)
 async def check_ip(request: Request):
     return await fast_api_ip_middleware.check_ip(request, ALLOWED_NETWORKS)
 
@@ -390,16 +428,16 @@ app.add_middleware(
 # -------------------------------------------------------------------------------- #
 
 
-@app.get("/")
+@app.get("/", include_in_schema=False)
 async def home():
     return FileResponse("dashboard.html")
 
-@app.get("/dashboard.css")
+@app.get("/dashboard.css", include_in_schema=False)
 async def css():
     return FileResponse("dashboard.css")
 
 
-@app.post("/scrape")
+@app.post("/scrape", status_code=status.HTTP_202_ACCEPTED)
 async def scrape(request: ScrapeRequest):
     try:
         app.state.broker.scrape(request)
