@@ -29,23 +29,25 @@ NODE_ROLE = os.getenv("NODE_ROLE").split(",")
 assert "SCRAPER" in NODE_ROLE, "The node should be a scraper to launch this image"
 
 
-DISPLAY_DEPTH=24
-DISPLAY_CLOSE_TIMEOUT=6
-BROWSER_DEFAULT_ID="default"
-BROWSER_DEFAULT_LIFESPAN=3600  # 1 hour in seconds
-BROWSER_DEFAULT_WINDOW=[1920, 1080]
-STREAM_QUALITY=15  # 2=best 31=worst
-STREAM_FPS=12
-STREAM_CLOSE_TIMEOUT=6
-STREAM_CHUNK_SIZE=16384
-JPEG_MARKER_START=b"\xFF\xD8\xFF"
-JPEG_MARKER_END=b"\xFF\xD9"
-MAX_INSTANCES_PER_SCRAPER=4
-UNPACKING_CLOSE_TIMEOUT=6
+BACKGROUND_UPDATE_PERIOD = 1  # seconds
+DISPLAY_DEPTH = 24
+DISPLAY_CLOSE_TIMEOUT = 6  # seconds
+BROWSER_DEFAULT_ID = "default"
+BROWSER_DEFAULT_LIFESPAN = 3600  # 1 hour in seconds
+BROWSER_DEFAULT_WINDOW = [1920, 1080]
+STREAM_QUALITY = 15  # 2=best 31=worst
+STREAM_FPS = 12
+STREAM_CLOSE_TIMEOUT = 6  # seconds
+STREAM_CHUNK_SIZE = 2**14
+JPEG_MARKER_START = b"\xFF\xD8\xFF"
+JPEG_MARKER_END = b"\xFF\xD9"
+MAX_INSTANCES_PER_SCRAPER = 4
+UNPACKING_CLOSE_TIMEOUT = 6  # seconds
 SCORE_PARAMETER_LAMBDA = .5
 ERHOLUNGSZEIT_MINIMUM = 2000  # milliseconds
 ERHOLUNGSZEIT_MEAN = 5000  # milliseconds
 ERHOLUNGSZEIT_SPREAD = 0.5  # variance
+ERHOLUNGSZEIT_REFRESH_PERIOD = 0.1  # seconds
 
 
 # -------------------------------------------------------------------------------- #
@@ -77,7 +79,7 @@ class Browser:
         self.browsing_history: List[Dict] = []
         self.__get_lock = asyncio.Lock()
         self.spotted = False
-        self.erholungszeit = datetime.datetime
+        self.erholungszeit: datetime.datetime = None
 
 
     @classmethod
@@ -156,6 +158,7 @@ class Browser:
         self.created_at = datetime.datetime.now()
         self.expires_at = self.created_at + datetime.timedelta(seconds=lifespan_in_seconds)
         self.__start_unpacking_frames_process()
+        self.erholungszeit = datetime.datetime.now()
 
 
     def kill(self) -> None:
@@ -271,7 +274,10 @@ class Browser:
             )
 
         async with self.__get_lock:
-            # SHOULD WAIT HERE FOR ERHOLUNGSZEIT
+
+            while self.erholungszeit and self.erholungszeit > datetime.datetime.now():
+                await asyncio.sleep(ERHOLUNGSZEIT_REFRESH_PERIOD)
+
             access_record = {
                 "url": url,
                 "timestamp": datetime.datetime.now().isoformat(),
@@ -387,7 +393,7 @@ async def background_update(app):
     loop = asyncio.get_running_loop()
     while True:
         await loop.run_in_executor(None, app.state.scraper.update)
-        await asyncio.sleep(1)
+        await asyncio.sleep(BACKGROUND_UPDATE_PERIOD)
 
 
 @asynccontextmanager
@@ -434,7 +440,7 @@ app.add_middleware(
 # -------------------------------------------------------------------------------- #
 
 
-@app.get("/")
+@app.get("/", include_in_schema=False)
 async def root():
     """
     health check for unit tests

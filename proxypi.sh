@@ -5,8 +5,6 @@
 source ui.sh
 source .env
 
-WIREGUARD_NETWORK_PREFIX="10.0.0"
-WIREGUARD_LIGHTHOUSE_ID="1"
 PROXYPI_RANGE_REGEX="22[0-9]{2}"
 
 PROXYPI_USER="admin"
@@ -32,6 +30,7 @@ declare -A FCT_MAP=(
     [load-wireguard]="wireguard::load"
     [ping]="ssh::ping"
     [ping-wireguard]="wireguard::ping"
+    [restart]="docker::restart"
     [swarm-execute]="ssh::exec"
 )
 
@@ -46,6 +45,7 @@ declare -A FCT_DESCR=(
     [load-wireguard]="Add to the lighthouse the peer proxies keys"
     [ping]="Check connectivity and status of all proxies. -w for getting the info formatted for the web (list of dictionaries)."
     [ping-wireguard]="Check connectivity through Wireguard. -a for getting just the available ips address for the scraper component."
+    [restart]="Restarts the containers broker and scraper depending on the node role"
     [swarm-execute]="Run a command on ALL proxies. For script execution 'bash' and './' are not equivalent"
 )
 
@@ -58,6 +58,7 @@ declare -A FCT_ARGS=(
     [connect]="proxy_id"
     [info]="node_id"
     [ram]="node_id"
+    [restart]="node_id"
     [swarm-execute]="timeout command"
 )
 
@@ -67,6 +68,7 @@ EXIT_CODE_UNKNOWN_FUNCTION=2
 EXIT_CODE_WRONG_PARAMETERS=3
 EXIT_CODE_NO_FLAG_FUNCTION=4
 EXIT_CODE_UNKNOWN_FLAG=5
+EXIT_CODE_NOT_IMPLEMENTED=6
 
 
 # TODO (ahoone): HERE WE SHOULD VERIFY THE ROLES OF THE PI (SCRAPER) AND IF THE REMOTE CONTAINER IS RUNNING
@@ -492,7 +494,7 @@ git::pull() {
 # Arguments:
 #   $1: proxy id
 # Outputs:
-#   Dictionnary to stdout
+#   Dictionary to stdout
 # Returns:
 #   0 on success
 #   1 on unknown port
@@ -531,7 +533,7 @@ ssh::info() {
 # Arguments:
 #   $1: proxy id
 # Outputs:
-#   Dictionnary to stdout
+#   Dictionary to stdout
 # Returns:
 #   0 on success
 #   1 on unknown port
@@ -668,6 +670,32 @@ wireguard::load() {
 
 
 #######################################
+# Restarts the containers
+# Arguments:
+#   $1: node_id
+# Returns:
+#   0 on success
+#######################################
+docker::restart() {
+    local node_id=$1
+
+    if [[ "$node_id" == "1" ]]; then
+        cd /home/admin
+
+        docker compose -f scraper/docker-compose.yml down
+        docker compose -f scraper/docker-compose.yml --env-file .env up --build -d
+
+        docker compose -f broker/docker-compose.yml down
+        docker compose -f broker/docker-compose.yml --env-file .env up --build -d
+    else
+        echob "NOT IMPLEMENTED FOR OTHER THAN NODE_ID=1"
+        return $EXIT_CODE_NOT_IMPLEMENTED
+    fi
+
+    # TODO (ahoone): implementing for the proxies
+}
+
+#######################################
 #######################################
 
 
@@ -761,7 +789,6 @@ while [[ $# -gt 0 ]]; do
             "${FCT_MAP[$fct]}" "$proxy_id"
             ;;
 
-
         swarm-execute)
 
             if [[ -z "$1" || ! "$1" =~ ^[0-9]+$ ]]; then
@@ -783,6 +810,19 @@ while [[ $# -gt 0 ]]; do
             
             "${FCT_MAP[$fct]}" "$swarm_timeout" "$*"; shift $#
             ;;
+
+        restart)
+            if [[ -z "$1" || ! "$1" =~ ^([1-9]|[1-9][0-9])$ ]]; then
+                echob "Error: the id specified is outside the range 1-99"
+                echob "Example: $0 restart 2"
+                help; exit $EXIT_CODE_WRONG_PARAMETERS
+            fi
+
+            node_id="$1"; shift
+
+            "${FCT_MAP[$fct]}" "$node_id"
+            ;;
+
     esac
 
 done

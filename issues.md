@@ -1,3 +1,5 @@
+- for the tests, the explicit new instance does not start if we are streaming the default one at the same time
+
 - scraping work just sometimes on the initialization of a browser
 - usually i remove the container and then rebuilt it
 - but apparently using a different id is working

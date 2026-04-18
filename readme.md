@@ -11,14 +11,16 @@ Repository hosting the infrastructure for all the Pis (installation + proxypi pa
 
 *It is ducking not good because flags' parameters are also treated as flags (not arguments for the function)*
 
-| Arg.                                  | For:                                                                  |
-|---------------------------------------|-----------------------------------------------------------------------|
-| -w (ping...)                          | web format (list of dictionnaries)                                    |
-| -h                                    | human readable                                                        |
-| -l                                    | logs                                                                  |
-| -nwrg                                 | warnings (terminal window too small)                                  |
-| swarm-execute -o                      | get output                                                            |
-| ping-cloudflare                       | Test if the proxy is able to bypass cloudflare. (nyi)                 |
+| Arg.             | For:                                                                  |
+|------------------|-----------------------------------------------------------------------|
+| -w (ping...)     | web format (list of dictionnaries)                                    |
+| -h               | human readable                                                        |
+| -l               | logs                                                                  |
+| -nwrg            | warnings (terminal window too small)                                  |
+| swarm-execute -o | get output                                                            |
+| ping-cloudflare  | Test if the proxy is able to bypass cloudflare. (nyi)                 |
+| restart          | [restart]="-a -b -s -n node_id"                                       |
+
 
 ## Initialization
 
@@ -131,7 +133,10 @@ The number of the opened port is decided by concatenate the prefix `22` and the 
 
 ## To format the python code
 
-So far there is no github worflow. Proceed to use black on the entire repository.
+```bash
+docker compose -f tests/docker-compose.yml --env-file .env up --build -d
+docker logs tests
+```
 
 ```bash
 python -m venv ~/py_envs

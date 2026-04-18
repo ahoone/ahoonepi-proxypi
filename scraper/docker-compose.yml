@@ -15,7 +15,6 @@ services:
       - /tmp/proxypi.sock:/tmp/proxypi.sock
     environment:
       NODE_ROLE: ${NODE_ROLE}
-      DISPLAY: :99
       # not sure if those are useful (those arguments are also set in main.py)
       # (which initiates the browser including those)
       CHROME_EXTRA_ARGS: >-
