@@ -12,7 +12,7 @@ from pydantic import BaseModel
 import subprocess
 import sys
 import threading
-from typing import Tuple, List, Dict, Callable, Optional, Union, BinaryIO, Any, Literal
+from typing import Tuple, List, Dict, Callable, Optional, Union, BinaryIO, Any, Literal, AsyncGenerator
 import zendriver as uc
 
 
@@ -37,7 +37,7 @@ BROWSER_DEFAULT_WINDOW = [1920, 1080]
 STREAM_QUALITY = 15  # 2=best 31=worst
 STREAM_FPS = 12
 STREAM_CLOSE_TIMEOUT = 6  # seconds
-STREAM_CHUNK_SIZE = 2**14
+STREAM_CHUNK_SIZE = 2**14  # 16,384
 JPEG_MARKER_START = b"\xFF\xD8\xFF"
 JPEG_MARKER_END = b"\xFF\xD9"
 MAX_INSTANCES_PER_SCRAPER = 4
@@ -50,6 +50,9 @@ ERHOLUNGSZEIT_REFRESH_PERIOD = .1  # seconds
 LIFESPAN_BUFFER_GET_REQUEST = 5  # seconds
 SETTLING_WAIT_TIME_COMPLETE = 1  # seconds
 SETTLING_WAIT_TIME_INTERACTIVE = 3  # seconds
+MAXIMUM_SIZE_HTML = 2**13  # =8,192 based on manual tests, cloudflare pages are 4456 and 5620 characters
+MAXIMUM_SIZE_ERROR_MESSAGE = 256
+
 
 # -------------------------------------------------------------------------------- #
 # -------------------------------------------------------------------------------- #
@@ -60,6 +63,27 @@ SETTLING_WAIT_TIME_INTERACTIVE = 3  # seconds
 #     def __init__(self) -> None:
 #         self.mouse_movements = None
 #         self.scrolling_speed = None
+
+
+class BotSpottedError(Exception):
+    def __init__(self, html: str):
+        self.html: str = html
+        super().__init__("spotted by anti bot")
+
+
+class NewInstanceRequest(BaseModel):
+    instance_id: str = BROWSER_DEFAULT_ID
+    lifespan_in_seconds: int = BROWSER_DEFAULT_LIFESPAN
+    window_size: Union[List[int], Tuple[int, int]] = BROWSER_DEFAULT_WINDOW
+
+
+class KillRequest(BaseModel):
+    instance_id: str
+
+
+class GetRequest(BaseModel):
+    instance_id: str
+    url: str
 
 
 class Browser:
@@ -82,7 +106,6 @@ class Browser:
         self.spotted: bool = False
         self.erholungszeit: datetime.datetime = None  # recovery period after a request
 
-
     @classmethod
     async def create(
         cls,
@@ -96,23 +119,18 @@ class Browser:
         )
         return browser
 
-
-    async def __create_driver(self):
-        os.environ["DISPLAY"] = self.display
-        return await uc.start(
-                headless=False,  # If headerless, Cloudflare spots us.
-                browser_args=[
-                    "--no-sandbox",
-                    "--disable-setuid-sandbox",
-                    "--disable-blink-features=AutomationControlled",
-                    "--disable-features=IsolateOrigins,site-per-process",
-                    f"--window-size={self.window_size[0]},{self.window_size[1]}",
-                    "--window-position=0,0",
-                ],  # If images are blocked, Cloudflare spots us.
-                sandbox=False,
-                env={**os.environ},
-            )
-
+    async def __initialize(
+        self,
+        lifespan_in_seconds: int,
+        window_size: Tuple[int, int],
+    ) -> None:
+        self.window_size = window_size
+        self.__create_display()
+        self.__driver = await self.__create_driver()
+        self.created_at = datetime.datetime.now()
+        self.expires_at = self.created_at + datetime.timedelta(seconds=lifespan_in_seconds)
+        self.__create_unpacking_frames_process()
+        self.erholungszeit = datetime.datetime.now()
 
     def __create_display(self) -> None:
         self.display = f":{Browser.display}"
@@ -132,40 +150,21 @@ class Browser:
             stderr=subprocess.DEVNULL,
         )
 
-
-    def __close_display(self) -> None:
-        # This version does not account for Xvfb creating its own child processes
-        if not self.__display_process:
-            return
-        self.__display_process.terminate()
-        try:
-            self.__display_process.wait(timeout=DISPLAY_CLOSE_TIMEOUT)
-        except subprocess.TimeoutExpired:
-            self.__display_process.kill()
-            self.__display_process.wait()
-        self.__display_process = None
-
-
-    async def __initialize(
-        self,
-        lifespan_in_seconds: int,
-        window_size: Tuple[int, int],
-    ) -> None:
-        self.window_size = window_size
-        self.__create_display()
-        self.__driver = await self.__create_driver()
-        self.created_at = datetime.datetime.now()
-        self.expires_at = self.created_at + datetime.timedelta(seconds=lifespan_in_seconds)
-        self.__start_unpacking_frames_process()
-        self.erholungszeit = datetime.datetime.now()
-
-
-    def kill(self) -> None:
-        self.__kill_streaming_process()
-        self.__kill_unpacking_frames_process()
-        self.__close_display()
-        self.__driver.stop()
-
+    async def __create_driver(self):
+        os.environ["DISPLAY"] = self.display
+        return await uc.start(
+                headless=False,  # If headerless, Cloudflare spots us.
+                browser_args=[
+                    "--no-sandbox",
+                    "--disable-setuid-sandbox",
+                    "--disable-blink-features=AutomationControlled",
+                    "--disable-features=IsolateOrigins,site-per-process",
+                    f"--window-size={self.window_size[0]},{self.window_size[1]}",
+                    "--window-position=0,0",
+                ],  # If images are blocked, Cloudflare spots us.
+                sandbox=False,
+                env={**os.environ},
+            )
 
     def __create_streaming_process(self) -> None:
         if self.__streaming_process:
@@ -191,19 +190,6 @@ class Browser:
             env = {**os.environ, "DISPLAY": self.display},
         )
 
-
-    def __kill_streaming_process(self) -> None:
-        if not self.__streaming_process:
-            return
-        self.__streaming_process.terminate()
-        try:
-            self.__streaming_process.wait(timeout=STREAM_CLOSE_TIMEOUT)
-        except subprocess.TimeoutExpired:
-            self.__streaming_process.kill()
-            self.__streaming_process.wait()
-        self.__streaming_process = None
-
-
     @staticmethod
     def __unpack_frames(stream: BinaryIO) -> bytes:
         buffer = bytearray()
@@ -224,8 +210,7 @@ class Browser:
                 yield frame
                 del buffer[:end]
 
-
-    def __start_unpacking_frames_process(self) -> None:
+    def __create_unpacking_frames_process(self) -> None:
         if not self.__streaming_process:
             self.__create_streaming_process()
 
@@ -240,14 +225,40 @@ class Browser:
         )
         self.__unpacking_frames_process.start()
 
+    def status(self) -> Literal["idle", "requesting", "spotted", "waiting"]:
+        if self.spotted:
+            return "spotted"
+        elif self.__get_lock.locked():
+            return "requesting"
+        elif self.erholungszeit > datetime.datetime.now():
+            return "waiting"
+        else:
+            return "idle"
 
-    def __kill_unpacking_frames_process(self) -> None:
-        if not self.__unpacking_frames_process:
-            return
-        self.__unpacking_frames_process.join(timeout=UNPACKING_CLOSE_TIMEOUT)
+    def score(self) -> float:
+        def cost_function(access_record: dict) -> float:
+            """
+            density function of the exponential law
+            too unexponential
+            """
+            time_elapsed = (datetime.datetime.now() - datetime.datetime.fromisoformat(access_record["timestamp"])).total_seconds()
+            return SCORE_PARAMETER_LAMBDA * exp(- time_elapsed * SCORE_PARAMETER_LAMBDA)
 
+        return sum([
+            cost_function(access_record)
+            for access_record in self.browsing_history
+        ])
 
-    async def stream(self) -> bytes:
+    def remaining_lifespan(self) -> datetime.timedelta:
+        return self.expires_at - datetime.datetime.now()
+
+    def expired(self) -> bool:
+        """
+        true if EXPIRED and false if alive
+        """
+        return self.expires_at < datetime.datetime.now()
+
+    async def stream(self) -> AsyncGenerator[bytes, Any]:
         while True:
             await self.__new_frame_available.wait()
             if self.__latest_frame:
@@ -259,15 +270,11 @@ class Browser:
                     b"\r\n"
                 )
 
-
     @staticmethod
-    async def smart_wait(page) -> Literal["complete", "interactive", "loading", "unknown"]:
+    async def smart_wait(page) -> Literal["complete", "interactive", "loading"]:
         """
         tries to wait up for the complete status, but returns with any status after a certain waiting time
         """
-        # complete == on the basis we need full load
-        # interactive == minimum viable
-
         current_state = await page.evaluate('document.readyState')
         if current_state == "complete":
             pass
@@ -282,8 +289,17 @@ class Browser:
             except asyncio.TimeoutError:
                 pass
         current_state = await page.evaluate('document.readyState')
-        return current_state if current_state else "unknown"
+        return current_state
 
+    def herobrine_is_here(self, page) -> bool:
+        """
+        analyze page.html to check if we were spotted by herobrine
+        automatically updates the attribute spotted
+        """
+        spotted = False
+        if spotted:
+            self.spotted = True
+        return spotted
 
     async def get(self, url: str) -> str:
         def erholungszeit() -> int:
@@ -306,8 +322,11 @@ class Browser:
             # and another thread directly moving in the lock
             # so we first clear all abusive requests
             if self.expired():
-                access_record["status"] = "aborted"
-                access_record["completed_at"] = datetime.datetime.now().isoformat()
+                access_record.update({
+                    "status": "aborted",
+                    "timestamp": datetime.datetime.now().isoformat()
+                })
+                self.browsing_history.append(access_record)
                 return ""
 
             while self.erholungszeit and self.erholungszeit > datetime.datetime.now():
@@ -317,73 +336,72 @@ class Browser:
                 page = await self.__driver.get(url)
                 access_record["page_state"] = await self.smart_wait(page)
                 self.erholungszeit = datetime.datetime.now() + datetime.timedelta(milliseconds=erholungszeit())
-                html_content = await page.get_content()
+                html = await page.get_content()
 
-                # Here should be the check that we were not spotted
+                if self.herobrine_is_here(page):
+                    raise BotSpottedError(html)
 
-                access_record["status"] = "success"
-                access_record["content_length"] = len(html_content)
-                access_record["completed_at"] = datetime.datetime.now().isoformat()
+                access_record.update({
+                    "status": "success",
+                    "content_length": len(html),
+                    "timestamp": datetime.datetime.now().isoformat()
+                })
                 self.browsing_history.append(access_record)
-                return html_content
+                return html
+
+            except BotSpottedError as e:
+                access_record.update({
+                    "status": "blocked",
+                    "html": e.html[:MAXIMUM_SIZE_HTML],
+                    "timestamp": datetime.datetime.now().isoformat()
+                })
+                self.browsing_history.append(access_record)
+                return ""
 
             except Exception as e:
-                access_record["status"] = "failed"
-                access_record["error"] = str(e)
-                access_record["completed_at"] = datetime.datetime.now().isoformat()
+                access_record.update({
+                    "status": "failed",
+                    "error": str(e)[:MAXIMUM_SIZE_ERROR_MESSAGE],
+                    "timestamp": datetime.datetime.now().isoformat()
+                })
                 self.browsing_history.append(access_record)
+                return ""
 
+    def __kill_streaming_process(self) -> None:
+        if not self.__streaming_process:
+            return
+        self.__streaming_process.terminate()
+        try:
+            self.__streaming_process.wait(timeout=STREAM_CLOSE_TIMEOUT)
+        except subprocess.TimeoutExpired:
+            self.__streaming_process.kill()
+            self.__streaming_process.wait()
+        self.__streaming_process = None
 
-    def status(self) -> Literal["idle", "requesting", "spotted", "waiting"]:
-        if self.spotted:
-            return "spotted"
-        elif self.__get_lock.locked():
-            return "requesting"
-        elif self.erholungszeit > datetime.datetime.now():
-            return "waiting"
-        else:
-            return "idle"
+    def __kill_unpacking_frames_process(self) -> None:
+        if not self.__unpacking_frames_process:
+            return
+        self.__unpacking_frames_process.join(timeout=UNPACKING_CLOSE_TIMEOUT)
 
-
-    def score(self) -> float:
-        def cost_function(access_record: dict) -> float:
-            """
-            density function of the exponential law
-            too unexponential
-            """
-            time_elapsed = (datetime.datetime.now() - datetime.datetime.fromisoformat(access_record["completed_at"])).total_seconds()
-            return SCORE_PARAMETER_LAMBDA * exp(- time_elapsed * SCORE_PARAMETER_LAMBDA)
-
-        return sum([
-            cost_function(access_record)
-            for access_record in self.browsing_history
-        ])
-
-
-    def remaining_lifespan(self) -> datetime.timedelta:
-        return self.expires_at - datetime.datetime.now()
-
-
-    def expired(self) -> bool:
+    def __close_display(self) -> None:
         """
-        true if EXPIRED and false if alive
+        This version does not account for Xvfb creating its own child processes
         """
-        return self.expires_at < datetime.datetime.now()
+        if not self.__display_process:
+            return
+        self.__display_process.terminate()
+        try:
+            self.__display_process.wait(timeout=DISPLAY_CLOSE_TIMEOUT)
+        except subprocess.TimeoutExpired:
+            self.__display_process.kill()
+            self.__display_process.wait()
+        self.__display_process = None
 
-
-class NewInstanceRequest(BaseModel):
-    instance_id: str = BROWSER_DEFAULT_ID
-    lifespan_in_seconds: int = BROWSER_DEFAULT_LIFESPAN
-    window_size: Union[List[int], Tuple[int, int]] = BROWSER_DEFAULT_WINDOW
-
-
-class KillRequest(BaseModel):
-    instance_id: str
-
-
-class GetRequest(BaseModel):
-    instance_id: str
-    url: str
+    def kill(self) -> None:
+        self.__kill_streaming_process()
+        self.__kill_unpacking_frames_process()
+        self.__close_display()
+        self.__driver.stop()
 
 
 class Scraper:
@@ -397,9 +415,20 @@ class Scraper:
     async def new_instance(self, request: Optional[NewInstanceRequest]) -> None:
         self.browsers[request.instance_id] = await Browser.create(request.lifespan_in_seconds, request.window_size)
 
+    async def get(self, request: GetRequest) -> str:
+        browser = self.browsers[request.instance_id]
+        return await browser.get(request.url)
+
+    def update(self) -> None:
+        # we must not iterate over the dictionary while editing it
+        expired = [instance_id for instance_id, browser in self.browsers.items() if browser.expired()]
+        for instance_id in expired:
+            self.kill(instance_id)
+
     def kill(self, instance_id: str) -> None:
         """
         can not kill an instance that is requesting
+        the get method handles itself the drop of remaining requests
         """
         if self.browsers[instance_id].status() == "requesting":
             return
@@ -407,18 +436,8 @@ class Scraper:
         self.browsers[instance_id].kill()
         del self.browsers[instance_id]
 
-    async def get(self, request: GetRequest) -> Dict[Any, Any]:
-        browser = self.browsers[request.instance_id]
-        return await browser.get(request.url)
-
     def terminate(self) -> None:
         [_.kill() for _ in self.browsers.values()]
-
-    def update(self) -> None:
-        # we must not iterate over the dictionary while editing it
-        expired = [instance_id for instance_id, browser in self.browsers.items() if browser.expired()]
-        for instance_id in expired:
-            self.kill(instance_id)
 
 
 # -------------------------------------------------------------------------------- #
