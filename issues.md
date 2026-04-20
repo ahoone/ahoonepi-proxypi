@@ -1,9 +1,39 @@
 - for the tests, the explicit new instance does not start if we are streaming the default one at the same time
+- solved by switching to zendriver
+
+- comeback of the nodriver error
+- not solved by `proxypi restart 1`
+- switched from nodriver to zendriver, solved for first run when rebuilted the container 
+```
+test_scraper.py::test_default_new_instance PASSED                        [ 33%]
+test_scraper.py::test_explicit_new_instance FAILED                       [ 50%]
+    def test_explicit_new_instance():
+        url = f"http://{ADDRESS}/new-instance"
+        payload = {
+            "instance_id": EXPLICIT_NEW_INSTANCE_ID,
+            "lifespan_in_seconds": EXPLICIT_NEW_INSTANCE_LIFESPAN,
+            "window_size": EXPLICIT_NEW_INSTANCE_WINDOW_SIZE,
+        }
+        response = requests.post(url, json=payload, timeout=TIMEOUT_REQUESTS)
+>       assert response.status_code == 201, response.content
+E       AssertionError: b'{"detail":"Exception at line 478: \
+E                         ---------------------\
+E                         Failed to connect to browser\
+E                         ---------------------\
+E                         One of the causes could be when you are running as root.\
+E                         In that case you need to pass no_sandbox=True \
+E                         "}'
+E       assert 500 == 201
+E        +  where 500 = <Response [500]>.status_code
+
+test_scraper.py:43: AssertionError
+```
 
 - scraping work just sometimes on the initialization of a browser
 - usually i remove the container and then rebuilt it
 - but apparently using a different id is working
 - happened again when I rebooted the pi and the container was running but not responding
+- solved by switching to zendriver
 ```
 admin@ahoonepi:~ $ curl -X POST "http://10.0.0.3:8000/scrape?url=https://boutique.magiccorporation.com/produit-38669-lorwyn-eclipse-montagne-a4-9-pocket-zippered-pro-binder-360-cartes-recto-verso.html"
 {"detail":"Exception at line 229: \n                ---------------------\n                Failed to connect to browser\n                ---------------------\n                One of the causes could be when you are running as root.\n                In that case you need to pass no_sandbox=True \n                "}admin@ahoonepi:~ $ curl -X POST "http://10.0.0.3:8000/scrape?url=https://boutique.magiccorporation.com/produit-38669-lorwyn-e

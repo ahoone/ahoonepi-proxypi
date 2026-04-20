@@ -6,15 +6,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, HTMLResponse, JSONResponse
 import ipaddress
 from math import exp
-import nodriver as uc
 import numpy as np
 import os
 from pydantic import BaseModel
-import random
 import subprocess
 import sys
 import threading
 from typing import Tuple, List, Dict, Callable, Optional, Union, BinaryIO, Any, Literal
+import zendriver as uc
 
 
 sys.path.insert(0, "/plugins")
@@ -46,9 +45,11 @@ UNPACKING_CLOSE_TIMEOUT = 6  # seconds
 SCORE_PARAMETER_LAMBDA = .5
 ERHOLUNGSZEIT_MINIMUM = 2000  # milliseconds
 ERHOLUNGSZEIT_MEAN = 5000  # milliseconds
-ERHOLUNGSZEIT_SPREAD = 0.5  # variance
-ERHOLUNGSZEIT_REFRESH_PERIOD = 0.1  # seconds
-
+ERHOLUNGSZEIT_SPREAD = .5  # variance
+ERHOLUNGSZEIT_REFRESH_PERIOD = .1  # seconds
+LIFESPAN_BUFFER_GET_REQUEST = 5  # seconds
+SETTLING_WAIT_TIME_COMPLETE = 1  # seconds
+SETTLING_WAIT_TIME_INTERACTIVE = 3  # seconds
 
 # -------------------------------------------------------------------------------- #
 # -------------------------------------------------------------------------------- #
@@ -74,12 +75,12 @@ class Browser:
         self.__unpacking_frames_process = None
         self.__latest_frame: bytes = None
         self.__new_frame_available = asyncio.Event()
-        self.created_at = None
-        self.expires_at = None
+        self.created_at: datetime.datetime = None
+        self.expires_at: datetime.datetime = None
         self.browsing_history: List[Dict] = []
         self.__get_lock = asyncio.Lock()
-        self.spotted = False
-        self.erholungszeit: datetime.datetime = None
+        self.spotted: bool = False
+        self.erholungszeit: datetime.datetime = None  # recovery period after a request
 
 
     @classmethod
@@ -111,8 +112,6 @@ class Browser:
                 sandbox=False,
                 env={**os.environ},
             )
-        # Should stop the browser creation here if:
-        # Failed with status 500: {'detail': 'Exception at line 398: \n                ---------------------\n                Failed to connect to browser\n                ---------------------\n                One of the causes could be when you are running as root.\n                In that case you need to pass no_sandbox=True \n                '}
 
 
     def __create_display(self) -> None:
@@ -230,8 +229,6 @@ class Browser:
         if not self.__streaming_process:
             self.__create_streaming_process()
 
-        loop = asyncio.get_event_loop()
-
         def __unpack_through_thread() -> None:
             for frame in self.__unpack_frames(self.__streaming_process.stdout):
                 self.__latest_frame = frame
@@ -263,6 +260,31 @@ class Browser:
                 )
 
 
+    @staticmethod
+    async def smart_wait(page) -> Literal["complete", "interactive", "loading", "unknown"]:
+        """
+        tries to wait up for the complete status, but returns with any status after a certain waiting time
+        """
+        # complete == on the basis we need full load
+        # interactive == minimum viable
+
+        current_state = await page.evaluate('document.readyState')
+        if current_state == "complete":
+            pass
+        elif current_state == "interactive":
+            try:
+                await page.wait_for_ready_state(until="complete", timeout=SETTLING_WAIT_TIME_COMPLETE)
+            except asyncio.TimeoutError:
+                pass
+        else:
+            try:
+                await page.wait_for_ready_state(until="interactive", timeout=SETTLING_WAIT_TIME_INTERACTIVE)
+            except asyncio.TimeoutError:
+                pass
+        current_state = await page.evaluate('document.readyState')
+        return current_state if current_state else "unknown"
+
+
     async def get(self, url: str) -> str:
         def erholungszeit() -> int:
             """
@@ -275,23 +297,33 @@ class Browser:
 
         async with self.__get_lock:
 
-            while self.erholungszeit and self.erholungszeit > datetime.datetime.now():
-                await asyncio.sleep(ERHOLUNGSZEIT_REFRESH_PERIOD)
-
             access_record = {
                 "url": url,
                 "timestamp": datetime.datetime.now().isoformat(),
             }
 
+            # here there may be a race condition between an instance that should die due to its lifespan
+            # and another thread directly moving in the lock
+            # so we first clear all abusive requests
+            if self.expired():
+                access_record["status"] = "aborted"
+                access_record["completed_at"] = datetime.datetime.now().isoformat()
+                return ""
+
+            while self.erholungszeit and self.erholungszeit > datetime.datetime.now():
+                await asyncio.sleep(ERHOLUNGSZEIT_REFRESH_PERIOD)
+
             try:
                 page = await self.__driver.get(url)
+                access_record["page_state"] = await self.smart_wait(page)
                 self.erholungszeit = datetime.datetime.now() + datetime.timedelta(milliseconds=erholungszeit())
                 html_content = await page.get_content()
+
+                # Here should be the check that we were not spotted
 
                 access_record["status"] = "success"
                 access_record["content_length"] = len(html_content)
                 access_record["completed_at"] = datetime.datetime.now().isoformat()
-
                 self.browsing_history.append(access_record)
                 return html_content
 
@@ -299,9 +331,7 @@ class Browser:
                 access_record["status"] = "failed"
                 access_record["error"] = str(e)
                 access_record["completed_at"] = datetime.datetime.now().isoformat()
-
                 self.browsing_history.append(access_record)
-                raise
 
 
     def status(self) -> Literal["idle", "requesting", "spotted", "waiting"]:
@@ -329,6 +359,16 @@ class Browser:
             for access_record in self.browsing_history
         ])
 
+
+    def remaining_lifespan(self) -> datetime.timedelta:
+        return self.expires_at - datetime.datetime.now()
+
+
+    def expired(self) -> bool:
+        """
+        true if EXPIRED and false if alive
+        """
+        return self.expires_at < datetime.datetime.now()
 
 
 class NewInstanceRequest(BaseModel):
@@ -358,6 +398,12 @@ class Scraper:
         self.browsers[request.instance_id] = await Browser.create(request.lifespan_in_seconds, request.window_size)
 
     def kill(self, instance_id: str) -> None:
+        """
+        can not kill an instance that is requesting
+        """
+        if self.browsers[instance_id].status() == "requesting":
+            return
+
         self.browsers[instance_id].kill()
         del self.browsers[instance_id]
 
@@ -370,7 +416,7 @@ class Scraper:
 
     def update(self) -> None:
         # we must not iterate over the dictionary while editing it
-        expired = [instance_id for instance_id, browser in self.browsers.items() if datetime.datetime.now() >= browser.expires_at]
+        expired = [instance_id for instance_id, browser in self.browsers.items() if browser.expired()]
         for instance_id in expired:
             self.kill(instance_id)
 
@@ -460,7 +506,7 @@ async def available():
         )
 
 
-@app.post("/new_instance", status_code=status.HTTP_201_CREATED)
+@app.post("/new-instance", status_code=status.HTTP_201_CREATED)
 async def new_instance(request: Optional[NewInstanceRequest] = NewInstanceRequest()):
     if app.state.scraper.browser_exists(request.instance_id):
         raise HTTPException(
@@ -511,7 +557,7 @@ async def browsers():
                 "display": browser.display,
                 "created_at": browser.created_at,
                 "expires_at": browser.expires_at,
-                "remaining_lifespan": browser.expires_at - datetime.datetime.now(),
+                "remaining_lifespan": browser.remaining_lifespan(),
                 "status": browser.status(),
                 "score": browser.score(),
                 "browsing_history": browser.browsing_history,  # maybe we'll not always want this, response may be too large
@@ -553,6 +599,12 @@ async def get(request: GetRequest):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"No browser instance with id {request.instance_id}",
+        )
+
+    if app.state.scraper.browsers[request.instance_id].remaining_lifespan() < datetime.timedelta(seconds=LIFESPAN_BUFFER_GET_REQUEST):
+        raise HTTPException(
+            status_code=status.HTTP_406_NOT_ACCEPTABLE,
+            detail=f"The browser instance with id {request.instance_id} does not have sufficient lifespan",
         )
 
     try:

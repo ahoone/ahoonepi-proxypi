@@ -140,7 +140,7 @@ class ScraperImage:
                 payload["lifespan_in_seconds"] = lifespan_in_seconds
             if window_size:
                 payload["window_size"] = window_size
-            response = await client.post(f"http://{self.vpn_address}:{HTTP_PORT_SCRAPER}/new_instance", json=payload)
+            response = await client.post(f"http://{self.vpn_address}:{HTTP_PORT_SCRAPER}/new-instance", json=payload)
             return response.status_code == 200
 
 
