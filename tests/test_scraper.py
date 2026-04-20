@@ -15,11 +15,9 @@ TIME_BETWEEN_TESTS = 0.5  # in seconds
 EXPLICIT_NEW_INSTANCE_ID = "explicit"
 EXPLICIT_NEW_INSTANCE_LIFESPAN = 8  # in seconds
 EXPLICIT_NEW_INSTANCE_WINDOW_SIZE = [1280, 720]
-TEST_URL = [
-    "https://fastapi.tiangolo.com/",
-    "https://github.com/cdpdriver/zendriver/tree/main",
-    "https://fr.wikipedia.org/wiki/%C3%89ruption_du_Samalas_en_1257",
-]
+
+with open("urls.txt", "r", encoding="utf-8") as f:
+    TEST_URL = [line.strip() for line in f]
 
 
 @pytest.fixture(autouse=True)

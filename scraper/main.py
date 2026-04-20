@@ -29,29 +29,40 @@ assert "SCRAPER" in NODE_ROLE, "The node should be a scraper to launch this imag
 
 
 BACKGROUND_UPDATE_PERIOD = 1  # seconds
-DISPLAY_DEPTH = 24
-DISPLAY_CLOSE_TIMEOUT = 6  # seconds
 BROWSER_DEFAULT_ID = "default"
 BROWSER_DEFAULT_LIFESPAN = 3600  # 1 hour in seconds
 BROWSER_DEFAULT_WINDOW = [1920, 1080]
-STREAM_QUALITY = 15  # 2=best 31=worst
-STREAM_FPS = 12
-STREAM_CLOSE_TIMEOUT = 6  # seconds
-STREAM_CHUNK_SIZE = 2**14  # 16,384
-JPEG_MARKER_START = b"\xFF\xD8\xFF"
-JPEG_MARKER_END = b"\xFF\xD9"
-MAX_INSTANCES_PER_SCRAPER = 4
-UNPACKING_CLOSE_TIMEOUT = 6  # seconds
-SCORE_PARAMETER_LAMBDA = .5
+DISPLAY_DEPTH = 24
+DISPLAY_CLOSE_TIMEOUT = 6  # seconds
 ERHOLUNGSZEIT_MINIMUM = 2000  # milliseconds
 ERHOLUNGSZEIT_MEAN = 5000  # milliseconds
 ERHOLUNGSZEIT_SPREAD = .5  # variance
 ERHOLUNGSZEIT_REFRESH_PERIOD = .1  # seconds
+JPEG_MARKER_START = b"\xFF\xD8\xFF"
+JPEG_MARKER_END = b"\xFF\xD9"
 LIFESPAN_BUFFER_GET_REQUEST = 5  # seconds
-SETTLING_WAIT_TIME_COMPLETE = 1  # seconds
-SETTLING_WAIT_TIME_INTERACTIVE = 3  # seconds
 MAXIMUM_SIZE_HTML = 2**13  # =8,192 based on manual tests, cloudflare pages are 4456 and 5620 characters
 MAXIMUM_SIZE_ERROR_MESSAGE = 256
+MAX_INSTANCES_PER_SCRAPER = 4
+RETRY_PERIOD_KILLING_BROWSER = .1  # seconds
+SCORE_PARAMETER_LAMBDA = .5
+SETTLING_WAIT_TIME_COMPLETE = 1  # seconds
+SETTLING_WAIT_TIME_INTERACTIVE = 3  # seconds
+STREAM_CHUNK_SIZE = 2**14  # 16,384
+STREAM_CLOSE_TIMEOUT = 6  # seconds
+STREAM_FPS = 12
+STREAM_QUALITY = 15  # 2=best 31=worst
+UNPACKING_CLOSE_TIMEOUT = 6  # seconds
+
+THRESHOLD_ARTIFACTS_DETECTION = 2  # number of artifacts required to be considered spotted (inclusive)
+CLOUDFLARE_ARTIFACTS = [
+    "Cloudflare",
+    "Just a moment...",
+    "challenge-error-text",
+    "/cdn-cgi/challenge-platform",
+    "Why have I been blocked?",
+    "You are unable to access",
+]
 
 
 # -------------------------------------------------------------------------------- #
@@ -97,7 +108,7 @@ class Browser:
         self.__driver = None
         self.__streaming_process = None
         self.__unpacking_frames_process = None
-        self.__latest_frame: bytes = None
+        self.__latest_frame: bytes = b''
         self.__new_frame_available = asyncio.Event()
         self.created_at: datetime.datetime = None
         self.expires_at: datetime.datetime = None
@@ -291,15 +302,15 @@ class Browser:
         current_state = await page.evaluate('document.readyState')
         return current_state
 
-    def herobrine_is_here(self, page) -> bool:
+    def herobrine_is_here(self, html) -> bool:
         """
         analyze page.html to check if we were spotted by herobrine
         automatically updates the attribute spotted
         """
-        spotted = False
-        if spotted:
+        if sum([1 for artifact in CLOUDFLARE_ARTIFACTS if artifact in html]) >= THRESHOLD_ARTIFACTS_DETECTION:
             self.spotted = True
-        return spotted
+            return True
+        return False
 
     async def get(self, url: str) -> str:
         def erholungszeit() -> int:
@@ -338,7 +349,7 @@ class Browser:
                 self.erholungszeit = datetime.datetime.now() + datetime.timedelta(milliseconds=erholungszeit())
                 html = await page.get_content()
 
-                if self.herobrine_is_here(page):
+                if self.herobrine_is_here(html):
                     raise BotSpottedError(html)
 
                 access_record.update({
@@ -397,11 +408,11 @@ class Browser:
             self.__display_process.wait()
         self.__display_process = None
 
-    def kill(self) -> None:
+    async def kill(self) -> None:
         self.__kill_streaming_process()
         self.__kill_unpacking_frames_process()
         self.__close_display()
-        self.__driver.stop()
+        asyncio.create_task(self.__driver.stop())  # probably never stopping
 
 
 class Scraper:
@@ -419,25 +430,28 @@ class Scraper:
         browser = self.browsers[request.instance_id]
         return await browser.get(request.url)
 
-    def update(self) -> None:
+    async def update(self) -> None:
         # we must not iterate over the dictionary while editing it
         expired = [instance_id for instance_id, browser in self.browsers.items() if browser.expired()]
         for instance_id in expired:
-            self.kill(instance_id)
+            await self.kill(instance_id)
 
-    def kill(self, instance_id: str) -> None:
+    async def kill(self, instance_id: str) -> None:
         """
-        can not kill an instance that is requesting
         the get method handles itself the drop of remaining requests
+        there may be a risk of race condition here between starting a new get request
+        and killing the instance, with both threads accessing the same memory
         """
-        if self.browsers[instance_id].status() == "requesting":
-            return
+        # we should better cancel the running request
+        # while self.browsers[instance_id].status() == "requesting":
+        #    await asyncio.sleep(RETRY_PERIOD_KILLING_BROWSER)
 
-        self.browsers[instance_id].kill()
+        await self.browsers[instance_id].kill()
         del self.browsers[instance_id]
 
-    def terminate(self) -> None:
-        [_.kill() for _ in self.browsers.values()]
+    async def terminate(self) -> None:
+        kills = [browser.kill() for browser in self.browsers.values()]
+        await asyncio.gather(*kills)
 
 
 # -------------------------------------------------------------------------------- #
@@ -455,9 +469,8 @@ ALLOWED_NETWORKS = [
 
 
 async def background_update(app):
-    loop = asyncio.get_running_loop()
     while True:
-        await loop.run_in_executor(None, app.state.scraper.update)
+        await app.state.scraper.update()
         await asyncio.sleep(BACKGROUND_UPDATE_PERIOD)
 
 
@@ -471,7 +484,7 @@ async def lifespan(app: FastAPI):
         await bg_task
     except asyncio.CancelledError:
         pass
-    app.state.scraper.terminate()
+    await app.state.scraper.terminate()
 
 
 app = FastAPI(
@@ -558,7 +571,7 @@ async def kill(request: KillRequest):
         )
 
     try:
-        app.state.scraper.kill(request.instance_id)
+        await app.state.scraper.kill(request.instance_id)
     except Exception as e:
         line = sys.exc_info()[2].tb_lineno
         raise HTTPException(

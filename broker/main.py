@@ -432,6 +432,7 @@ app.add_middleware(
 async def home():
     return FileResponse("dashboard.html")
 
+
 @app.get("/dashboard.css", include_in_schema=False)
 async def css():
     return FileResponse("dashboard.css")

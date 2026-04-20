@@ -1,0 +1,3 @@
+https://fastapi.tiangolo.com/
+https://github.com/cdpdriver/zendriver/tree/main
+https://fr.wikipedia.org/wiki/%C3%89ruption_du_Samalas_en_1257
