@@ -12,7 +12,7 @@ from pydantic import BaseModel
 import subprocess
 import sys
 import threading
-from typing import Tuple, List, Dict, Callable, Optional, Union, BinaryIO, Any, Literal, AsyncGenerator
+from typing import Tuple, List, Dict, Callable, Optional, Union, BinaryIO, Any, Literal, AsyncGenerator, Set
 import zendriver as uc
 
 
@@ -48,7 +48,7 @@ RETRY_PERIOD_KILLING_BROWSER = .1  # seconds
 SCORE_PARAMETER_LAMBDA = .5
 SETTLING_WAIT_TIME_COMPLETE = 1  # seconds
 SETTLING_WAIT_TIME_INTERACTIVE = 3  # seconds
-STREAM_CHUNK_SIZE = 2**14  # 16,384
+STREAM_CHUNK_SIZE = 2**14  # 16,384 bits
 STREAM_CLOSE_TIMEOUT = 6  # seconds
 STREAM_FPS = 12
 STREAM_QUALITY = 15  # 2=best 31=worst
@@ -103,17 +103,18 @@ class Browser:
 
     def __init__(self) -> None:
         self.window_size: Tuple[int, int] = None
-        self.display = None
+        self.display: str = None
         self.__display_process = None
         self.__driver = None
         self.__streaming_process = None
         self.__unpacking_frames_process = None
         self.__latest_frame: bytes = b''
-        self.__new_frame_available = asyncio.Event()
+        self.__new_frame_available: asyncio.Event = asyncio.Event()
+        self.__killing_event = asyncio.Event()
         self.created_at: datetime.datetime = None
         self.expires_at: datetime.datetime = None
         self.browsing_history: List[Dict] = []
-        self.__get_lock = asyncio.Lock()
+        self.__get_lock: asyncio.Lock = asyncio.Lock()
         self.spotted: bool = False
         self.erholungszeit: datetime.datetime = None  # recovery period after a request
 
@@ -161,7 +162,7 @@ class Browser:
             stderr=subprocess.DEVNULL,
         )
 
-    async def __create_driver(self):
+    async def __create_driver(self) -> None:
         os.environ["DISPLAY"] = self.display
         return await uc.start(
                 headless=False,  # If headerless, Cloudflare spots us.
@@ -312,6 +313,18 @@ class Browser:
             return True
         return False
 
+    async def get_or_abort(self, url: str) -> str:
+        try:
+            async with self.__get_lock:
+                return await self.get(url)
+        except asyncio.CancelledError:
+            self.browsing_history.append({
+                "url": url,
+                "status": "aborted",
+                "timestamp": datetime.datetime.now().isoformat(),
+            })
+            return ""
+
     async def get(self, url: str) -> str:
         def erholungszeit() -> int:
             """
@@ -322,61 +335,48 @@ class Browser:
                 np.random.normal(loc=ERHOLUNGSZEIT_MEAN, scale=ERHOLUNGSZEIT_SPREAD),
             )
 
-        async with self.__get_lock:
+        access_record = {}
 
-            access_record = {
+        while self.erholungszeit and self.erholungszeit > datetime.datetime.now():
+            await asyncio.sleep(ERHOLUNGSZEIT_REFRESH_PERIOD)
+
+        try:
+            page = await self.__driver.get(url)
+            access_record["page_state"] = await self.smart_wait(page)
+            self.erholungszeit = datetime.datetime.now() + datetime.timedelta(milliseconds=erholungszeit())
+            html = await page.get_content()
+
+            if self.herobrine_is_here(html):
+                raise BotSpottedError(html)
+
+            access_record.update({
                 "url": url,
-                "timestamp": datetime.datetime.now().isoformat(),
-            }
+                "status": "success",
+                "content_length": len(html),
+                "timestamp": datetime.datetime.now().isoformat()
+            })
+            self.browsing_history.append(access_record)
+            return html
 
-            # here there may be a race condition between an instance that should die due to its lifespan
-            # and another thread directly moving in the lock
-            # so we first clear all abusive requests
-            if self.expired():
-                access_record.update({
-                    "status": "aborted",
-                    "timestamp": datetime.datetime.now().isoformat()
-                })
-                self.browsing_history.append(access_record)
-                return ""
+        except BotSpottedError as e:
+            access_record.update({
+                "url": url,
+                "status": "blocked",
+                "html": e.html[:MAXIMUM_SIZE_HTML],
+                "timestamp": datetime.datetime.now().isoformat()
+            })
+            self.browsing_history.append(access_record)
+            return ""
 
-            while self.erholungszeit and self.erholungszeit > datetime.datetime.now():
-                await asyncio.sleep(ERHOLUNGSZEIT_REFRESH_PERIOD)
-
-            try:
-                page = await self.__driver.get(url)
-                access_record["page_state"] = await self.smart_wait(page)
-                self.erholungszeit = datetime.datetime.now() + datetime.timedelta(milliseconds=erholungszeit())
-                html = await page.get_content()
-
-                if self.herobrine_is_here(html):
-                    raise BotSpottedError(html)
-
-                access_record.update({
-                    "status": "success",
-                    "content_length": len(html),
-                    "timestamp": datetime.datetime.now().isoformat()
-                })
-                self.browsing_history.append(access_record)
-                return html
-
-            except BotSpottedError as e:
-                access_record.update({
-                    "status": "blocked",
-                    "html": e.html[:MAXIMUM_SIZE_HTML],
-                    "timestamp": datetime.datetime.now().isoformat()
-                })
-                self.browsing_history.append(access_record)
-                return ""
-
-            except Exception as e:
-                access_record.update({
-                    "status": "failed",
-                    "error": str(e)[:MAXIMUM_SIZE_ERROR_MESSAGE],
-                    "timestamp": datetime.datetime.now().isoformat()
-                })
-                self.browsing_history.append(access_record)
-                return ""
+        except Exception as e:
+            access_record.update({
+                "url": url,
+                "status": "failed",
+                "error": str(e)[:MAXIMUM_SIZE_ERROR_MESSAGE],
+                "timestamp": datetime.datetime.now().isoformat()
+            })
+            self.browsing_history.append(access_record)
+            return ""
 
     def __kill_streaming_process(self) -> None:
         if not self.__streaming_process:
@@ -413,41 +413,48 @@ class Browser:
         self.__kill_unpacking_frames_process()
         self.__close_display()
         asyncio.create_task(self.__driver.stop())  # probably never stopping
+        # creates a zombie process
+        # 999      4088371  0.0  0.0      0     0 ?        Z    Apr20   0:00 [chrome_crashpad] <defunct>
 
 
 class Scraper:
 
     def __init__(self) -> None:
         self.browsers: Dict[str, Browser] = {}
+        self.__browser_active_tasks: Dict[str, Set[asyncio.Task]] = {}
 
     def browser_exists(self, instance_id: str) -> bool:
         return instance_id in self.browsers.keys()
 
     async def new_instance(self, request: Optional[NewInstanceRequest]) -> None:
         self.browsers[request.instance_id] = await Browser.create(request.lifespan_in_seconds, request.window_size)
+        self.__browser_active_tasks[request.instance_id] = set()
 
     async def get(self, request: GetRequest) -> str:
-        browser = self.browsers[request.instance_id]
-        return await browser.get(request.url)
+        task = asyncio.create_task(self.browsers[request.instance_id].get_or_abort(request.url))
+        self.__browser_active_tasks[request.instance_id].add(task)
+        try:
+            return await task
+        finally:
+            self.__browser_active_tasks[request.instance_id].discard(task)
 
     async def update(self) -> None:
-        # we must not iterate over the dictionary while editing it
-        expired = [instance_id for instance_id, browser in self.browsers.items() if browser.expired()]
-        for instance_id in expired:
-            await self.kill(instance_id)
+        expired = [self.kill(instance_id) for instance_id, browser in self.browsers.items() if browser.expired()]
+        await asyncio.gather(*expired)
+
+    async def cancel_browser_tasks(self, instance_id: str) -> None:
+        tasks = self.__browser_active_tasks[instance_id]
+        if not tasks:
+            return
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=False)
 
     async def kill(self, instance_id: str) -> None:
-        """
-        the get method handles itself the drop of remaining requests
-        there may be a risk of race condition here between starting a new get request
-        and killing the instance, with both threads accessing the same memory
-        """
-        # we should better cancel the running request
-        # while self.browsers[instance_id].status() == "requesting":
-        #    await asyncio.sleep(RETRY_PERIOD_KILLING_BROWSER)
-
+        await self.cancel_browser_tasks(instance_id)
         await self.browsers[instance_id].kill()
         del self.browsers[instance_id]
+        del self.__browser_active_tasks[instance_id]
 
     async def terminate(self) -> None:
         kills = [browser.kill() for browser in self.browsers.values()]
@@ -518,12 +525,14 @@ app.add_middleware(
 # -------------------------------------------------------------------------------- #
 
 
-@app.get("/", include_in_schema=False)
-async def root():
+@app.get("/health", include_in_schema=False)
+async def health():
     """
     health check for unit tests
     """
-    return {}
+    return {
+        "is_running_as_root": os.getuid() == 0,
+    }
 
 
 @app.get("/available")
@@ -562,7 +571,7 @@ async def new_instance(request: Optional[NewInstanceRequest] = NewInstanceReques
         )
 
 
-@app.delete("/kill")
+@app.post("/kill")
 async def kill(request: KillRequest):
     if not app.state.scraper.browser_exists(request.instance_id):
         raise HTTPException(

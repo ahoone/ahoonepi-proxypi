@@ -13,7 +13,7 @@ ADDRESS = f"{WIREGUARD_NETWORK_PREFIX}.{WIREGUARD_LIGHTHOUSE_ID}:{HTTP_PORT_SCRA
 TIMEOUT_REQUESTS = 20  # in seconds, may take some time as we are waiting for either "complete" or "interactive" status
 TIME_BETWEEN_TESTS = 0.5  # in seconds
 EXPLICIT_NEW_INSTANCE_ID = "explicit"
-EXPLICIT_NEW_INSTANCE_LIFESPAN = 8  # in seconds
+EXPLICIT_NEW_INSTANCE_LIFESPAN = 10  # in seconds
 EXPLICIT_NEW_INSTANCE_WINDOW_SIZE = [1280, 720]
 
 with open("urls.txt", "r", encoding="utf-8") as f:
@@ -26,7 +26,7 @@ def wait_between_tests():
     sleep(TIME_BETWEEN_TESTS)
 
 def test_scraper_available():
-    url = f"http://{ADDRESS}/"
+    url = f"http://{ADDRESS}/health"
     response = requests.get(url, timeout=TIMEOUT_REQUESTS)
     assert response.status_code == 200, response.content
 
@@ -71,7 +71,7 @@ def test_get_page_default_instance():
 def test_kill_default_instance():
     url = f"http://{ADDRESS}/kill"
     payload = {"instance_id": "default"}
-    response = requests.delete(url, json= payload, timeout=TIMEOUT_REQUESTS)
+    response = requests.post(url, json= payload, timeout=TIMEOUT_REQUESTS)
     assert response.status_code == 200, response.content
 
 def test_explicit_instance_dead():
