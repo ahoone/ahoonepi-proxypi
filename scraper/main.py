@@ -348,6 +348,7 @@ class Browser:
 
             if self.herobrine_is_here(html):
                 raise BotSpottedError(html)
+                # should also raise a html error to the broker
 
             access_record.update({
                 "url": url,
@@ -526,17 +527,26 @@ app.add_middleware(
 
 
 @app.get("/health", include_in_schema=False)
-async def health():
+async def health() -> Dict[str, Any]:
     """
-    health check for unit tests
+    Health function for unit tests.
+    Also useful to get the availability of the scraper.
     """
-    return {
-        "is_running_as_root": os.getuid() == 0,
-    }
+    try:
+        return {
+            "is_running_as_root": os.getuid() == 0,
+            "can_create_browser": MAX_INSTANCES_PER_SCRAPER - len(app.state.scraper.browsers) > 0,
+        }
+    except Exception as e:
+        line = sys.exc_info()[2].tb_lineno
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"{type(e).__name__} at line {line}: {str(e)}",
+        )
 
 
 @app.get("/available")
-async def available():
+async def available() -> Dict[str, bool]:
     try:
         return {"available": MAX_INSTANCES_PER_SCRAPER - len(app.state.scraper.browsers) > 0}
     except Exception as e:
@@ -549,6 +559,10 @@ async def available():
 
 @app.post("/new-instance", status_code=status.HTTP_201_CREATED)
 async def new_instance(request: Optional[NewInstanceRequest] = NewInstanceRequest()):
+    """
+    Creates a new instances performing checks on its id
+    and on the number of running instances.
+    """
     if app.state.scraper.browser_exists(request.instance_id):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -573,6 +587,11 @@ async def new_instance(request: Optional[NewInstanceRequest] = NewInstanceReques
 
 @app.post("/kill")
 async def kill(request: KillRequest):
+    """
+    Kill the target instance correctly cleaning its tasks and processes.
+    Does not return if the killing was successfull, 
+    as ending the chromedriver process may take some time.
+    """
     if not app.state.scraper.browser_exists(request.instance_id):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -590,7 +609,11 @@ async def kill(request: KillRequest):
 
 
 @app.get("/browsers")
-async def browsers():
+async def browsers() -> Dict[str, Any]:
+    """
+    Returns as a JSON the information of the scraper and its running instances,
+    including the entire browsing history of each instances that may be large.
+    """
     try:
         return {
             instance_id: {
@@ -601,7 +624,7 @@ async def browsers():
                 "remaining_lifespan": browser.remaining_lifespan(),
                 "status": browser.status(),
                 "score": browser.score(),
-                "browsing_history": browser.browsing_history,  # maybe we'll not always want this, response may be too large
+                "browsing_history": browser.browsing_history,
             } for instance_id, browser in app.state.scraper.browsers.items()
         }
     except Exception as e:
@@ -635,7 +658,12 @@ async def stream(instance_id: str):
 
 
 @app.post("/get")
-async def get(request: GetRequest):
+async def get(request: GetRequest) -> str:
+    """
+    Core function to scrape a web page.
+    Can support spam calls and execute the resquests sequentially,
+    with no guarantee on the first one to resolve.
+    """
     if not app.state.scraper.browser_exists(request.instance_id):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

@@ -376,3 +376,33 @@ th.col-ram {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+#broker-container {
+  display: flex;
+  gap: 16px;
+  flex: 1; /* Takes remaining space after .table-header */
+}
+
+#broker-table-content {
+  flex: 1;
+  overflow: auto;
+}
+
+.logger {
+  flex: 0 0 400px;
+  overflow: auto;
+  background: rgba(255,255,255,.03);
+  padding: 1.25rem;
+  border: 2px solid var(--red); /* DEBUG: Make it very visible */
+}
+
+.logger .table-title {
+  display: block;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.logger .empty-state {
+  padding: 2rem 1rem;
+}

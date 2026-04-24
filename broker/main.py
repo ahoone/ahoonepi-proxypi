@@ -40,6 +40,8 @@ DISPLAY_LIMIT_SCRAPING_LIST = 200
 HTTP_PORT_SCRAPER = os.getenv("HTTP_PORT_SCRAPER")
 TIMEOUT_SCRAPER_FETCHING_INFO = 2
 THRESHOLD_SCORE = 300
+REFRESH_PERIOD_BROKER = .1  # seconds
+BUFFER_SIZE_LOGGER = 10
 
 
 # -------------------------------------------------------------------------------- #
@@ -102,7 +104,7 @@ class ScraperImage:
         self.browsers = {}
         scraper_response = requests.get(
             f"http://{self.vpn_address}:{HTTP_PORT_SCRAPER}/browsers",
-            timeout=TIMEOUT_SCRAPER_FETCHING_INFO,
+            timeout=TIMEOUT_SCRAPER_FETCHING_INFO,  # the timeout seems to block the update
         )
         scraper_response_as_dict = json.loads(scraper_response.text)
         if not scraper_response.ok:
@@ -152,7 +154,7 @@ class ScrapeRequest(BaseModel):
     """
     antwortzeit is the time you hope the response
     default is the time of receiving the request
-    else is a isoformat string of datetime.datetime
+    else is an isoformat string of datetime.datetime
     """
     url: HttpUrl
     antwortzeit: Optional[datetime.datetime] = Field(default_factory=datetime.datetime.now())
@@ -168,9 +170,14 @@ class Broker:
         # self
         self.__db_con = None
         self.__db_cur = None
+        self.logger_queue: List[Dict[str, Any]] = []
 
 
-    # __INIT__ CAN NOT BE ASYNC IN PYTHON
+    def log(self, event: Dict[str, Any]) -> None:
+        self.logger_queue.insert(0, event)
+        self.logger_queue = self.logger_queue[:BUFFER_SIZE_LOGGER]
+
+
     @classmethod
     async def create(cls) -> "Broker":
         broker = cls()
@@ -221,7 +228,7 @@ class Broker:
         self.__db_con.commit()
 
 
-    def scraping_list(self) -> List[Dict[str, Any]]:
+    def get_scraping_list(self) -> List[Dict[str, Any]]:
         self.__db_cur.execute(f"""
             SELECT *
             FROM {DB_TABLE_TARGETS}
@@ -327,24 +334,31 @@ class Broker:
         return dict(zip(columns, response))
 
 
-    async def __distribute(self) -> None:
+    async def __distribute_task(self) -> None:
         request = self.__get_top_request()
         if not request:
+            self.log({
+                "timestamp": datetime.datetime.now(),
+                "detail": "no request found",
+                "level": "INFO",
+            })
             return
-        print(request)
-
+        # print(request)
+        self.log({
+            "timestamp": datetime.datetime.now(),
+            "detail": f"selected request {request['id']}//{request['url']}",
+            "level": "INFO",
+        })
         worker = await self.__get_available_browser() 
         if not worker:
             return
-
-        
-        # PROCESS THE REQUEST
+        # problem is that it is the browser image object that holds the method to scrape
 
 
     async def update(self) -> None:
         await self.__update_available_nodes()
         await self.__update_nodes()
-        await self.__distribute()
+        await self.__distribute_task()
 
 
     def get_scraper_from_hostname(self, hostname: str) -> Optional[ScraperImage]:
@@ -373,7 +387,7 @@ ALLOWED_NETWORKS = [
 async def background_update(app):
     while True:
         await app.state.broker.update()
-        await asyncio.sleep(1)
+        await asyncio.sleep(REFRESH_PERIOD_BROKER)
 
 
 @asynccontextmanager
@@ -396,9 +410,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Broker API",
-    description="Broker",
-    version="1.0.0",
+    title="Broker",
     lifespan=lifespan,
 )
 
@@ -428,6 +440,14 @@ app.add_middleware(
 # -------------------------------------------------------------------------------- #
 
 
+@app.get("/health", include_in_schema=False)
+async def health():
+    """
+    health check for unit tests
+    """
+    return {}
+
+
 @app.get("/", include_in_schema=False)
 async def home():
     return FileResponse("dashboard.html")
@@ -437,22 +457,20 @@ async def home():
 async def css():
     return FileResponse("dashboard.css")
 
+@app.get("/v2", include_in_schema=False)
+async def home():
+    return FileResponse("dashboard2.html")
+
+
+@app.get("/dashboard2.css", include_in_schema=False)
+async def css():
+    return FileResponse("dashboard2.css")
+
 
 @app.post("/scrape", status_code=status.HTTP_202_ACCEPTED)
 async def scrape(request: ScrapeRequest):
     try:
         app.state.broker.scrape(request)
-    except Exception as e:
-        line = sys.exc_info()[2].tb_lineno
-        raise HTTPException(
-            status_code=500, detail=f"{type(e).__name__} at line {line}: {str(e)}"
-        )
-
-
-@app.get("/scraping-list")
-async def scraping_list():
-    try:
-        return app.state.broker.scraping_list()
     except Exception as e:
         line = sys.exc_info()[2].tb_lineno
         raise HTTPException(
@@ -475,6 +493,28 @@ async def nodes():
             }
             for scraper in app.state.broker.scrapers.values()
         ]
+    except Exception as e:
+        line = sys.exc_info()[2].tb_lineno
+        raise HTTPException(
+            status_code=500, detail=f"{type(e).__name__} at line {line}: {str(e)}"
+        )
+
+
+@app.get("/broker")
+async def broker():
+    try:
+        return app.state.broker.get_scraping_list()
+    except Exception as e:
+        line = sys.exc_info()[2].tb_lineno
+        raise HTTPException(
+            status_code=500, detail=f"{type(e).__name__} at line {line}: {str(e)}"
+        )
+
+
+@app.get("/logger")
+async def logger():
+    try:
+        return app.state.broker.logger_queue
     except Exception as e:
         line = sys.exc_info()[2].tb_lineno
         raise HTTPException(

@@ -1,0 +1,133 @@
+:root {
+  --bg:        #0a0c10;
+  --surface:   #10141c;
+  --border:    #1e2635;
+  --accent:    #00d4ff;
+  --accent2:   #7c3aed;
+  --text:      #c9d1e0;
+  --text-dim:  #4a5568;
+  --green:     #00e5a0;
+  --yellow:    #f6c90e;
+  --red:       #ff5a7e;
+  --mono:      'IBM Plex Mono', monospace;
+  --sans:      'IBM Plex Sans', sans-serif;
+}
+
+body {
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  margin: 0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+thead th {
+  font-family: var(--mono);
+  font-size: .65rem;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  color: var(--text-dim);
+  text-align: left;
+  padding: .7rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+  background: rgba(255,255,255,.015);
+  white-space: nowrap;
+}
+
+tbody tr {
+  border-bottom: 1px solid var(--border);
+  transition: background .15s;
+}
+
+tbody tr:last-child { border-bottom: none; }
+tbody tr:hover { background: rgba(255,255,255,.03); }
+
+td {
+  font-family: var(--mono);
+  font-size: .8rem;
+  padding: .85rem 1.25rem;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.live-dot {
+  display: inline-block;
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 8px var(--green);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .35; }
+}
+
+.dashboard-grid {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+
+.row:last-child { flex: 1; }
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  height: 100%; 
+  box-sizing: border-box;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  background: rgba(255,255,255,.015);
+}
+
+.card-title {
+  .card-header;
+  font-family: var(--mono);
+/*  font-size: .75rem;*/
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.card-timestamp-group {
+  .card-header;
+  display: flex;
+  align-items: center;
+}
+
+.card-stat {
+  .card;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 1rem 1.25rem;
+  position: relative;
+  overflow: hidden;
+  animation: fadeUp .4s ease both;
+  border-right: none;
+}
+
+.timestamp { margin: 0px 8px; }

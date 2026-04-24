@@ -52,8 +52,17 @@
     </div>
   </div>
   <div id="broker-container">
-    <div class="empty-state">Loading...</div>
+    <div id="broker-table-content">
+       <div class="empty-state">Loading...</div>
+    </div>
+
+    <div class="logger">
+      <span class="table-title">Logger</span>
+      <div class="empty-state">Loading...</div>
+    </div>
   </div>
+</div>
+
 </div>
 
 <script>
@@ -289,7 +298,7 @@
 
   async function fetchBroker() {
     try {
-      const res  = await fetch('/scraping-list');
+      const res  = await fetch('/broker');
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const json = await res.json();
       renderBroker(Array.isArray(json) ? json : (json.output || []));
