@@ -5,7 +5,8 @@
 source ui.sh
 source .env
 
-PROXYPI_RANGE_REGEX="22[0-9]{2}"
+`# should use $WIREGUARD_PROXYPI_RANGE_REGEX here`
+SSH_PORT_PROXYPI_RANGE_REGEX="$SSH_NETWORK_PREFIX[0-9]{2}"
 
 PROXYPI_USER="admin"
 LIGHTHOUSE_PRIVATE_KEY_PATH="/home/admin/.ssh/id_proxy_access"
@@ -164,9 +165,9 @@ _get_proxypi_id() {
 
 
 #######################################
-# Examines open ports between 2202 and 2299
+# Examines open ports between $SSH_NETWORK_PREFIX02 and $SSH_NETWORK_PREFIX99
 # Globals:
-#   PROXYPI_RANGE_REGEX
+#   SSH_PORT_PROXYPI_RANGE_REGEX
 # Outputs:
 #   Ports to stdout
 # Returns:
@@ -178,7 +179,7 @@ _proxypi_listen_ssh() {
         netstat -an | \
         grep -F "LISTEN " | \
         grep -F "tcp6" | \
-        grep -oE $PROXYPI_RANGE_REGEX | \
+        grep -oE $SSH_PORT_PROXYPI_RANGE_REGEX | \
         sort -n
     )
     if [ -z "$ports" ]; then
@@ -373,7 +374,7 @@ ssh::copy_keys() {
 ssh::connect() {
     local proxy_id=$1
 
-    ssh -i "$LIGHTHOUSE_PRIVATE_KEY_PATH" -p 22"$(printf "%02d" $proxy_id)" "$PROXYPI_USER"@localhost
+    ssh -i "$LIGHTHOUSE_PRIVATE_KEY_PATH" -p $SSH_NETWORK_PREFIX"$(printf "%02d" $proxy_id)" "$PROXYPI_USER"@localhost
 }
 
 
@@ -502,7 +503,7 @@ git::pull() {
 #######################################
 ssh::info() {
     local proxy_id=$1
-    local port="22$(printf "%02d" $proxy_id)"
+    local port="$SSH_NETWORK_PREFIX$(printf "%02d" $proxy_id)"
 
     if [[ "$proxy_id" == "1" ]]; then
         echo "{\"hostname\": \"$(hostname)\", \"port\": \"$port\", \"ipv6\": \"$(curl ifconfig.me 2>/dev/null || echo 'N/A')\"}"
@@ -541,7 +542,7 @@ ssh::info() {
 #######################################
 ssh::ram() {
     local proxy_id=$1
-    local port="22$(printf "%02d" $proxy_id)"
+    local port="$SSH_NETWORK_PREFIX$(printf "%02d" $proxy_id)"
 
     if [[ "$proxy_id" == "1" ]]; then
         echo "{\"ram_specs\": \"$(free -h | awk '/^Mem:/{print $2}')\", \"ram_usage\": \"$(free | awk '/^Mem:/{printf "%.0f%%", $3/$2*100}')\"}"

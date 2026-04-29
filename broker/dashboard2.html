@@ -32,7 +32,7 @@
             <div class="card-header">
                 <span class="card-title">Nodes</span>
                 <div class="card-timestamp-group">
-                    <span class="live-dot">&nbsp;</span>
+<!--                     <span class="live-dot">&nbsp;</span> -->
                     <span id="ts-broker" class="timestamp">—</span>
                 </div>
             </div>
@@ -65,7 +65,7 @@
             <div class="card-header">
                 <span class="card-title">Broker</span>
                 <div class="card-timestamp-group">
-                    <span class="live-dot">&nbsp;</span>
+<!--                     <span class="live-dot">&nbsp;</span> -->
                     <span id="ts-broker" class="timestamp">—</span>
                 </div>
             </div>
@@ -93,7 +93,7 @@
             <div class="card-header">
                 <span class="card-title">Logger</span>
                 <div class="card-timestamp-group">
-                    <span class="live-dot">&nbsp;</span>
+<!--                     <span class="live-dot">&nbsp;</span> -->
                     <span id="ts-broker" class="timestamp">—</span>
                 </div>
             </div>
@@ -171,7 +171,10 @@
         {
             label: 'Hostname',
             render: function(r) {
-                return r.hostname || '—';
+                const status = r.online ? 'online' : 'offline';
+                return '<span class="live-dot ' + status + '"></span> ' +
+                    (r.hostname || '—') +
+                    '<span style="color: var(--text-dim)"> ' + r.ram_specs + '</span>';
             }
         },
         {

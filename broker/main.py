@@ -1,6 +1,7 @@
 import asyncio
 from contextlib import asynccontextmanager
 import datetime
+import exrex
 from fastapi import Body, FastAPI, status, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, StreamingResponse
@@ -8,14 +9,16 @@ import httpx
 import ipaddress
 import json
 import os
+from ping3 import ping
 from pydantic import HttpUrl, BaseModel, Field
 import random
 import requests
 import sqlite3  # native // does not need to be in requirements.txt
 from starlette.background import BackgroundTask
 from string import Template, ascii_letters, digits
+import subprocess
 import sys
-from typing import Any, Callable, Dict, List, Literal, Union, Optional, Tuple
+from typing import Any, Callable, Dict, List, Literal, Union, Optional, Tuple, Set
 
 sys.path.insert(0, "/plugins")
 import fast_api_ip_middleware
@@ -25,7 +28,7 @@ import proxypi
 # -------------------------------------------------------------------------------- #
 
 
-NODE_ROLE = os.getenv("NODE_ROLE").split(",")
+NODE_ROLE = os.environ["NODE_ROLE"].split(",")
 assert "LIGHTHOUSE" in NODE_ROLE, "The node should be a lighthouse (ie includes broker) to launch this image"
 
 
@@ -33,84 +36,169 @@ BROKER_DATABASE = "broker.db"
 BROKER_CLEAR_DB_ON_STARTUP = True
 DB_TABLE_TARGETS = "targets"
 DB_TABLE_REQUESTS = "requests"
-PROXYPI_COMMAND_INFO = Template("info $node_id")
-PROXYPI_COMMAND_AVAILABLE_NODES = "ping-wireguard -a"
-PROXYPI_COMMAND_RAM = Template("ram $node_id")
 DISPLAY_LIMIT_SCRAPING_LIST = 200
-HTTP_PORT_SCRAPER = os.getenv("HTTP_PORT_SCRAPER")
-TIMEOUT_SCRAPER_FETCHING_INFO = 2
+HTTP_PORT_SCRAPER = os.environ["HTTP_PORT_SCRAPER"]
+LOGGER_BUFFER_SIZE = 10
+PROXYPI_COMMAND_AVAILABLE_NODES = "ping-wireguard -a"
+PROXYPI_COMMAND_INFO = Template("info $node_id")
+PROXYPI_COMMAND_RAM = Template("ram $node_id")
+REFRESH_PERIOD_BROKER = 1  # seconds
+SEMAPHORE_UPDATE_REACHABLE_NODES = 200
+SSH_NETWORK_PREFIX = os.environ["SSH_NETWORK_PREFIX"]
 THRESHOLD_SCORE = 300
-REFRESH_PERIOD_BROKER = .1  # seconds
-BUFFER_SIZE_LOGGER = 10
+TIMEOUT_SCRAPER_FETCHING_INFO = 2  # seconds
+TIMEOUT_SCRAPER_HTTP_REQUEST = 4  # seconds
+TIMEOUT_SCRAPER_PING = .1  # seconds
+WIREGUARD_LIGHTHOUSE_ID = os.environ["WIREGUARD_LIGHTHOUSE_ID"]
+WIREGUARD_NETWORK_PREFIX = os.environ["WIREGUARD_NETWORK_PREFIX"]
+NODE_ID_RANGE_REGEX = os.environ["NODE_ID_RANGE_REGEX"]
 
 
 # -------------------------------------------------------------------------------- #
 # -------------------------------------------------------------------------------- #
+
+
+class NodeIdentifier:
+
+    node_ids: Set[int] = {
+        int(x) for x in
+        exrex.generate(NODE_ID_RANGE_REGEX, limit=exrex.count(NODE_ID_RANGE_REGEX))
+    }
+    reachable_nodes: Set[int] = None
+
+    @staticmethod
+    async def ping(
+        host: str,
+        port: int,
+        sem: asyncio.Semaphore,
+    ) -> bool:
+        async with sem:
+            try:
+                conn = asyncio.open_connection(host, port)
+                reader, writer = await asyncio.wait_for(conn, TIMEOUT_SCRAPER_PING)
+                writer.close()
+                await writer.wait_closed()
+                return True
+            except ConnectionRefusedError:
+                return True
+            except asyncio.TimeoutError:
+                return False
+            except OSError:
+                return False
+
+    @classmethod
+    async def update_reachable_nodes(cls) -> None:
+        """
+        Only checks if the nodes is accessible,
+        independently of the remote scraper container running properly.
+        Change ping(..., None, ...) to the desired port (HTTP_PORT_SCRAPER).
+        """
+        sem = asyncio.Semaphore(SEMAPHORE_UPDATE_REACHABLE_NODES)
+        pings = [
+            cls.ping(f"{WIREGUARD_NETWORK_PREFIX}.{node_id}", None, sem)
+            for node_id in cls.node_ids
+        ]
+        ping_results = await asyncio.gather(*pings)
+        cls.reachable_nodes = {
+            node_id
+            for node_id, ping_result in zip(cls.node_ids, ping_results)
+            if ping_result
+        }
+
+    def __init__(self, node_id: int) -> None:
+        """
+        This method should check for allready used node_id.
+        """
+        if node_id not in NodeIdentifier.node_ids:
+            raise ValueError("Invalid node_id")
+        self.node_id: int = node_id
+        self.vpn_address: str = f"{WIREGUARD_NETWORK_PREFIX}.{node_id}"
+        self.ssh_port: int = int(
+            f"{SSH_NETWORK_PREFIX}{str(node_id).zfill(len(str(max(NodeIdentifier.node_ids))))}"
+        )
+
+    async def available(self) -> bool:
+        """
+        deprecated, classmethod update reachable nodes is more powerful
+        """
+        response = await asyncio.to_thread(
+            ping,
+            self.vpn_address,
+            timeout=TIMEOUT_SCRAPER_PING,
+        )
+        return response is not None
 
 
 class BrowserImage:
 
-    def __init__(self, scraper_response: Dict[str, Any]) -> None:
+    def __init__(
+        self,
+        instance_id: str,
+        passport: NodeIdentifier,
+        scraper_response: Dict[str, Any],
+    ) -> None:
+        self.instance_id: str = instance_id
+        self.passport: NodeIdentifier = passport
         self.created_at: datetime.datetime = scraper_response["created_at"]
         self.expires_at: datetime.datetime = scraper_response["expires_at"]
         self.browsing_history: List[str] = []
         self.status: Literal["idle", "requesting", "spotted", "waiting"] = scraper_response["status"]
         self.score: float = scraper_response["score"]
 
+    async def get(self, url: str):
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"http://{self.passport.vpn_address}:{HTTP_PORT_SCRAPER}/get",
+                json = {"instance_id": self.instance_id, "url": url},
+            )
+            return response.json()
+
 
 class ScraperImage:
 
     def __init__(self) -> None:
         self.online: bool = None
-        # self.id = Dict[str, Any] = {"vpn_address": None, "node": None, "port": None, "hostname": None}  # replacement for the keys
-        self.vpn_address: str = None  # UNIQUE (primary key)
-        self.node_id: int = None  # UNIQUE (equivalent to primary key)
-        self.port: str = None  # UNIQUE (equivalent to primary key)
+        self.passport: NodeIdentifier = None
         self.hostname: str = None  # UNIQUE
         self.ipv6: str = None
         self.ram_specs: str = None
         self.ram_usage: str = None
         # self.electricity_consumption: ?
-        # self.ssh_latency: int = None
-        # self.internet_latency: int = None
-        # self.vpn_latency: int = None
-        # self.spotted: bool = None
         self.browsers: Dict[str, BrowserImage] = {}  # instance_id: browser
         self.score: float = .0
 
 
     # __INIT__ CAN NOT BE ASYNC
     @classmethod
-    async def create(cls, vpn_address: str) -> "ScraperImage":
+    async def create(cls, node_id: int) -> "ScraperImage":
         scraperImage = cls()
-        await scraperImage.__initialize(vpn_address)
+        await scraperImage.__initialize(node_id)
         return scraperImage
 
 
-    async def __initialize(self, vpn_address: str) -> None:
+    async def __initialize(self, node_id: int) -> None:
         self.online = True
-        self.vpn_address = vpn_address
-        self.node_id = int(vpn_address.split(".")[-1])
-        response = await proxypi.run(PROXYPI_COMMAND_INFO.safe_substitute(node_id=self.node_id))
+        self.passport = NodeIdentifier(node_id)
+        response = await proxypi.run(PROXYPI_COMMAND_INFO.safe_substitute(node_id=self.passport.node_id))
         self.__dict__.update(json.loads(response))
 
 
     async def __fetch_info(self) -> None:
-        ram_response = await proxypi.run(PROXYPI_COMMAND_RAM.safe_substitute(node_id=self.node_id))
+        ram_response = await proxypi.run(PROXYPI_COMMAND_RAM.safe_substitute(node_id=self.passport.node_id))
         data = json.loads(ram_response)
         self.ram_specs = data['ram_specs']
         self.ram_usage = data['ram_usage']
 
         self.browsers = {}
         scraper_response = requests.get(
-            f"http://{self.vpn_address}:{HTTP_PORT_SCRAPER}/browsers",
+            f"http://{self.passport.vpn_address}:{HTTP_PORT_SCRAPER}/browsers",
             timeout=TIMEOUT_SCRAPER_FETCHING_INFO,  # the timeout seems to block the update
         )
         scraper_response_as_dict = json.loads(scraper_response.text)
         if not scraper_response.ok:
             return
         for instance_id, browser_as_dict in scraper_response_as_dict.items():
-            self.browsers[instance_id] = BrowserImage(browser_as_dict)
+            self.browsers[instance_id] = BrowserImage(instance_id, self.passport, browser_as_dict)
 
         # dropping outdated/killed instances
         # emptying self.browsers may be too memory intensive because of the browsing history
@@ -124,7 +212,7 @@ class ScraperImage:
 
     async def available(self) -> bool:
         async with httpx.AsyncClient() as client:
-            response = await client.get(f"http://{self.vpn_address}:{HTTP_PORT_SCRAPER}/available")
+            response = await client.get(f"http://{self.passport.vpn_address}:{HTTP_PORT_SCRAPER}/available")
             if response.status_code != 200:
                 return False
             return json.loads(response.text)["available"]
@@ -142,12 +230,20 @@ class ScraperImage:
                 payload["lifespan_in_seconds"] = lifespan_in_seconds
             if window_size:
                 payload["window_size"] = window_size
-            response = await client.post(f"http://{self.vpn_address}:{HTTP_PORT_SCRAPER}/new-instance", json=payload)
-            return response.status_code == 200
+            response = await client.post(
+                f"http://{self.passport.vpn_address}:{HTTP_PORT_SCRAPER}/new-instance",
+                json=payload,
+                timeout=TIMEOUT_SCRAPER_HTTP_REQUEST,
+            )
+            return response.status_code == 201
 
 
 # -------------------------------------------------------------------------------- #
 # -------------------------------------------------------------------------------- #
+
+
+class GetRequest(BaseModel):
+    url: str
 
 
 class ScrapeRequest(BaseModel):
@@ -166,16 +262,17 @@ class Broker:
     def __init__(
         self,
     ) -> None:
-        self.scrapers: Dict[str, ScraperImage] = {}  # vpn_address -> scraper
+        self.scrapers: Dict[int, ScraperImage] = {}  # node_id -> scraper
+        self.logger_queue: List[Dict[str, Any]] = []
+        self.effective_refresh_period: float = None
+        self.logger_queue = self.logger_queue[:LOGGER_BUFFER_SIZE]
         # self
         self.__db_con = None
         self.__db_cur = None
-        self.logger_queue: List[Dict[str, Any]] = []
 
 
     def log(self, event: Dict[str, Any]) -> None:
         self.logger_queue.insert(0, event)
-        self.logger_queue = self.logger_queue[:BUFFER_SIZE_LOGGER]
 
 
     @classmethod
@@ -240,22 +337,15 @@ class Broker:
 
 
     async def __update_available_nodes(self) -> None:
-        vpn_addresses_availables = (await proxypi.run(PROXYPI_COMMAND_AVAILABLE_NODES)).splitlines()
+        await NodeIdentifier.update_reachable_nodes()
+        reachable_node_ids: Set[int] = NodeIdentifier.reachable_nodes
 
-        for vpn_address in vpn_addresses_availables:
-            if vpn_address not in self.scrapers.keys():
-                scraper = await ScraperImage.create(vpn_address)
-                if any([
-                    scraper.hostname in [_.hostname for _ in self.scrapers.values()],
-                    scraper.node_id in [_.node_id for _ in self.scrapers.values()],
-                    scraper.port in [_.port for _ in self.scrapers.values()],
-                ]):
-                    print("trying to create a scraper for a scraper id that already exists")
-                else:
-                    self.scrapers[vpn_address] = scraper
-
+        for node_id in reachable_node_ids:
+            if node_id not in self.scrapers.keys():
+                self.scrapers[node_id] = await ScraperImage.create(node_id)
+                
         for scraper in self.scrapers.values():
-            if scraper.vpn_address not in vpn_addresses_availables:
+            if scraper.passport.node_id not in reachable_node_ids:
                 scraper.online = False
             else:
                 scraper.online = True
@@ -296,7 +386,7 @@ class Broker:
         return True
 
 
-    async def __get_available_browser(self) -> BrowserImage:
+    async def get_available_browser(self) -> BrowserImage:
         """
         returns the object (BrowserImage) browser that can handle the job
         """
@@ -349,7 +439,7 @@ class Broker:
             "detail": f"selected request {request['id']}//{request['url']}",
             "level": "INFO",
         })
-        worker = await self.__get_available_browser() 
+        worker = await self.get_available_browser() 
         if not worker:
             return
         # problem is that it is the browser image object that holds the method to scrape
@@ -385,9 +475,21 @@ ALLOWED_NETWORKS = [
 
 
 async def background_update(app):
+
+    loop = asyncio.get_running_loop()
+    next_update = loop.time()
+    last_update = next_update
+
     while True:
         await app.state.broker.update()
-        await asyncio.sleep(REFRESH_PERIOD_BROKER)
+        now = loop.time()
+        
+        app.state.broker.effective_refresh_period = now - last_update
+        last_update = now
+        next_update += REFRESH_PERIOD_BROKER
+        sleep_time = next_update - loop.time()
+        if sleep_time > 0:
+            await asyncio.sleep(sleep_time)
 
 
 @asynccontextmanager
@@ -443,9 +545,14 @@ app.add_middleware(
 @app.get("/health", include_in_schema=False)
 async def health():
     """
-    health check for unit tests
+    Health function for unit tests.
     """
-    return {}
+    return {
+        "is_running_as_root": os.getuid() == 0,
+        "broker_refresh_period": REFRESH_PERIOD_BROKER,
+        "broker_effective_refresh_period": app.state.broker.effective_refresh_period,
+        "reachable_nodes": NodeIdentifier.reachable_nodes,
+    }
 
 
 @app.get("/", include_in_schema=False)
@@ -467,6 +574,26 @@ async def css():
     return FileResponse("dashboard2.css")
 
 
+@app.post("/get")
+async def get(request: GetRequest):
+    """
+    Gets an available browser from the broker,
+    and shortcuts the request logic.
+    """
+    try:
+        browser = await app.state.broker.get_available_browser()
+        if not browser:
+            raise ValueError("no browser")
+        else:
+            print(browser.instance_id)
+        return await browser.get(request.url)
+    except Exception as e:
+        line = sys.exc_info()[2].tb_lineno
+        raise HTTPException(
+            status_code=500, detail=f"{type(e).__name__} at line {line}: {str(e)}"
+        )
+
+
 @app.post("/scrape", status_code=status.HTTP_202_ACCEPTED)
 async def scrape(request: ScrapeRequest):
     try:
@@ -485,7 +612,7 @@ async def nodes():
             {
                 "online": scraper.online,
                 "hostname": scraper.hostname,
-                "node_id": scraper.node_id,
+                "node_id": scraper.passport.node_id,
                 "ram_specs": scraper.ram_specs,
                 "ram_usage": scraper.ram_usage,
                 "ipv6": scraper.ipv6,
@@ -535,7 +662,7 @@ async def stream(hostname: str, instance_id: str):
             status_code=409, detail=f"No browser instance {instance_id} for scraper {hostname}"
         )
 
-    url = f"http://{scraper.vpn_address}:{HTTP_PORT_SCRAPER}/stream/{instance_id}"
+    url = f"http://{scraper.passport.vpn_address}:{HTTP_PORT_SCRAPER}/stream/{instance_id}"
 
     client = httpx.AsyncClient()
     req = client.build_request("GET", url)
