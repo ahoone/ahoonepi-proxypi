@@ -579,6 +579,9 @@ async def get(request: GetRequest):
     """
     Gets an available browser from the broker,
     and shortcuts the request logic.
+    Not designed to resist multiple calls,
+    and maybe initialize multiple browsers at once,
+    making it prone to detection.
     """
     try:
         browser = await app.state.broker.get_available_browser()
@@ -616,7 +619,7 @@ async def nodes():
                 "ram_specs": scraper.ram_specs,
                 "ram_usage": scraper.ram_usage,
                 "ipv6": scraper.ipv6,
-                "browsers": scraper.browsers,
+                "browsers": dict(sorted(scraper.browsers.items(), key=lambda x: x[1].created_at)),  # orders by created_at
             }
             for scraper in app.state.broker.scrapers.values()
         ]

@@ -44,7 +44,7 @@
                         <th>Node ID</th>
                         <th>RAM</th>
                         <th>IPv6</th>
-                        <th>Status</th>
+                        <th>Browsers</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -196,9 +196,23 @@
             }
         },
         {
-            label: 'Status',
+            label: 'Browsers',
             render: function(r) {
-                return r.online ? '<span class="status-online">Online</span>' : '<span class="status-offline">Offline</span>';
+                let instances = [];
+                
+                if (Array.isArray(r.browser_instances)) {
+                    instances = r.browser_instances;
+                } else if (r.browsers && typeof r.browsers === 'object') {
+                    instances = Object.entries(r.browsers);
+                }
+                
+                if (!instances.length) return '<span>—</span>';
+                
+                return instances.map(function([name, data]) {
+                    const status = data.status || 'idle';
+                    const url = '/stream/' + encodeURIComponent(r.hostname) + '/' + encodeURIComponent(name);
+                    return '<a href="' + url + '" class="browser-badge browser-badge--' + status + '" target="_blank">' + name + '</a>';
+                }).join(' ');
             }
         }
     ];
