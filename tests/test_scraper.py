@@ -25,15 +25,18 @@ def wait_between_tests():
     yield
     sleep(TIME_BETWEEN_TESTS)
 
+
 def test_scraper_available():
     url = f"http://{ADDRESS}/health"
     response = requests.get(url, timeout=TIMEOUT_REQUESTS)
     assert response.status_code == 200, response.content
 
+
 def test_default_new_instance():
     url = f"http://{ADDRESS}/new-instance"
     response = requests.post(url, timeout=TIMEOUT_REQUESTS)
     assert response.status_code == 201, response.content
+
 
 def test_explicit_new_instance():
     url = f"http://{ADDRESS}/new-instance"
@@ -44,6 +47,7 @@ def test_explicit_new_instance():
     }
     response = requests.post(url, json=payload, timeout=TIMEOUT_REQUESTS)
     assert response.status_code == 201, response.content
+
 
 def test_get_page_explicit_instance():
     url = f"http://{ADDRESS}/browsers"
@@ -59,6 +63,7 @@ def test_get_page_explicit_instance():
         response = requests.post(url, json=payload, timeout=TIMEOUT_REQUESTS)
         assert response.status_code == 200, response.content
 
+
 def test_get_page_default_instance():
     url = f"http://{ADDRESS}/get"
     payload = {
@@ -68,14 +73,16 @@ def test_get_page_default_instance():
     response = requests.post(url, json=payload, timeout=TIMEOUT_REQUESTS)
     assert response.status_code == 200, response.content
 
+
 def test_kill_default_instance():
     url = f"http://{ADDRESS}/kill"
     payload = {"instance_id": "default"}
-    response = requests.post(url, json= payload, timeout=TIMEOUT_REQUESTS)
+    response = requests.post(url, json=payload, timeout=TIMEOUT_REQUESTS)
     assert response.status_code == 200, response.content
 
+
 def test_explicit_instance_dead():
-#    sleep(EXPLICIT_NEW_INSTANCE_LIFESPAN)
+    #    sleep(EXPLICIT_NEW_INSTANCE_LIFESPAN)
     url = f"http://{ADDRESS}/browsers"
     response = requests.get(url, timeout=TIMEOUT_REQUESTS)
     assert response.status_code == 200, response.content

@@ -3,6 +3,7 @@ import socket
 
 SOCKET_PROXYPI = "/tmp/proxypi.sock"
 
+
 async def run(command: str):
 
     def _call(command: str) -> str:
@@ -16,6 +17,4 @@ async def run(command: str):
         sock.close()
         return b"".join(chunks).decode()
 
-    return await asyncio.get_event_loop().run_in_executor(
-        None, lambda: _call(command)
-    )
+    return await asyncio.get_event_loop().run_in_executor(None, lambda: _call(command))

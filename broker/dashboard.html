@@ -1,320 +1,363 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Dashboard</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;600&family=IBM+Plex+Sans:wght@300;400;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="dashboard.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard</title>
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="dashboard.css">
 </head>
 <body>
 
-<div class="stats-row" id="stats">
-  <div class="stat-card c-total">
-    <div class="stat-label">Total Nodes</div>
-    <div class="stat-value" id="s-total">—</div>
-  </div>
-  <div class="stat-card c-online">
-    <div class="stat-label">Online</div>
-    <div class="stat-value" id="s-online">—</div>
-  </div>
-  <div class="stat-card c-ssh">
-    <div class="stat-label">Offline</div>
-    <div class="stat-value" id="s-offline">—</div>
-  </div>
-  <div class="stat-card c-net">
-    <div class="stat-label">Browser Instances</div>
-    <div class="stat-value" id="s-browsers">—</div>
-  </div>
-</div>
+<main class="dashboard-grid">
+    <div class="row">
+        <section class="card-stat">
+            <div>Nodes:</div>    
+            <span>-</span>
+        </section>
 
-<div class="table-wrap">
-  <div class="table-header">
-    <span class="table-title">Nodes</span>
-    <div class="meta">
-      <span><span class="live-dot"></span> &nbsp;live</span>
-      <span id="ts-nodes" class="ts">—</span>
-    </div>
-  </div>
+        <section class="card-stat">
+            <div>Online:</div>    
+            <span>-</span>
+        </section>
 
-  <div id="table-container">
-    <div class="empty-state">Loading...</div>
-  </div>
-</div>
-
-<div class="table-wrap">
-  <div class="table-header">
-    <span class="table-title">Broker</span>
-    <div class="meta">
-      <span><span class="live-dot"></span> &nbsp;live</span>
-      <span id="ts-broker" class="ts">—</span>
-    </div>
-  </div>
-  <div id="broker-container">
-    <div id="broker-table-content">
-       <div class="empty-state">Loading...</div>
+        <section class="card-stat">
+            <div>RPM:</div>    
+            <span>-</span>
+        </section>
     </div>
 
-    <div class="logger">
-      <span class="table-title">Logger</span>
-      <div class="empty-state">Loading...</div>
-    </div>
-  </div>
-</div>
+    <div class="row">
+        <section class="card nodes">
+            <div class="card-header">
+                <span class="card-title">Nodes</span>
+                <div class="card-timestamp-group">
+<!--                     <span class="live-dot">&nbsp;</span> -->
+                    <span id="ts-broker" class="timestamp">—</span>
+                </div>
+            </div>
 
-</div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Hostname</th>
+                        <th>Node ID</th>
+                        <th>RAM</th>
+                        <th>IPv6</th>
+                        <th>Browsers</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>-</td>
+                        <td>-</td>
+                        <td>-</td>
+                        <td>-</td>
+                        <td>-</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+    </div>
+
+    <div class="row">
+        <section class="card broker">
+            <div class="card-header">
+                <span class="card-title">Broker</span>
+                <div class="card-timestamp-group">
+<!--                     <span class="live-dot">&nbsp;</span> -->
+                    <span id="ts-broker" class="timestamp">—</span>
+                </div>
+            </div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>URL</th>
+                        <th>Antworzeit</th>
+                        <th>Timestamp</th>
+                        <th>Tag</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>-</td>
+                        <td>-</td>
+                        <td>-</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section class="card logger">
+            <div class="card-header">
+                <span class="card-title">Logger</span>
+                <div class="card-timestamp-group">
+<!--                     <span class="live-dot">&nbsp;</span> -->
+                    <span id="ts-broker" class="timestamp">—</span>
+                </div>
+            </div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Timestamp</th>
+                        <th>Detail</th>
+                        <th>Level</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>-</td>
+                        <td>-</td>
+                        <td>-</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+    </div>
+</main>
 
 <script>
-  // ── CONFIG ──────────────────────────────────────
-  const API_URL = '/nodes';
-  const AUTO_REFRESH_MS = 1_000;
-  // ────────────────────────────────────────────────
 
-  // ── Generic in-place table upsert ───────────────
-  // Updates existing rows/cells without recreating DOM nodes,
-  // so CSS animations (blinking dots) never restart.
-  function upsertTable(container, rows, rowKey, columns) {
-    let table = container.querySelector('table');
+    const NODES_SOCKET = '/nodes';
+    const NODES_REFRESH_PERIOD = 2_000;
+    const BROKER_SOCKET = "/broker";
+    const BROKER_REFRESH_PERIOD = 2_000;
+    const LOGGER_SOCKET = "/logger";
+    const LOGGER_REFRESH_PERIOD = 1_000;
 
-    if (!table) {
-      container.innerHTML =
-        '<table><thead><tr>' +
-        columns.map(c => '<th' + (c.cls ? ' class="' + c.cls + '"' : '') + '>' + c.label + '</th>').join('') +
-        '</tr></thead><tbody></tbody></table>';
-      table = container.querySelector('table');
+    function upsertTable(container, rows, rowKey, columns) {
+        let table = container.querySelector('table');
+        if (!table) {
+            container.innerHTML =
+                '<table><thead><tr>' +
+                columns.map(c => '<th' + (c.cls ? ' class="' + c.cls + '"' : '') + '>' + c.label + '</th>').join('') +
+                '</tr></thead><tbody></tbody></table>';
+            table = container.querySelector('table');
+        }
+        const tbody = table.querySelector('tbody');
+        const seen = new Set();
+        rows.forEach(function(r, idx) {
+            const key = String(rowKey(r));
+            seen.add(key);
+            let tr = tbody.querySelector('[data-key="' + key + '"]');
+            if (!tr) {
+                tr = document.createElement('tr');
+                tr.dataset.key = key;
+                columns.forEach(function() { tr.appendChild(document.createElement('td')); });
+                tbody.appendChild(tr);
+            }
+            const siblings = [...tbody.children];
+            if (siblings.indexOf(tr) !== idx) {
+                tbody.insertBefore(tr, tbody.children[idx] || null);
+            }
+            columns.forEach(function(col, i) {
+                if (tr.children[i].className !== (col.cls || '')) {
+                    tr.children[i].className = col.cls || '';
+                }
+                const next = col.render(r);
+                if (tr.children[i].innerHTML !== next) {
+                    tr.children[i].innerHTML = next;
+                }
+            });
+        });
+        [...tbody.querySelectorAll('tr')].forEach(function(tr) {
+            if (!seen.has(tr.dataset.key)) tr.remove();
+        });
     }
 
-    const tbody = table.querySelector('tbody');
-    const seen  = new Set();
+    const NODE_COLUMNS = [
+        {
+            label: 'Hostname',
+            render: function(r) {
+                const status = r.online ? 'online' : 'offline';
+                return '<span class="live-dot ' + status + '"></span> ' +
+                    (r.hostname || '—') +
+                    '<span style="color: var(--text-dim)"> ' + r.ram_specs + '</span>';
+            }
+        },
+        {
+            label: 'Node ID',
+            render: function(r) {
+                return r.node_id != null ? r.node_id : '—';
+            }
+        },
+        {
+            label: 'RAM',
+            render: function(r) {
+                return r.ram_usage != null ? r.ram_usage : '—';
+            }
+        },
+        {
+            label: 'IPv6',
+            render: function(r) {
+                return r.ipv6 || '—';
+            }
+        },
+        {
+            label: 'Browsers',
+            render: function(r) {
+                let instances = [];
+                
+                if (Array.isArray(r.browser_instances)) {
+                    instances = r.browser_instances;
+                } else if (r.browsers && typeof r.browsers === 'object') {
+                    instances = Object.entries(r.browsers);
+                }
+                
+                if (!instances.length) return '<span>—</span>';
+                
+                return instances.map(function([name, data]) {
+                    const status = data.status || 'idle';
+                    const url = '/stream/' + encodeURIComponent(r.hostname) + '/' + encodeURIComponent(name);
+                    return '<a href="' + url + '" class="browser-badge browser-badge--' + status + '" target="_blank">' + name + '</a>';
+                }).join(' ');
+            }
+        }
+    ];
 
-    rows.forEach(function(r, idx) {
-      const key = String(rowKey(r));
-      seen.add(key);
+    const BROKER_COLUMNS = [
+        {
+            label: 'URL',
+            render: function(r) {
+                return r.url || '—';
+            }
+        },
+        {
+            label: 'Antwortzeit',
+            render: function(r) {
+                return r.antwortzeit || '—';
+            }
+        },
+        {
+            label: 'Timestamp',
+            render: function(r) {
+                return r.timestamp || '—';
+            }
+        },
+        {
+            label: 'Tag',
+            render: function(r) {
+                return r.tag || '—';
+            }
+        }
+    ];
 
-      let tr = tbody.querySelector('[data-key="' + key + '"]');
+    const LOGGER_COLUMNS = [
+        {
+            label: 'Timestamp',
+            render: function(r) {
+                return r.timestamp || '—';
+            }
+        },
+        {
+            label: 'Detail',
+            render: function(r) {
+                return r.detail || '—';
+            }
+        },
+        {
+            label: 'Level',
+            render: function(r) {
+                const level = r.level || 'info';
+                return '<span class="log-level log-level--' + level + '">' + level.toUpperCase() + '</span>';
+            }
+        }
+    ];
 
-      if (!tr) {
-        tr = document.createElement('tr');
-        tr.dataset.key = key;
-        columns.forEach(function() { tr.appendChild(document.createElement('td')); });
-        tbody.appendChild(tr);
-      }
+    function renderNodes(rawRows) {
+        const container = document.querySelector('.card.nodes');
+        const rows = Array.isArray(rawRows) ? rawRows.filter(function(r) { return r && typeof r.hostname === 'string'; }) : [];
 
-      // Keep row in sorted order without moving it if already correct
-      const siblings = [...tbody.children];
-      if (siblings.indexOf(tr) !== idx) {
-        tbody.insertBefore(tr, tbody.children[idx] || null);
-      }
+        upsertTable(container, rows, function(r) { return r.node_id || r.hostname; }, NODE_COLUMNS);
+        
+        if (!rows.length) {
+            container.querySelector('tbody').innerHTML = '<tr><td colspan="5">No data available</td></tr>';
+            return;
+        }
+        
+        const onlineCount = rows.filter(function(r) { return r.online; }).length;
+        const statsCards = document.querySelectorAll('.card-stat span');
+        if (statsCards[0]) statsCards[0].textContent = rows.length;
+        if (statsCards[1]) statsCards[1].textContent = onlineCount;
+        if (statsCards[2]) statsCards[2].textContent = rows.reduce(function(sum, r) { return sum + (r.rpm || 0); }, 0);
+        
+        document.getElementById('ts-broker').textContent = new Date().toLocaleTimeString();
+    }
 
-      // Update only cells whose content actually changed
-      columns.forEach(function(col, i) {
+    function renderBroker(rawRows) {
+        const container = document.querySelector('.card.broker');
+        const rows = Array.isArray(rawRows) ? rawRows : [];
+        
+        upsertTable(container, rows, function(r, idx) { return r.url || idx; }, BROKER_COLUMNS);
+        container.querySelector('#ts-broker').textContent = new Date().toLocaleTimeString();
 
-        if (tr.children[i].className !== (col.cls || '')) {
-          tr.children[i].className = col.cls || '';
+        if (!rows.length) {
+            container.querySelector('tbody').innerHTML = '<tr><td colspan="3">No data available</td></tr>';
+            return;
+        }
+    }
+
+    function renderLogger(rawRows) {
+        const container = document.querySelector('.card.logger');
+        const rows = Array.isArray(rawRows) ? rawRows : [];
+
+        upsertTable(container, rows.slice(0, 10), function(r, idx) { return r.timestamp || idx; }, LOGGER_COLUMNS);
+        container.querySelector('#ts-broker').textContent = new Date().toLocaleTimeString();
+        
+        if (!rows.length) {
+            container.querySelector('tbody').innerHTML = '<tr><td colspan="3">No data available</td></tr>';
+            return;
         }
 
-        const next = col.render(r);
-        if (tr.children[i].innerHTML !== next) {
-          tr.children[i].innerHTML = next;
+        rows.sort(function(a, b) {
+            return new Date(b.timestamp || 0) - new Date(a.timestamp || 0);
+        });
+    }
+
+    async function fetchNodes() {
+        try {
+            const res = await fetch(NODES_SOCKET);
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            const json = await res.json();
+            renderNodes(Array.isArray(json) ? json : (json.output || []));
+        } catch (e) {
+            console.error('Failed to fetch nodes:', e);
         }
-      });
-
-      // Sync row-level classes
-      const isLighthouse = r.node_id === 1;
-    });
-
-    // Remove rows that no longer exist in the data
-    [...tbody.querySelectorAll('tr')].forEach(function(tr) {
-      if (!seen.has(tr.dataset.key)) tr.remove();
-    });
-  }
-
-  // ── Nodes ────────────────────────────────────────
-  const NODE_COLUMNS = [
-    {
-      label: 'Hostname',
-      render: function(r) {
-        const isLighthouse = r.node_id === 1;
-        const dotClass = (isLighthouse) ? 'lighthouse' : (r.online ? 'online' : 'offline');
-        return '<div class="host-cell">' +
-          '<span class="host-dot ' + dotClass + '"></span>' +
-          r.hostname +
-          (isLighthouse ? ' <span class="badge badge-lh">LIGHTHOUSE</span>' : '') +
-          '</div>';
-      }
-    },
-    {
-      label: 'Node ID ↓',
-      render: function(r) {
-        return r.node_id === 1
-          ? '<span class="background-cell">' + r.node_id + '</span>'
-          : '<span class="background-cell">' + (r.node_id != null ? r.node_id : '—') + '</span>';
-      }
-    },
-    {
-      label: 'RAM',
-      cls: 'col-ram',
-      render: function(r) {
-        const usage = r.ram_usage != null ? parseFloat(r.ram_usage) : null;
-        const cls = usage === null ? ''
-                  : usage < 50 ? 'ram-green'
-                  : usage < 75 ? 'ram-yellow'
-                  : usage < 90 ? 'ram-orange'
-                  :               'ram-red';
-        return '<div class="ram-cell">' +
-          '<span class="ram-specs">'  + (r.ram_specs || '—') + '</span>' +
-          '<span class="ram-divider">|</span>' +
-          '<span class="ram-usage ' + cls + '">' + (usage !== null ? usage.toFixed(0) + '%' : '—') + '</span>' +
-        '</div>';
-      }
-    },
-    {
-      label: 'IPv6',
-      render: function(r) {
-        return '<span class="background-cell" title="' + (r.ipv6 || '') + '">' + (r.ipv6 || '—') + '</span>';
-      }
-    },
-    {
-      label: 'Browsers',
-      render: function(r) {
-        const instances = Array.isArray(r.browser_instances) ? r.browser_instances : [];
-        if (!instances.length) return '<span class="lat-none">—</span>';
-        return instances.map(function([name, data]) {
-          const status = data.status || 'idle';
-          const url = '/stream/' + encodeURIComponent(r.hostname) + '/' + encodeURIComponent(name);
-          return '<a href="' + url + '" class="browser-badge browser-badge--' + status + '" target="_blank">' + 
-            name + 
-            '</a>';
-        }).join(' ');
-      }
-    }
-  ];
-
-  function renderNodes(rawRows) {
-    const container = document.getElementById('table-container');
-    const rows = rawRows.filter(function(r) { return r && typeof r.hostname === 'string'; });
-    if (!rows.length) {
-      container.innerHTML = '<div class="empty-state">No data returned.</div>';
-      return;
     }
 
-    rows.forEach(function(r) {
-      r.browser_instances = (r.browsers && typeof r.browsers === 'object')
-        ? Object.entries(r.browsers)
-        : [];
-    });
-
-    rows.sort(function(a, b) { return (a.node_id != null ? a.node_id : Infinity) - (b.node_id != null ? b.node_id : Infinity); });
-    upsertTable(container, rows, function(r) { return r.node_id; }, NODE_COLUMNS);
-
-    // Stats
-    const onlineCount   = rows.filter(function(r) { return r.online; }).length;
-    const totalBrowsers = rows.reduce(function(s, r) { return s + r.browser_instances.length; }, 0);
-    document.getElementById('s-total').textContent    = rows.length;
-    document.getElementById('s-online').textContent   = onlineCount;
-    document.getElementById('s-offline').textContent  = rows.length - onlineCount;
-    document.getElementById('s-browsers').textContent = totalBrowsers;
-  }
-
-  async function fetchNodes() {
-    try {
-      const res  = await fetch(API_URL);
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      const json = await res.json();
-      renderNodes(Array.isArray(json) ? json : (json.output || []));
-      document.getElementById('ts-nodes').textContent = 'updated ' + new Date().toLocaleTimeString();
-    } catch (e) {
-      document.getElementById('table-container').innerHTML =
-        '<div class="error-state">Failed to fetch: ' + e.message + '</div>';
-    }
-  }
-
-  // ── Broker ───────────────────────────────────────
-  const BROKER_COLUMNS = [
-    { label: 'URL',       render: function(r) { return '<span class="url-cell">'  + (r.url       || '—') + '</span>'; } },
-    { label: 'Antwortzeit ↓', render: function(r) { return '<span class="background-cell">' + (r.antwortzeit || '—') + '</span>'; } },
-    { label: 'Timestamp', render: function(r) { return '<span class="background-cell">' + (r.timestamp || '—') + '</span>'; } },
-    { 
-      label: 'Tag', 
-      render: function(r) { 
-        if (!r.tag) {
-          return '<span class="background-cell">—</span>';
+    async function fetchBroker() {
+        try {
+            const res = await fetch(BROKER_SOCKET);
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            const json = await res.json();
+            renderBroker(Array.isArray(json) ? json : (json.output || []));
+        } catch (e) {
+            console.error('Failed to fetch broker:', e);
         }
-        const dynamicStyle = getTagStyle(r.tag);
-        return `<span class="badge" style="${dynamicStyle}">${r.tag}</span>`;
-      } 
-    }
-  ];
-
-  function getTagStyle(tag) {
-    if (!tag) return '';
-
-    // Generate a hash from the tag string
-    let hash = 0;
-    for (let i = 0; i < tag.length; i++) {
-      hash = tag.charCodeAt(i) + ((hash << 5) - hash);
     }
 
-    // Use the hash to pick a Hue (0-360)
-    const h = Math.abs(hash % 360);
-    
-    // S=80%, L=65% gives a vibrant "neon" color that works well in dark mode
-    const color = `hsl(${h}, 80%, 65%)`;
-    
-    return `
-      background: hsla(${h}, 80%, 65%, 0.1); 
-      color: ${color}; 
-      border: 1px solid hsla(${h}, 80%, 65%, 0.2);
-    `;
-  }
-
-  function getTagColor(tag) {
-    if (!tag) return '';
-    
-    // Generate a simple hash from the string
-    let hash = 0;
-    for (let i = 0; i < tag.length; i++) {
-      hash = tag.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    
-    // Use HSL for "vibrant but readable" colors
-    // Hue: 0-360, Saturation: 70%, Lightness: 85% (pastel look)
-    const h = Math.abs(hash % 360);
-    return `background: hsl(${h}, 70%, 90%); color: hsl(${h}, 80%, 25%); border: 1px solid hsl(${h}, 70%, 80%);`;
-  }
-
-  function renderBroker(rawRows) {
-    const container = document.getElementById('broker-container');
-
-    if (!rawRows.length) {
-      container.innerHTML = '<div class="empty-state">No data returned.</div>';
-      return;
+    async function fetchLogger() {
+        try {
+            const res = await fetch(LOGGER_SOCKET);
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            const json = await res.json();
+            renderLogger(Array.isArray(json) ? json : (json.output || []));
+        } catch (e) {
+            console.error('Failed to fetch logger:', e);
+        }
     }
 
-    upsertTable(container, rawRows, function(r) { return r.id; }, BROKER_COLUMNS);
-    document.getElementById('ts-broker').textContent = 'updated ' + new Date().toLocaleTimeString();
-  }
+    fetchNodes();
+    fetchBroker();
+    fetchLogger();
 
-  async function fetchBroker() {
-    try {
-      const res  = await fetch('/broker');
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      const json = await res.json();
-      renderBroker(Array.isArray(json) ? json : (json.output || []));
-    } catch (e) {
-      document.getElementById('broker-container').innerHTML =
-        '<div class="error-state">Failed to fetch: ' + e.message + '</div>';
-    }
-  }
+    if (NODES_REFRESH_PERIOD > 0) { setInterval(fetchNodes, NODES_REFRESH_PERIOD); }
+    if (BROKER_REFRESH_PERIOD > 0) { setInterval(fetchBroker, BROKER_REFRESH_PERIOD); }
+    if (LOGGER_REFRESH_PERIOD > 0) { setInterval(fetchLogger, LOGGER_REFRESH_PERIOD); }
 
-  // ── Boot ─────────────────────────────────────────
-  fetchNodes();
-  fetchBroker();
-  if (AUTO_REFRESH_MS > 0) {
-    setInterval(fetchNodes, AUTO_REFRESH_MS);
-    setInterval(fetchBroker, AUTO_REFRESH_MS);
-  }
 </script>
+
 </body>
 </html>

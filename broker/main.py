@@ -4,7 +4,12 @@ import datetime
 import exrex
 from fastapi import Body, FastAPI, status, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, StreamingResponse
+from fastapi.responses import (
+    HTMLResponse,
+    JSONResponse,
+    FileResponse,
+    StreamingResponse,
+)
 import httpx
 import ipaddress
 import json
@@ -29,7 +34,9 @@ import proxypi
 
 
 NODE_ROLE = os.environ["NODE_ROLE"].split(",")
-assert "LIGHTHOUSE" in NODE_ROLE, "The node should be a lighthouse (ie includes broker) to launch this image"
+assert (
+    "LIGHTHOUSE" in NODE_ROLE
+), "The node should be a lighthouse (ie includes broker) to launch this image"
 
 
 BROKER_DATABASE = "broker.db"
@@ -48,7 +55,7 @@ SSH_NETWORK_PREFIX = os.environ["SSH_NETWORK_PREFIX"]
 THRESHOLD_SCORE = 300
 TIMEOUT_SCRAPER_FETCHING_INFO = 2  # seconds
 TIMEOUT_SCRAPER_HTTP_REQUEST = 4  # seconds
-TIMEOUT_SCRAPER_PING = .1  # seconds
+TIMEOUT_SCRAPER_PING = 0.1  # seconds
 WIREGUARD_LIGHTHOUSE_ID = os.environ["WIREGUARD_LIGHTHOUSE_ID"]
 WIREGUARD_NETWORK_PREFIX = os.environ["WIREGUARD_NETWORK_PREFIX"]
 NODE_ID_RANGE_REGEX = os.environ["NODE_ID_RANGE_REGEX"]
@@ -61,8 +68,10 @@ NODE_ID_RANGE_REGEX = os.environ["NODE_ID_RANGE_REGEX"]
 class NodeIdentifier:
 
     node_ids: Set[int] = {
-        int(x) for x in
-        exrex.generate(NODE_ID_RANGE_REGEX, limit=exrex.count(NODE_ID_RANGE_REGEX))
+        int(x)
+        for x in exrex.generate(
+            NODE_ID_RANGE_REGEX, limit=exrex.count(NODE_ID_RANGE_REGEX)
+        )
     }
     reachable_nodes: Set[int] = None
 
@@ -142,14 +151,16 @@ class BrowserImage:
         self.created_at: datetime.datetime = scraper_response["created_at"]
         self.expires_at: datetime.datetime = scraper_response["expires_at"]
         self.browsing_history: List[str] = []
-        self.status: Literal["idle", "requesting", "spotted", "waiting"] = scraper_response["status"]
+        self.status: Literal["idle", "requesting", "spotted", "waiting"] = (
+            scraper_response["status"]
+        )
         self.score: float = scraper_response["score"]
 
     async def get(self, url: str):
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 f"http://{self.passport.vpn_address}:{HTTP_PORT_SCRAPER}/get",
-                json = {"instance_id": self.instance_id, "url": url},
+                json={"instance_id": self.instance_id, "url": url},
             )
             return response.json()
 
@@ -165,8 +176,7 @@ class ScraperImage:
         self.ram_usage: str = None
         # self.electricity_consumption: ?
         self.browsers: Dict[str, BrowserImage] = {}  # instance_id: browser
-        self.score: float = .0
-
+        self.score: float = 0.0
 
     # __INIT__ CAN NOT BE ASYNC
     @classmethod
@@ -175,19 +185,21 @@ class ScraperImage:
         await scraperImage.__initialize(node_id)
         return scraperImage
 
-
     async def __initialize(self, node_id: int) -> None:
         self.online = True
         self.passport = NodeIdentifier(node_id)
-        response = await proxypi.run(PROXYPI_COMMAND_INFO.safe_substitute(node_id=self.passport.node_id))
+        response = await proxypi.run(
+            PROXYPI_COMMAND_INFO.safe_substitute(node_id=self.passport.node_id)
+        )
         self.__dict__.update(json.loads(response))
 
-
     async def __fetch_info(self) -> None:
-        ram_response = await proxypi.run(PROXYPI_COMMAND_RAM.safe_substitute(node_id=self.passport.node_id))
+        ram_response = await proxypi.run(
+            PROXYPI_COMMAND_RAM.safe_substitute(node_id=self.passport.node_id)
+        )
         data = json.loads(ram_response)
-        self.ram_specs = data['ram_specs']
-        self.ram_usage = data['ram_usage']
+        self.ram_specs = data["ram_specs"]
+        self.ram_usage = data["ram_usage"]
 
         self.browsers = {}
         scraper_response = requests.get(
@@ -198,25 +210,26 @@ class ScraperImage:
         if not scraper_response.ok:
             return
         for instance_id, browser_as_dict in scraper_response_as_dict.items():
-            self.browsers[instance_id] = BrowserImage(instance_id, self.passport, browser_as_dict)
+            self.browsers[instance_id] = BrowserImage(
+                instance_id, self.passport, browser_as_dict
+            )
 
         # dropping outdated/killed instances
         # emptying self.browsers may be too memory intensive because of the browsing history
         # but the BrowserImage just on top is always reloading everything...
 
-
     async def update(self) -> None:
         await self.__fetch_info()
         # anything to update for the browsers?
 
-
     async def available(self) -> bool:
         async with httpx.AsyncClient() as client:
-            response = await client.get(f"http://{self.passport.vpn_address}:{HTTP_PORT_SCRAPER}/available")
+            response = await client.get(
+                f"http://{self.passport.vpn_address}:{HTTP_PORT_SCRAPER}/available"
+            )
             if response.status_code != 200:
                 return False
             return json.loads(response.text)["available"]
-
 
     async def new_instance(
         self,
@@ -225,7 +238,7 @@ class ScraperImage:
         window_size: Optional[Union[List[int], Tuple[int, int]]] = None,
     ) -> bool:
         async with httpx.AsyncClient() as client:
-            payload={"instance_id": instance_id}
+            payload = {"instance_id": instance_id}
             if lifespan_in_seconds:
                 payload["lifespan_in_seconds"] = lifespan_in_seconds
             if window_size:
@@ -252,8 +265,11 @@ class ScrapeRequest(BaseModel):
     default is the time of receiving the request
     else is an isoformat string of datetime.datetime
     """
+
     url: HttpUrl
-    antwortzeit: Optional[datetime.datetime] = Field(default_factory=datetime.datetime.now())
+    antwortzeit: Optional[datetime.datetime] = Field(
+        default_factory=datetime.datetime.now()
+    )
     tag: str
 
 
@@ -270,10 +286,8 @@ class Broker:
         self.__db_con = None
         self.__db_cur = None
 
-
     def log(self, event: Dict[str, Any]) -> None:
         self.logger_queue.insert(0, event)
-
 
     @classmethod
     async def create(cls) -> "Broker":
@@ -281,13 +295,11 @@ class Broker:
         await broker.__initialize()
         return broker
 
-
     async def __initialize(self) -> None:
         self.__db_con = sqlite3.connect(BROKER_DATABASE)
         self.__db_cur = self.__db_con.cursor()
         self.__initialize_db_tables()
         await self.update()
-
 
     def __initialize_db_tables(self) -> None:
         response = self.__db_cur.execute("SELECT name FROM sqlite_master")
@@ -315,15 +327,15 @@ class Broker:
                 );
             """)
 
-
     def scrape(self, request: ScrapeRequest) -> None:
         # data = [(request.urls, request.tag)] if isinstance(request.urls, str) else [(url, request.tag) for url in request.urls]
         # NOT SUPPORTING MULTIPLE ELEMENTS AT ONCE
         data = [(str(request.url), request.antwortzeit, request.tag)]
-        query = f"INSERT INTO {DB_TABLE_TARGETS} (url, antwortzeit, tag) VALUES (?, ?, ?)"
+        query = (
+            f"INSERT INTO {DB_TABLE_TARGETS} (url, antwortzeit, tag) VALUES (?, ?, ?)"
+        )
         self.__db_cur.executemany(query, data)
         self.__db_con.commit()
-
 
     def get_scraping_list(self) -> List[Dict[str, Any]]:
         self.__db_cur.execute(f"""
@@ -335,7 +347,6 @@ class Broker:
         columns = [desc[0] for desc in self.__db_cur.description]
         return [dict(zip(columns, row)) for row in self.__db_cur.fetchall()]
 
-
     async def __update_available_nodes(self) -> None:
         await NodeIdentifier.update_reachable_nodes()
         reachable_node_ids: Set[int] = NodeIdentifier.reachable_nodes
@@ -343,27 +354,22 @@ class Broker:
         for node_id in reachable_node_ids:
             if node_id not in self.scrapers.keys():
                 self.scrapers[node_id] = await ScraperImage.create(node_id)
-                
+
         for scraper in self.scrapers.values():
             if scraper.passport.node_id not in reachable_node_ids:
                 scraper.online = False
             else:
                 scraper.online = True
 
-
     async def __update_nodes(self) -> None:
         updates = [
-            scraper.update()
-            for scraper in self.scrapers.values()
-            if scraper.online
+            scraper.update() for scraper in self.scrapers.values() if scraper.online
         ]
         await asyncio.gather(*updates)
 
-
     @staticmethod
     def __random_id() -> str:
-        return ''.join(random.choices(ascii_letters + digits, k=8))
-
+        return "".join(random.choices(ascii_letters + digits, k=8))
 
     async def __create_browser(self) -> bool:
         """
@@ -376,20 +382,18 @@ class Broker:
         ]
         results = await asyncio.gather(*[task for _, task in tasks])
         availables = [
-            vpn_address 
-            for (vpn_address, _), result in zip(tasks, results)
-            if result
+            vpn_address for (vpn_address, _), result in zip(tasks, results) if result
         ]
         if len(availables) == 0:
             return False
         await self.scrapers[random.choice(availables)].new_instance(self.__random_id())
         return True
 
-
     async def get_available_browser(self) -> BrowserImage:
         """
         returns the object (BrowserImage) browser that can handle the job
         """
+
         def get_browsers():
             browsers = []
             [
@@ -410,7 +414,6 @@ class Broker:
             browsers = get_browsers()
         return random.choice(browsers) if browsers else None
 
-
     def __get_top_request(self) -> Optional[Dict[str, Any]]:
         self.__db_cur.execute(f"""
             SELECT *
@@ -423,33 +426,34 @@ class Broker:
             return
         return dict(zip(columns, response))
 
-
     async def __distribute_task(self) -> None:
         request = self.__get_top_request()
         if not request:
-            self.log({
-                "timestamp": datetime.datetime.now(),
-                "detail": "no request found",
-                "level": "INFO",
-            })
+            self.log(
+                {
+                    "timestamp": datetime.datetime.now(),
+                    "detail": "no request found",
+                    "level": "INFO",
+                }
+            )
             return
         # print(request)
-        self.log({
-            "timestamp": datetime.datetime.now(),
-            "detail": f"selected request {request['id']}//{request['url']}",
-            "level": "INFO",
-        })
-        worker = await self.get_available_browser() 
+        self.log(
+            {
+                "timestamp": datetime.datetime.now(),
+                "detail": f"selected request {request['id']}//{request['url']}",
+                "level": "INFO",
+            }
+        )
+        worker = await self.get_available_browser()
         if not worker:
             return
         # problem is that it is the browser image object that holds the method to scrape
-
 
     async def update(self) -> None:
         await self.__update_available_nodes()
         await self.__update_nodes()
         await self.__distribute_task()
-
 
     def get_scraper_from_hostname(self, hostname: str) -> Optional[ScraperImage]:
         for scraper in self.scrapers.values():
@@ -483,7 +487,7 @@ async def background_update(app):
     while True:
         await app.state.broker.update()
         now = loop.time()
-        
+
         app.state.broker.effective_refresh_period = now - last_update
         last_update = now
         next_update += REFRESH_PERIOD_BROKER
@@ -495,19 +499,21 @@ async def background_update(app):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     if BROKER_CLEAR_DB_ON_STARTUP and os.path.exists(BROKER_DATABASE):
-        os.remove(BROKER_DATABASE)  # automatically created by sqlite3.connect(BROKER_DATABASE)
+        os.remove(
+            BROKER_DATABASE
+        )  # automatically created by sqlite3.connect(BROKER_DATABASE)
     app.state.broker = await Broker.create()
 
     bg_task = asyncio.create_task(background_update(app))
-    
+
     yield
-    
+
     bg_task.cancel()
     try:
         await bg_task
     except asyncio.CancelledError:
         pass
-    
+
     app.state.broker.__db_con.close()
 
 
@@ -564,15 +570,6 @@ async def home():
 async def css():
     return FileResponse("dashboard.css")
 
-@app.get("/v2", include_in_schema=False)
-async def home():
-    return FileResponse("dashboard2.html")
-
-
-@app.get("/dashboard2.css", include_in_schema=False)
-async def css():
-    return FileResponse("dashboard2.css")
-
 
 @app.post("/get")
 async def get(request: GetRequest):
@@ -619,7 +616,9 @@ async def nodes():
                 "ram_specs": scraper.ram_specs,
                 "ram_usage": scraper.ram_usage,
                 "ipv6": scraper.ipv6,
-                "browsers": dict(sorted(scraper.browsers.items(), key=lambda x: x[1].created_at)),  # orders by created_at
+                "browsers": dict(
+                    sorted(scraper.browsers.items(), key=lambda x: x[1].created_at)
+                ),  # orders by created_at
             }
             for scraper in app.state.broker.scrapers.values()
         ]
@@ -662,7 +661,8 @@ async def stream(hostname: str, instance_id: str):
 
     if instance_id not in scraper.browsers.keys():
         raise HTTPException(
-            status_code=409, detail=f"No browser instance {instance_id} for scraper {hostname}"
+            status_code=409,
+            detail=f"No browser instance {instance_id} for scraper {hostname}",
         )
 
     url = f"http://{scraper.passport.vpn_address}:{HTTP_PORT_SCRAPER}/stream/{instance_id}"
@@ -670,10 +670,10 @@ async def stream(hostname: str, instance_id: str):
     client = httpx.AsyncClient()
     req = client.build_request("GET", url)
     response = await client.send(req, stream=True)
-    
+
     return StreamingResponse(
         response.aiter_bytes(),
         status_code=response.status_code,
         headers=dict(response.headers),
-        background=BackgroundTask(client.aclose)
+        background=BackgroundTask(client.aclose),
     )
