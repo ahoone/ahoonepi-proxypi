@@ -7,14 +7,15 @@ services:
       - "${HTTP_PORT_BROKER}:8000"
     volumes:
       - ./:/app
-      # Can not do a COPY inside the Dockerfile, as we are outside the component context
-      # and that other services like NPM have limited permissions
-      # And we mount outside of app as Docker tries to create an empty `plugins` folder inside of app
-      # (but the simlink to the real plugins folder works)
       - ../plugins:/plugins:ro
       - /tmp/proxypi.sock:/tmp/proxypi.sock
     environment:
+      HTTP_PORT_SCRAPER: ${HTTP_PORT_SCRAPER}
+      NODE_ID_RANGE_REGEX: ${NODE_ID_RANGE_REGEX}
       NODE_ROLE: ${NODE_ROLE}
+      SSH_NETWORK_PREFIX: ${SSH_NETWORK_PREFIX}
+      WIREGUARD_LIGHTHOUSE_ID: ${WIREGUARD_LIGHTHOUSE_ID}
+      WIREGUARD_NETWORK_PREFIX: ${WIREGUARD_NETWORK_PREFIX}
     restart: unless-stopped
     networks:
       - default

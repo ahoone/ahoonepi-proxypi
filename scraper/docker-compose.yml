@@ -15,18 +15,18 @@ services:
       - /tmp/proxypi.sock:/tmp/proxypi.sock
     environment:
       NODE_ROLE: ${NODE_ROLE}
-      DISPLAY: :99
+      # not sure if those are useful (those arguments are also set in main.py)
+      # (which initiates the browser including those)
       CHROME_EXTRA_ARGS: >-
         --no-sandbox
         --disable-setuid-sandbox
-    deploy:
-      resources:
-        limits:
-          memory: 1800M
-          cpus: '1.5'
-        reservations:
-          memory: 512M
-    shm_size: '512mb'
+    # Your kernel does not support memory limit capabilities or the cgroup is not mounted. Limitation discarded.
+    # deploy:
+    #   resources:
+    #     limits:
+    #       cpus: ${SCRAPER_CPUS}
+    #       memory: ${SCRAPER_MEMORY}
+    # shm_size: ${SCRAPER_SHM_SIZE}
     restart: unless-stopped
     networks:
       - default

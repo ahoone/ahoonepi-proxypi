@@ -3,7 +3,7 @@ FROM python:3.10-slim
 USER root
 
 RUN apt-get update && apt-get install -y \
-    net-tools \
+    net-tools ffmpeg \
     wget gnupg xvfb ca-certificates \
     fonts-liberation libx11-xcb1 libxcomposite1 \
     libxcursor1 libxdamage1 libxext6 libxfixes3 \
@@ -47,5 +47,10 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 COPY . /app/
 
 RUN chmod +x /app/start.sh
+
+# fix for nodirver (running as root || not running sandbox)
+RUN groupadd -r chrome && useradd -r -g chrome -m chrome
+COPY --chown=chrome:chrome . /app
+USER chrome
 
 CMD ["/app/start.sh"]

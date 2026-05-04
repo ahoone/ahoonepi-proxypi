@@ -72,8 +72,8 @@ async def filter_ip_middleware(
             )
         response = await call_next(request)
         return response
-    except ValueError:
+    except ValueError as e:
         return JSONResponse(
             status_code=400,
-            content={"detail": f"Invalid IP address: {client_ip}"},
+            content={"detail": f"Unknown error for {client_ip}: {e}"},
         )

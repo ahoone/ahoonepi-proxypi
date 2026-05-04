@@ -1,19 +1,32 @@
-test.sh
+scraper/issues.md
+test.py
+
 /.env
 *.key
 keys.json
+
+# Logs
 *.conf
 *.log
 *.log.[0-9]*
 *.log.[0-9]*.gz
 *.sqlite
-.docker/
-.local/
-.cache
+*.db
+
+.Trash-1000/
+
+# npm
+.npm/
+node_modules/
+package-lock.json
+package.json
+
+# Python
 py_envs/
 .python_history
 __pycache__/
-.Trash-1000/
+
+# DDNS data
 ddns/*.txt
 ddns/*.log
 
@@ -44,3 +57,6 @@ nginx-proxy-manager/letsencrypt/
 .ssh/
 .sudo_as_admin_successful
 .viminfo
+.docker/
+.local/
+.cache

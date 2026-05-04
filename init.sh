@@ -2,8 +2,6 @@
 source ui.sh
 source .env
 
-set -euo pipefail
-
 
 #######################################
 #######################################
@@ -45,7 +43,7 @@ for role in "${!REQUIRED_ENV_VAR[@]}"; do
 
         for required_env_var_for_role in ${REQUIRED_ENV_VAR[$role]}; do
             if [[ -z "${!required_env_var_for_role}" ]]; then
-                echo "Environment variable $required_env_var_for_role not set"
+                echob "Environment variable $required_env_var_for_role not set"
                 bool_missing_required_env_var=true
             fi
         done
@@ -57,13 +55,16 @@ if "$bool_missing_required_env_var"; then
     exit
 fi
 
-if [[ "$NODE_ROLE" = *"LIGHTHOUSE"* ]] || [[ "$NODE_ROLE" = *"PROXY"* ]]; then
-    echob "duck off, incompatible roles of proxy and lighthouse for now"
+if [[ "$NODE_ROLE" = *"LIGHTHOUSE"* ]] && [[ "$NODE_ROLE" = *"PROXY"* ]]; then
+    echob "duck off, incompatible roles of proxy and lighthouse for now"; exit
 fi
 
 
 #######################################
 #######################################
+
+
+set -euo pipefail
 
 
 echob "upgrading..."
@@ -112,7 +113,10 @@ if [[ "$NODE_ROLE" = *"LIGHTHOUSE"* ]]; then
     fi | draw_box
 
     echob "starting Nginx Proxy Manager docker container..."
-    echo -e $(docker compose -f nginx-proxy-manager/docker-compose.yml up -d 2>&1) | draw_box && echob "✓ NPM running." || echob "✗ NPM failed running." 
+    echo -e $(sudo docker compose -f nginx-proxy-manager/docker-compose.yml up -d 2>&1) | draw_box && echob "✓ NPM running." || echob "✗ NPM failed running."
+
+    echob "starting broker container..."
+    echo -e $(sudo docker compose -f broker/docker-compose.yml --env-file .env up --build -d 2>&1) | draw_box && echob "✓ Broker running." || echob "✗ Broker failed running."
 
 fi
 
@@ -126,7 +130,7 @@ if [[ "$NODE_ROLE" = *"DDNS_UPKEEPER"* ]]; then
     echob "DDNS_UPKEEPER:"
 
     echob "initializing ddns crontab job..."
-    ./ddns/init.sh
+    ./ddns/init_ddns.sh
 
 fi
 
@@ -136,10 +140,24 @@ fi
 
 
 if [[ "$NODE_ROLE" = *"PROXY"* ]]; then
-    
+
     echob "PROXY:"
 
     echob "initializing ssh reverse tunnel..."
     ./init_ssh.sh
+
+fi
+
+
+#######################################
+#######################################
+
+
+if [[ "$NODE_ROLE" = *"SCRAPER"* ]]; then
+
+    echob "SCRAPER:"
+
+    echob "starting scraper container..."
+    echo -e $(sudo docker compose -f scraper/docker-compose.yml --env-file .env up --build -d 2>&1) | draw_box && echob "✓ Scraper running." || echob "✗ Scraper failed running."
 
 fi

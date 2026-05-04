@@ -5,17 +5,15 @@
 source ui.sh
 source .env
 
-
-WIREGUARD_NETWORK_PREFIX="10.0.0"
-WIREGUARD_LIGHTHOUSE_ID=1
-PROXYPI_RANGE_REGEX="22[0-9]{2}"
+`# should use $WIREGUARD_PROXYPI_RANGE_REGEX here`
+SSH_PORT_PROXYPI_RANGE_REGEX="$SSH_NETWORK_PREFIX[0-9]{2}"
 
 PROXYPI_USER="admin"
 LIGHTHOUSE_PRIVATE_KEY_PATH="/home/admin/.ssh/id_proxy_access"
 
 WIREGUARD_DEFAULT_PING_SAMPLE_SIZE="1"
-DEFAULT_SSH_CONNECTION_PLUS_INSTRUCTIONS_TIMEOUT=16
-TCP_CONNECTION_TIMEOUT=8
+DEFAULT_SSH_CONNECTION_PLUS_INSTRUCTIONS_TIMEOUT="16"
+TCP_CONNECTION_TIMEOUT="8"
 
 
 #######################################
@@ -27,10 +25,13 @@ declare -A FCT_MAP=(
     [apt-upgrade]="apt::upgrade"
     [connect]="ssh::connect"
     [git-pull]="git::pull"
+    [info]="ssh::info"
+    [ram]="ssh::ram"
     [load-ssh]="ssh::copy_keys"
     [load-wireguard]="wireguard::load"
     [ping]="ssh::ping"
     [ping-wireguard]="wireguard::ping"
+    [restart]="docker::restart"
     [swarm-execute]="ssh::exec"
 )
 
@@ -39,19 +40,26 @@ declare -A FCT_DESCR=(
     [apt-upgrade]="Upgrades the proxies"
     [connect]="Connects the sheel to the proxy"
     [git-pull]="Upgrades the reference repository"
+    [info]="same use as ping -w but properly done (1 is the lighthouse)"
+    [ram]="get RAM and usage %"
     [load-ssh]="Retrieve ssh keys for easy access"
     [load-wireguard]="Add to the lighthouse the peer proxies keys"
-    [ping]="Check connectivity and status of all proxies"
+    [ping]="Check connectivity and status of all proxies. -w for getting the info formatted for the web (list of dictionaries)."
     [ping-wireguard]="Check connectivity through Wireguard. -a for getting just the available ips address for the scraper component."
-    [swarm-execute]="Run a command on ALL proxies"
+    [restart]="Restarts the containers broker and scraper depending on the node role"
+    [swarm-execute]="Run a command on ALL proxies. For script execution 'bash' and './' are not equivalent"
 )
 
 declare -A FCT_FLAGS=(
+    [ping]="-w vpn_address"  # DEPRECATED! UNPROPER IMPLEMENTATION
     [ping-wireguard]="-a"
 )
 
 declare -A FCT_ARGS=(
-    [connect]="port"
+    [connect]="proxy_id"
+    [info]="node_id"
+    [ram]="node_id"
+    [restart]="node_id"
     [swarm-execute]="timeout command"
 )
 
@@ -61,14 +69,48 @@ EXIT_CODE_UNKNOWN_FUNCTION=2
 EXIT_CODE_WRONG_PARAMETERS=3
 EXIT_CODE_NO_FLAG_FUNCTION=4
 EXIT_CODE_UNKNOWN_FLAG=5
+EXIT_CODE_NOT_IMPLEMENTED=6
 
 
 # TODO (ahoone): HERE WE SHOULD VERIFY THE ROLES OF THE PI (SCRAPER) AND IF THE REMOTE CONTAINER IS RUNNING
+FLAG_PING_INFO_FROM_VPN_ADDRESS=false
 FLAG_PING_WIREGUARD_PRINT_AVAILABLE=false
+FLAG_PARAMETER_VPN_ADDRESS=""
 
 
 #######################################
 #######################################
+
+
+#######################################
+# loop to format the flags
+# Arguments:
+#   $1: the docstring of flags
+# Outputs:
+#   String to stdout
+# Returns:
+#   0 on success
+#######################################
+fmt_flags() {
+    local fct_flags=$1
+    local fmt_fct_flags=""
+
+    if [[ -n "$fct_flags" ]]; then
+        current=""
+        for token in $fct_flags; do
+            if [[ "$token" == -* ]]; then
+                [[ -n "$current" ]] && fmt_fct_flags+="$current] "
+                current="[$token"
+            else
+                current+=" <$token>"
+            fi
+        done
+        [[ -n "$current" ]] && fmt_fct_flags+="$current]"
+        fmt_fct_flags="${fmt_fct_flags% }"  # trim trailing space
+    fi
+
+    echo "$fmt_fct_flags"
+}
 
 
 #######################################
@@ -93,7 +135,7 @@ help() {
         fct_flags="${FCT_FLAGS[$fct]}"
         fct_args="${FCT_ARGS[$fct]}"
 
-        fmt_fct_flags=$([[ -n "$fct_flags" ]] && echo "[${fct_flags// /] [}]")
+        fmt_fct_flags=$(fmt_flags "$fct_flags")
         fmt_fct_args=$([[ -n "$fct_args" ]] && echo "<${fct_args// /> <}>")
 
         # TODO (ahoone): here a double space is printed if there are args descr but no flags
@@ -123,9 +165,9 @@ _get_proxypi_id() {
 
 
 #######################################
-# Examines open ports between 2202 and 2299
+# Examines open ports between $SSH_NETWORK_PREFIX02 and $SSH_NETWORK_PREFIX99
 # Globals:
-#   PROXYPI_RANGE_REGEX
+#   SSH_PORT_PROXYPI_RANGE_REGEX
 # Outputs:
 #   Ports to stdout
 # Returns:
@@ -137,7 +179,7 @@ _proxypi_listen_ssh() {
         netstat -an | \
         grep -F "LISTEN " | \
         grep -F "tcp6" | \
-        grep -oE $PROXYPI_RANGE_REGEX | \
+        grep -oE $SSH_PORT_PROXYPI_RANGE_REGEX | \
         sort -n
     )
     if [ -z "$ports" ]; then
@@ -183,16 +225,25 @@ _proxypi_execute_command() {
 
 #######################################
 # Check connectivity to all proxy Pis
+# Globals :
+#   FLAG_PING_INFO_FROM_VPN_ADDRESS
+#   FLAG_PARAMETER_VPN_ADDRESS
 # Outputs:
 #   Formatted table to stdout
 # Returns:
 #   0 on success
 #######################################
 ssh::ping() {
-    local column_name=("HOSTNAME" "PORT" "IPv6 ADDRESS" "SSH (RTT) (ms)" "INTERNET (ms)")
-    local column_size=(24 8 45 16 16)
-    draw_tabular_header column_size column_name
 
+    local column_name=("HOSTNAME" "PORT" "IPv6 ADDRESS" "SSH (RTT) (ms)" "INTERNET (ms)")
+    if ! "$FLAG_PING_INFO_FROM_VPN_ADDRESS"; then
+        local column_size=(24 8 45 16 16)
+        draw_tabular_header column_size column_name
+    else
+        local vpn_address=$FLAG_PARAMETER_VPN_ADDRESS
+        echob "Deprecated -w flag"
+    fi
+    
     #--------------------------------------
     local hostname=$(hostname)
     local internet_start_time=$(date +%s%3N)
@@ -202,7 +253,13 @@ ssh::ping() {
 
     local label="$hostname $(echob '(lighthouse)')"
     local entry=("$label" "" "$ipv6" "" "${internet_latency}")
-    draw_tabular_row column_size entry
+    if ! "$FLAG_PING_INFO_FROM_VPN_ADDRESS"; then
+        draw_tabular_row column_size entry
+    elif [[ "$vpn_address" == "$WIREGUARD_NETWORK_PREFIX.$WIREGUARD_LIGHTHOUSE_ID" ]]; then
+        echo "${entry[@]}"
+    fi
+
+
     #--------------------------------------
 
     local instructions="echo \
@@ -214,6 +271,10 @@ ssh::ping() {
     local ssh_start_time ssh_result ssh_end_time
     for port in $(_proxypi_listen_ssh); do
         (
+            # if [[ "$FLAG_PING_INFO_FROM_VPN_ADDRESS" == "true" && "$port" != *"$vpn_address" ]]; then
+            #   continue
+            # fi
+
             ssh_start_time=$(date +%s%3N)
             _proxypi_execute_command "$port" "whoami" &>/dev/null
             ssh_end_time=$(date +%s%3N)
@@ -221,9 +282,12 @@ ssh::ping() {
             ssh_result=$(_proxypi_execute_command "$port" "$instructions")
 
             if [ -z "$ssh_result" ]; then
-                entry=("---" "$(echob $port)" "---" "$(echob UNREACHABLE)" "---")
-                draw_tabular_row column_size entry
-                continue
+                if ! "$FLAG_PING_INFO_FROM_VPN_ADDRESS"; then
+                    entry=("---" "$(echob $port)" "---" "$(echob UNREACHABLE)" "---")
+                    draw_tabular_row column_size entry
+                else
+                    continue
+                fi
             fi
 
             read hostname internet_start_time ipv6 internet_end_time <<< "$ssh_result"
@@ -232,7 +296,11 @@ ssh::ping() {
             internet_latency=$((internet_end_time - internet_start_time))
             
             entry=("$hostname" "$port" "$ipv6" "$ssh_latency" "$internet_latency")
-            draw_tabular_row column_size entry
+            if ! "$FLAG_PING_INFO_FROM_VPN_ADDRESS"; then
+                draw_tabular_row column_size entry
+            else
+                echo "${entry[@]}"
+            fi
         ) &
     done
     wait
@@ -306,7 +374,7 @@ ssh::copy_keys() {
 ssh::connect() {
     local proxy_id=$1
 
-    ssh -i "$LIGHTHOUSE_PRIVATE_KEY_PATH" -p 22"$(printf "%02d" $proxy_id)" "$PROXYPI_USER"@localhost
+    ssh -i "$LIGHTHOUSE_PRIVATE_KEY_PATH" -p $SSH_NETWORK_PREFIX"$(printf "%02d" $proxy_id)" "$PROXYPI_USER"@localhost
 }
 
 
@@ -423,6 +491,84 @@ git::pull() {
 
 
 #######################################
+# Get the info for the ScraperImage
+# Arguments:
+#   $1: proxy id
+# Outputs:
+#   Dictionary to stdout
+# Returns:
+#   0 on success
+#   1 on unknown port
+#   2 on unresponsive ip
+#######################################
+ssh::info() {
+    local proxy_id=$1
+    local port="$SSH_NETWORK_PREFIX$(printf "%02d" $proxy_id)"
+
+    if [[ "$proxy_id" == "1" ]]; then
+        echo "{\"hostname\": \"$(hostname)\", \"port\": \"$port\", \"ipv6\": \"$(curl ifconfig.me 2>/dev/null || echo 'N/A')\"}"
+        return
+    fi
+
+    if ! [[ "$(_proxypi_listen_ssh)" =~ "$port" ]]; then
+        return 1
+    fi
+
+    if ! [[ "$(./proxypi.sh ping-wireguard -a)" =~ "10.0.0.$proxy_id" ]]; then
+        return 2
+    fi
+
+    local instructions="echo \
+        \$(hostname) \
+        \$(curl ifconfig.me 2>/dev/null || echo 'N/A')
+    "
+
+    ssh_result=$(_proxypi_execute_command "$port" "$instructions")
+    read node_hostname node_ipv6 <<< "$ssh_result"
+    echo "{\"hostname\": \"$node_hostname\", \"port\": \"$port\", \"ipv6\": \"$node_ipv6\"}"
+}
+
+
+#######################################
+# Get the RAM usage
+# Arguments:
+#   $1: proxy id
+# Outputs:
+#   Dictionary to stdout
+# Returns:
+#   0 on success
+#   1 on unknown port
+#   2 on unresponsive ip
+#######################################
+ssh::ram() {
+    local proxy_id=$1
+    local port="$SSH_NETWORK_PREFIX$(printf "%02d" $proxy_id)"
+
+    if [[ "$proxy_id" == "1" ]]; then
+        echo "{\"ram_specs\": \"$(free -h | awk '/^Mem:/{print $2}')\", \"ram_usage\": \"$(free | awk '/^Mem:/{printf "%.0f%%", $3/$2*100}')\"}"
+        return
+    fi
+
+    if ! [[ "$(_proxypi_listen_ssh)" =~ "$port" ]]; then
+        return 1
+    fi
+
+    if ! [[ "$(./proxypi.sh ping-wireguard -a)" =~ "10.0.0.$proxy_id" ]]; then
+        return 2
+    fi
+
+    local instructions="echo \
+        \$(free -h | awk '/^Mem:/{print \$2}') \
+        \$(free | awk '/^Mem:/{printf \"\%.0f%%\", \$3/\$2*100}')
+    "
+
+    ssh_result=$(_proxypi_execute_command "$port" "$instructions")
+    read ram ram_usage <<< "$ssh_result"
+    echo "{\"ram_specs\": \"$ram\", \"ram_usage\": \"$ram_usage\"}"
+}
+
+
+#######################################
 # Ping proxys through VPN
 # Globals:
 #   WIREGUARD_NETWORK_PREFIX
@@ -438,7 +584,7 @@ git::pull() {
 wireguard::ping() {
     local wireguard_ping_sample_size="${1:-$WIREGUARD_DEFAULT_PING_SAMPLE_SIZE}"
 
-    if ! $FLAG_PING_WIREGUARD_PRINT_AVAILABLE; then
+    if ! "$FLAG_PING_WIREGUARD_PRINT_AVAILABLE"; then
         local column_name=("HOSTNAME" "IP" "UPSIDE LATENCY (ms)" "UPSIDE LOSS" "DOWNSIDE LATENCY (ms)" "DOWNSIDE LOSS")
         local column_size=(24 16 24 16 24 16)
         draw_tabular_header column_size column_name
@@ -450,7 +596,7 @@ wireguard::ping() {
     instructions="${instructions//PING_COUNT/${wireguard_ping_sample_size}}"
     instructions="${instructions//PING_TARGET/${WIREGUARD_NETWORK_PREFIX}.${WIREGUARD_LIGHTHOUSE_ID}}"
     
-    # TODO (ahoone): should test if wireguard is running remotly
+
 
     local ssh_result target proxypi_hostname proxypi_id upside_latency upside_loss downside_result downside_latency downside_loss entry
     for port in $(_proxypi_listen_ssh); do
@@ -525,7 +671,39 @@ wireguard::load() {
 
 
 #######################################
+# Restarts the containers
+# Arguments:
+#   $1: node_id
+# Returns:
+#   0 on success
 #######################################
+docker::restart() {
+    local node_id=$1
+
+    if [[ "$node_id" == "1" ]]; then
+        cd /home/admin
+
+        docker compose -f scraper/docker-compose.yml down
+        docker compose -f scraper/docker-compose.yml --env-file .env up --build -d
+
+        docker compose -f broker/docker-compose.yml down
+        docker compose -f broker/docker-compose.yml --env-file .env up --build -d
+    else
+        echob "NOT IMPLEMENTED FOR OTHER THAN NODE_ID=1"
+        return $EXIT_CODE_NOT_IMPLEMENTED
+    fi
+
+    # TODO (ahoone): implementing for the proxies
+}
+
+#######################################
+#######################################
+
+
+# no fucking idea if this working to stop the execution when sourced
+if [[ "${BASH_SOURCE[0]}" != "${0}" ]]; then
+    return
+fi
 
 
 if [[ $# -eq 0 ]]; then
@@ -539,27 +717,33 @@ while [[ $# -gt 0 ]]; do
     fct="$1"; shift
 
     if [[ -z "${FCT_MAP[$fct]}" ]]; then
-        echob "Unknown function: $fct"
+        echob "Unknown function: '$fct'"
         help; exit $EXIT_CODE_UNKNOWN_FUNCTION
     fi
 
     # flags must start with a dash
     while [[ $1 == "-"* ]]; do
         if [[ -z "${FCT_FLAGS[$fct]}" ]]; then
-            echob "Function $fct has no flag"
+            echob "Function '$fct' has no flag"
             help; exit $EXIT_CODE_NO_FLAG_FUNCTION
         fi
 
         flag="$1"; shift
         
-        if [[ $flag != *"${FCT_FLAGS[$fct]}"* ]]; then
-            echob "Function $fct has no flag $flag"
+        if [[ "${FCT_FLAGS[$fct]}" != *"$flag"* ]]; then
+            echob "Function '$fct' has no flag '$flag'"
             help; exit $EXIT_CODE_UNKNOWN_FLAG
         fi
         
         case "$fct" in
+            ping)
+                if [[ $flag == "-w" ]]; then
+                    FLAG_PING_INFO_FROM_VPN_ADDRESS=true;
+                    FLAG_PARAMETER_VPN_ADDRESS=$1; shift
+                fi
+                ;;
             ping-wireguard)
-                if [[ $flag == "-a" ]]; then FLAG_PING_WIREGUARD_PRINT_AVAILABLE=true; continue; fi
+                if [[ $flag == "-a" ]]; then FLAG_PING_WIREGUARD_PRINT_AVAILABLE=true; fi
                 ;;
         esac
     done
@@ -573,6 +757,30 @@ while [[ $# -gt 0 ]]; do
         connect)
             if [[ -z "$1" || ! "$1" =~ ^([2-9]|[1-9][0-9])$ ]]; then
                 echob "Error: the id specified is outside the range 2-99"
+                echob "Example: $0 connect 2"
+                help; exit $EXIT_CODE_WRONG_PARAMETERS
+            fi
+
+            proxy_id="$1"; shift
+
+            "${FCT_MAP[$fct]}" "$proxy_id"
+            ;;
+
+        info)
+            if [[ -z "$1" || ! "$1" =~ ^([1-9]|[1-9][0-9])$ ]]; then
+                echob "Error: the id specified is outside the range 1-99"
+                echob "Example: $0 connect 2"
+                help; exit $EXIT_CODE_WRONG_PARAMETERS
+            fi
+
+            proxy_id="$1"; shift
+
+            "${FCT_MAP[$fct]}" "$proxy_id"
+            ;;
+
+        ram)
+            if [[ -z "$1" || ! "$1" =~ ^([1-9]|[1-9][0-9])$ ]]; then
+                echob "Error: the id specified is outside the range 1-99"
                 echob "Example: $0 connect 2"
                 help; exit $EXIT_CODE_WRONG_PARAMETERS
             fi
@@ -603,6 +811,19 @@ while [[ $# -gt 0 ]]; do
             
             "${FCT_MAP[$fct]}" "$swarm_timeout" "$*"; shift $#
             ;;
+
+        restart)
+            if [[ -z "$1" || ! "$1" =~ ^([1-9]|[1-9][0-9])$ ]]; then
+                echob "Error: the id specified is outside the range 1-99"
+                echob "Example: $0 restart 2"
+                help; exit $EXIT_CODE_WRONG_PARAMETERS
+            fi
+
+            node_id="$1"; shift
+
+            "${FCT_MAP[$fct]}" "$node_id"
+            ;;
+
     esac
 
 done
