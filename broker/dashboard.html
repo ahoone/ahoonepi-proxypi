@@ -84,6 +84,7 @@
                         <td>-</td>
                         <td>-</td>
                         <td>-</td>
+                        <td>-</td>
                     </tr>
                 </tbody>
             </table>
@@ -121,9 +122,9 @@
 <script>
 
     const NODES_SOCKET = '/nodes';
-    const NODES_REFRESH_PERIOD = 2_000;
+    const NODES_REFRESH_PERIOD = 1_000;
     const BROKER_SOCKET = "/broker";
-    const BROKER_REFRESH_PERIOD = 2_000;
+    const BROKER_REFRESH_PERIOD = 1_000;
     const LOGGER_SOCKET = "/logger";
     const LOGGER_REFRESH_PERIOD = 1_000;
 
@@ -233,7 +234,7 @@
         {
             label: 'Timestamp',
             render: function(r) {
-                return r.timestamp || '—';
+                return r.created_at || '—';
             }
         },
         {
@@ -290,26 +291,20 @@
         const container = document.querySelector('.card.broker');
         const rows = Array.isArray(rawRows) ? rawRows : [];
         
-        upsertTable(container, rows, function(r, idx) { return r.url || idx; }, BROKER_COLUMNS);
-        container.querySelector('#ts-broker').textContent = new Date().toLocaleTimeString();
-
-        if (!rows.length) {
-            container.querySelector('tbody').innerHTML = '<tr><td colspan="3">No data available</td></tr>';
-            return;
+        if (rows.length) {
+            upsertTable(container, rows, function(r, idx) { return r.id || idx; }, BROKER_COLUMNS);
         }
+        container.querySelector('#ts-broker').textContent = new Date().toLocaleTimeString();
     }
 
     function renderLogger(rawRows) {
         const container = document.querySelector('.card.logger');
         const rows = Array.isArray(rawRows) ? rawRows : [];
 
-        upsertTable(container, rows.slice(0, 10), function(r, idx) { return r.timestamp || idx; }, LOGGER_COLUMNS);
-        container.querySelector('#ts-broker').textContent = new Date().toLocaleTimeString();
-        
-        if (!rows.length) {
-            container.querySelector('tbody').innerHTML = '<tr><td colspan="3">No data available</td></tr>';
-            return;
+        if (rows.length) {
+            upsertTable(container, rows.slice(0, 10), function(r, idx) { return r.timestamp || idx; }, LOGGER_COLUMNS);
         }
+        container.querySelector('#ts-broker').textContent = new Date().toLocaleTimeString();
 
         rows.sort(function(a, b) {
             return new Date(b.timestamp || 0) - new Date(a.timestamp || 0);
