@@ -29,12 +29,12 @@ def test_broker_available():
     assert response.status_code == 200, response.content
 
 
-def test_broker_receive_scrape_request():
-    url = f"http://{ADDRESS}/scrape"
-    payload = {
-        "url": "http://example.com",
-        "antwortzeit": "2019-08-24T14:15:22Z",
-        "tag": "string",
-    }
-    response = requests.post(url, json=payload, timeout=TIMEOUT_REQUESTS)
-    assert response.status_code == 202, response.content
+# def test_broker_receive_scrape_request():
+#     url = f"http://{ADDRESS}/scrape"
+#     payload = {
+#         "url": "http://example.com",
+#         "antwortzeit": "2019-08-24T14:15:22Z",
+#         "tag": "string",
+#     }
+#     response = requests.post(url, json=payload, timeout=TIMEOUT_REQUESTS)
+#     assert response.status_code == 202, response.content

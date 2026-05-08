@@ -1,3 +1,4 @@
+import aiosqlite
 import asyncio
 from contextlib import asynccontextmanager
 import datetime
@@ -18,11 +19,11 @@ from ping3 import ping
 from pydantic import HttpUrl, BaseModel, Field
 import random
 import requests
-import sqlite3  # native // does not need to be in requirements.txt
 from starlette.background import BackgroundTask
 from string import Template, ascii_letters, digits
 import subprocess
 import sys
+import traceback
 from typing import Any, Callable, Dict, List, Literal, Union, Optional, Tuple, Set
 
 sys.path.insert(0, "/plugins")
@@ -39,7 +40,7 @@ assert (
 ), "The node should be a lighthouse (ie includes broker) to launch this image"
 
 
-BROKER_DATABASE = "broker.db"
+BROKER_DATABASE = "/tmp/broker.db"
 BROKER_CLEAR_DB_ON_STARTUP = True
 DB_TABLE_TARGETS = "targets"
 DB_TABLE_REQUESTS = "requests"
@@ -116,7 +117,7 @@ class NodeIdentifier:
 
     def __init__(self, node_id: int) -> None:
         """
-        This method should check for allready used node_id.
+        This method should check for already used node_id.
         """
         if node_id not in NodeIdentifier.node_ids:
             raise ValueError("Invalid node_id")
@@ -157,12 +158,24 @@ class BrowserImage:
         self.score: float = scraper_response["score"]
 
     async def get(self, url: str):
+        """
+        should be cancellable
+        (therefore response_timestamp is not defined)
+        """
         async with httpx.AsyncClient() as client:
+            loop = asyncio.get_running_loop()
+            request_timestamp = loop.time()
             response = await client.post(
                 f"http://{self.passport.vpn_address}:{HTTP_PORT_SCRAPER}/get",
                 json={"instance_id": self.instance_id, "url": url},
             )
-            return response.json()
+            response_timestamp = loop.time()
+            return {
+                "request_timestamp": request_timestamp,
+                "response_timestamp": response_timestamp,
+                "success": True,  # Should examine the content
+                "content": response.json(),
+            }
 
 
 class ScraperImage:
@@ -177,8 +190,21 @@ class ScraperImage:
         # self.electricity_consumption: ?
         self.browsers: Dict[str, BrowserImage] = {}  # instance_id: browser
         self.score: float = 0.0
+        self.__lock_updating: asyncio.Lock = asyncio.Lock()
 
-    # __INIT__ CAN NOT BE ASYNC
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "online": self.online,
+            "hostname": self.hostname,
+            "node_id": self.passport.node_id,
+            "ram_specs": self.ram_specs,
+            "ram_usage": self.ram_usage,
+            "ipv6": self.ipv6,
+            "browsers": dict(
+                sorted(self.browsers.items(), key=lambda x: x[1].created_at)
+            ),
+        }
+
     @classmethod
     async def create(cls, node_id: int) -> "ScraperImage":
         scraperImage = cls()
@@ -222,7 +248,10 @@ class ScraperImage:
         await self.__fetch_info()
         # anything to update for the browsers?
 
-    async def available(self) -> bool:
+    async def available(self) -> bool: 
+        """
+        the MAX_INSTANCES_PER_SCRAPER should be move in an overall config file
+        """
         async with httpx.AsyncClient() as client:
             response = await client.get(
                 f"http://{self.passport.vpn_address}:{HTTP_PORT_SCRAPER}/available"
@@ -268,84 +297,138 @@ class ScrapeRequest(BaseModel):
 
     url: HttpUrl
     antwortzeit: Optional[datetime.datetime] = Field(
-        default_factory=datetime.datetime.now()
+        default_factory=datetime.datetime.now
     )
     tag: str
 
 
-class Broker:
-
-    def __init__(
-        self,
-    ) -> None:
-        self.scrapers: Dict[int, ScraperImage] = {}  # node_id -> scraper
-        self.logger_queue: List[Dict[str, Any]] = []
-        self.effective_refresh_period: float = None
-        self.logger_queue = self.logger_queue[:LOGGER_BUFFER_SIZE]
-        # self
-        self.__db_con = None
-        self.__db_cur = None
-
-    def log(self, event: Dict[str, Any]) -> None:
-        self.logger_queue.insert(0, event)
+class DatabaseHandler:
 
     @classmethod
-    async def create(cls) -> "Broker":
-        broker = cls()
-        await broker.__initialize()
-        return broker
+    async def initialize(cls) -> None:
 
-    async def __initialize(self) -> None:
-        self.__db_con = sqlite3.connect(BROKER_DATABASE)
-        self.__db_cur = self.__db_con.cursor()
-        self.__initialize_db_tables()
-        await self.update()
+        async with aiosqlite.connect(BROKER_DATABASE) as conn:
 
-    def __initialize_db_tables(self) -> None:
-        response = self.__db_cur.execute("SELECT name FROM sqlite_master")
-        if response and DB_TABLE_TARGETS not in response.fetchall():
-            self.__db_cur.execute(f"""
-                CREATE TABLE {DB_TABLE_TARGETS} (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    url TEXT NOT NULL,
-                    antwortzeit DATETIME NOT NULL,
-                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    tag TEXT
-                );
-            """)
-        if response and DB_TABLE_REQUESTS not in response.fetchall():
-            self.__db_cur.execute(f"""
-                CREATE TABLE {DB_TABLE_REQUESTS} (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    {DB_TABLE_TARGETS}_id INTEGER NOT NULL,
-                    request_timestamp DATETIME NOT NULL,
-                    response_timestamp DATETIME,
-                    status_code INTEGER,
-                    success BOOLEAN,
-                    content BLOB,
-                    FOREIGN KEY ({DB_TABLE_TARGETS}_id) REFERENCES {DB_TABLE_TARGETS}(id)
-                );
-            """)
+            if BROKER_CLEAR_DB_ON_STARTUP and os.path.exists(BROKER_DATABASE):
+                os.remove(BROKER_DATABASE)
 
-    def scrape(self, request: ScrapeRequest) -> None:
+            response = await conn.execute("SELECT name FROM sqlite_master")
+            if not response:
+                return
+            existing_tables = await response.fetchall()
+
+            if DB_TABLE_TARGETS not in existing_tables:
+                await DatabaseHandler.execute(f"""
+                    CREATE TABLE {DB_TABLE_TARGETS} (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        url TEXT NOT NULL,
+                        antwortzeit DATETIME NOT NULL,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        tag TEXT
+                    );
+                """)
+
+            if DB_TABLE_REQUESTS not in existing_tables:
+                await DatabaseHandler.execute(f"""
+                    CREATE TABLE {DB_TABLE_REQUESTS} (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        {DB_TABLE_TARGETS}_id INTEGER NOT NULL,
+                        request_timestamp DATETIME NOT NULL,
+                        response_timestamp DATETIME,
+                        success BOOLEAN,
+                        content BLOB,
+                        FOREIGN KEY ({DB_TABLE_TARGETS}_id) REFERENCES {DB_TABLE_TARGETS}(id)
+                    );
+                """)
+
+            # await conn.execute("PRAGMA journal_mode=WAL;")
+            await conn.commit()
+
+    @classmethod
+    async def execute(cls, query: str, params: Tuple[Any] = None) -> None:
+        """
+        handlers not aiming for reuse (does not return a cursor)
+        but here we only have just one type of fetch per query
+        """
+        async with aiosqlite.connect(BROKER_DATABASE) as conn:
+            conn.row_factory = aiosqlite.Row
+            await conn.execute(query, params)
+            await conn.commit()
+
+    @classmethod
+    async def executemany(cls, query: str, params: Tuple[Any] = None) -> None:
+        async with aiosqlite.connect(BROKER_DATABASE) as conn:
+            conn.row_factory = aiosqlite.Row
+            await conn.executemany(query, params)
+            await conn.commit()
+
+    @classmethod
+    async def fetchone(cls, query: str, params: Tuple[Any] = None) -> Dict[str, Any]:
+        async with aiosqlite.connect(BROKER_DATABASE) as conn:
+            conn.row_factory = aiosqlite.Row
+            cursor = await conn.execute(query, params)
+            return await cursor.fetchone()
+
+    @classmethod
+    async def fetchall(cls, query: str, params: Tuple[Any] = None) -> List[Dict[str, Any]]:
+        async with aiosqlite.connect(BROKER_DATABASE) as conn:
+            conn.row_factory = aiosqlite.Row
+            cursor = await conn.execute(query, params)
+            return await cursor.fetchall()
+
+
+class Broker:
+
+    def __init__(self) -> None:
+        self.scrapers: Dict[int, ScraperImage] = {}  # node_id -> scraper
+        self.logger: List[Dict[str, Any]] = []
+        self.__lock_logger: asyncio.Lock = asyncio.Lock()
+        self.effective_refresh_period: float = None
+        self.__current_tasks: Dict[int, asyncio.Task] = {}
+        self.__lock_current_tasks: asyncio.Lock = asyncio.Lock()
+
+    def to_dict(self) -> Dict[str, Any]:
+        return [scraper.to_dict() for scraper in app.state.broker.scrapers.values()]
+
+    async def log(
+        self,
+        detail: str,
+        level: Optional[Literal["INFO", "WARNING"]] = "INFO",
+    ) -> None:
+        async with self.__lock_logger:
+            event = {
+                "timestamp": datetime.datetime.now().isoformat(),
+                "detail": detail,
+                "level": level,
+            }
+            self.logger.insert(0, event)
+            self.logger = self.logger[:LOGGER_BUFFER_SIZE]
+
+    async def scrape(self, request: ScrapeRequest) -> None:
         # data = [(request.urls, request.tag)] if isinstance(request.urls, str) else [(url, request.tag) for url in request.urls]
         # NOT SUPPORTING MULTIPLE ELEMENTS AT ONCE
         data = [(str(request.url), request.antwortzeit, request.tag)]
         query = (
             f"INSERT INTO {DB_TABLE_TARGETS} (url, antwortzeit, tag) VALUES (?, ?, ?)"
         )
-        self.__db_cur.executemany(query, data)
-        self.__db_con.commit()
+        await DatabaseHandler.executemany(query, data)
 
-    def get_scraping_list(self) -> List[Dict[str, Any]]:
-        self.__db_cur.execute(f"""
+    async def get_scraping_list(self) -> List[Dict[str, Any]]:
+        query = (f"""
             SELECT *
-            FROM {DB_TABLE_TARGETS}
+            FROM {DB_TABLE_TARGETS} l
+            WHERE 1=1
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM {DB_TABLE_REQUESTS} r
+                    WHERE 1=1
+                        AND r.{DB_TABLE_TARGETS}_id = l.id
+                        AND r.success = TRUE
+                )
             ORDER BY antwortzeit ASC
             LIMIT {DISPLAY_LIMIT_SCRAPING_LIST}
         """)
-        columns = [desc[0] for desc in self.__db_cur.description]
-        return [dict(zip(columns, row)) for row in self.__db_cur.fetchall()]
+        return await DatabaseHandler.fetchall(query)
 
     async def __update_available_nodes(self) -> None:
         await NodeIdentifier.update_reachable_nodes()
@@ -385,8 +468,11 @@ class Broker:
             vpn_address for (vpn_address, _), result in zip(tasks, results) if result
         ]
         if len(availables) == 0:
+            await self.log("unable to create a new instance", level="WARNING")
             return False
-        await self.scrapers[random.choice(availables)].new_instance(self.__random_id())
+        random_id = self.__random_id()
+        await self.scrapers[random.choice(availables)].new_instance(random_id)
+        await self.log(f"created browser {random_id}")
         return True
 
     async def get_available_browser(self) -> BrowserImage:
@@ -414,46 +500,63 @@ class Broker:
             browsers = get_browsers()
         return random.choice(browsers) if browsers else None
 
-    def __get_top_request(self) -> Optional[Dict[str, Any]]:
-        self.__db_cur.execute(f"""
-            SELECT *
-            FROM {DB_TABLE_TARGETS}
-            ORDER BY antwortzeit ASC
-        """)
-        columns = [desc[0] for desc in self.__db_cur.description]
-        response = self.__db_cur.fetchone()
-        if not response:
-            return
-        return dict(zip(columns, response))
+    async def __get_target(self) -> Optional[Dict[str, Any]]:
+        async with self.__lock_current_tasks:
+            query = (f"""
+                SELECT *
+                FROM {DB_TABLE_TARGETS} l
+                WHERE 1=1
+                    {''.join([f'AND l.id != {current_id} ' for current_id in self.__current_tasks])}
+                    AND NOT EXISTS (
+                        SELECT 1
+                        FROM {DB_TABLE_REQUESTS} r
+                        WHERE 1=1
+                            AND r.{DB_TABLE_TARGETS}_id = l.id
+                            AND r.success = TRUE
+                    )
+                ORDER BY l.antwortzeit ASC
+            """)
+            return await DatabaseHandler.fetchone(query)
 
     async def __distribute_task(self) -> None:
-        request = self.__get_top_request()
-        if not request:
-            self.log(
-                {
-                    "timestamp": datetime.datetime.now(),
-                    "detail": "no request found",
-                    "level": "INFO",
-                }
-            )
+        target = await self.__get_target()
+        if not target:
+            await self.log("no target found")
             return
-        # print(request)
-        self.log(
-            {
-                "timestamp": datetime.datetime.now(),
-                "detail": f"selected request {request['id']}//{request['url']}",
-                "level": "INFO",
-            }
-        )
-        worker = await self.get_available_browser()
-        if not worker:
+        await self.log(f"selected target {target['id']} ({target['url']})")
+        browser = await self.get_available_browser()
+        if not browser:
+            await self.log(f"no browser available for {target['id']}", level="WARNING")
             return
-        # problem is that it is the browser image object that holds the method to scrape
+        await self.log(f"browser {browser.instance_id} selected for {target['id']}")
+        task = asyncio.create_task(browser.get(target["url"]))
+        async with self.__lock_current_tasks:
+            self.__current_tasks[target['id']] = task
+
+    async def __retrieve_task(self) -> None:
+        completed: List[Tuple[Any]] = []
+        async with self.__lock_current_tasks:
+            for target_id, task in self.__current_tasks.items():
+                if task.done():
+                    result = task.result()
+                    completed.append((target_id, result["request_timestamp"], result["response_timestamp"], result["success"], result["content"]))
+            for x in completed:
+                del self.__current_tasks[x[0]]
+        if len(completed) > 0:
+            query = f"""
+                INSERT INTO {DB_TABLE_REQUESTS} ({DB_TABLE_TARGETS}_id, request_timestamp, response_timestamp, success, content)
+                VALUES (?, ?, ?, ?, ?)
+            """
+            await DatabaseHandler.executemany(query, completed)
 
     async def update(self) -> None:
-        await self.__update_available_nodes()
-        await self.__update_nodes()
-        await self.__distribute_task()
+        try:
+            await self.__update_available_nodes()
+            await self.__update_nodes()
+            await self.__distribute_task()
+            await self.__retrieve_task()
+        except Exception as e:
+            traceback.print_exc()
 
     def get_scraper_from_hostname(self, hostname: str) -> Optional[ScraperImage]:
         for scraper in self.scrapers.values():
@@ -498,12 +601,8 @@ async def background_update(app):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    if BROKER_CLEAR_DB_ON_STARTUP and os.path.exists(BROKER_DATABASE):
-        os.remove(
-            BROKER_DATABASE
-        )  # automatically created by sqlite3.connect(BROKER_DATABASE)
-    app.state.broker = await Broker.create()
-
+    await DatabaseHandler.initialize()
+    app.state.broker = Broker()
     bg_task = asyncio.create_task(background_update(app))
 
     yield
@@ -513,8 +612,6 @@ async def lifespan(app: FastAPI):
         await bg_task
     except asyncio.CancelledError:
         pass
-
-    app.state.broker.__db_con.close()
 
 
 app = FastAPI(
@@ -597,7 +694,7 @@ async def get(request: GetRequest):
 @app.post("/scrape", status_code=status.HTTP_202_ACCEPTED)
 async def scrape(request: ScrapeRequest):
     try:
-        app.state.broker.scrape(request)
+        await app.state.broker.scrape(request)
     except Exception as e:
         line = sys.exc_info()[2].tb_lineno
         raise HTTPException(
@@ -608,20 +705,7 @@ async def scrape(request: ScrapeRequest):
 @app.get("/nodes")
 async def nodes():
     try:
-        return [
-            {
-                "online": scraper.online,
-                "hostname": scraper.hostname,
-                "node_id": scraper.passport.node_id,
-                "ram_specs": scraper.ram_specs,
-                "ram_usage": scraper.ram_usage,
-                "ipv6": scraper.ipv6,
-                "browsers": dict(
-                    sorted(scraper.browsers.items(), key=lambda x: x[1].created_at)
-                ),  # orders by created_at
-            }
-            for scraper in app.state.broker.scrapers.values()
-        ]
+        return app.state.broker.to_dict()
     except Exception as e:
         line = sys.exc_info()[2].tb_lineno
         raise HTTPException(
@@ -632,7 +716,7 @@ async def nodes():
 @app.get("/broker")
 async def broker():
     try:
-        return app.state.broker.get_scraping_list()
+        return await app.state.broker.get_scraping_list()
     except Exception as e:
         line = sys.exc_info()[2].tb_lineno
         raise HTTPException(
@@ -643,7 +727,7 @@ async def broker():
 @app.get("/logger")
 async def logger():
     try:
-        return app.state.broker.logger_queue
+        return app.state.broker.logger
     except Exception as e:
         line = sys.exc_info()[2].tb_lineno
         raise HTTPException(
