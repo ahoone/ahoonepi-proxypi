@@ -2,18 +2,11 @@ FROM python:3.10-slim
 
 USER root
 
-RUN apt-get update && apt-get install -y \
-    net-tools ffmpeg \
-    wget gnupg xvfb ca-certificates \
-    fonts-liberation libx11-xcb1 libxcomposite1 \
-    libxcursor1 libxdamage1 libxext6 libxfixes3 \
-    libxi6 libxrandr2 libxrender1 libxtst6 \
-    libnss3 libatk1.0-0 libcups2 libdbus-1-3 \
-    libdrm2 libgbm1 libasound2 libpangocairo-1.0-0 \
-    libxshmfence1 lsb-release xdg-utils \
-    unzip jq curl \
-    --no-install-recommends \
-    && rm -rf /var/lib/apt/lists/*
+COPY aptfile /app/
+
+RUN apt-get update && \
+    xargs -a /app/aptfile apt-get install -y --no-install-recommends && \
+    rm -rf /var/lib/apt/lists/*
 
 RUN ARCH=$(dpkg --print-architecture) \
     && if [ "$ARCH" = "amd64" ]; then \
