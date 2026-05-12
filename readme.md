@@ -113,7 +113,7 @@ The scraper API runs permanently.
 > The same container is deployed on the proxies.
 
 ```bash
-docker compose -f scraper/docker-compose.yml --env-file .env up --build -d
+docker compose -f scraper/docker-compose.yml --env-file .env --env-file config.env up --build -d
 ```
 
 ```bash

@@ -33,33 +33,32 @@ import proxypi
 # -------------------------------------------------------------------------------- #
 # -------------------------------------------------------------------------------- #
 
-
+HTTP_PORT_SCRAPER = os.environ["HTTP_PORT_SCRAPER"]
+NODE_ID_RANGE_REGEX = os.environ["NODE_ID_RANGE_REGEX"]
 NODE_ROLE = os.environ["NODE_ROLE"].split(",")
+SSH_NETWORK_PREFIX = os.environ["SSH_NETWORK_PREFIX"]
+WIREGUARD_LIGHTHOUSE_ID = os.environ["WIREGUARD_LIGHTHOUSE_ID"]
+WIREGUARD_NETWORK_PREFIX = os.environ["WIREGUARD_NETWORK_PREFIX"]
+
 assert (
     "LIGHTHOUSE" in NODE_ROLE
-), "The node should be a lighthouse (ie includes broker) to launch this image"
-
+), f"The node should be a lighthouse (ie includes broker in {NODE_ROLE}) to launch this image"
 
 BROKER_DATABASE = "/tmp/broker.db"
 BROKER_CLEAR_DB_ON_STARTUP = True
 DB_TABLE_TARGETS = "targets"
 DB_TABLE_REQUESTS = "requests"
 DISPLAY_LIMIT_SCRAPING_LIST = 200
-HTTP_PORT_SCRAPER = os.environ["HTTP_PORT_SCRAPER"]
 LOGGER_BUFFER_SIZE = 10
 PROXYPI_COMMAND_AVAILABLE_NODES = "ping-wireguard -a"
 PROXYPI_COMMAND_INFO = Template("info $node_id")
 PROXYPI_COMMAND_RAM = Template("ram $node_id")
 REFRESH_PERIOD_BROKER = 1  # seconds
 SEMAPHORE_UPDATE_REACHABLE_NODES = 200
-SSH_NETWORK_PREFIX = os.environ["SSH_NETWORK_PREFIX"]
 THRESHOLD_SCORE = 300
 TIMEOUT_SCRAPER_FETCHING_INFO = 2  # seconds
 TIMEOUT_SCRAPER_HTTP_REQUEST = 4  # seconds
 TIMEOUT_SCRAPER_PING = 0.1  # seconds
-WIREGUARD_LIGHTHOUSE_ID = os.environ["WIREGUARD_LIGHTHOUSE_ID"]
-WIREGUARD_NETWORK_PREFIX = os.environ["WIREGUARD_NETWORK_PREFIX"]
-NODE_ID_RANGE_REGEX = os.environ["NODE_ID_RANGE_REGEX"]
 
 
 # -------------------------------------------------------------------------------- #

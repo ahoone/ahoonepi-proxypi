@@ -3,6 +3,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    env_file:
+      - path: ../config.env
+        required: true
     ports:
       - "${HTTP_PORT_BROKER}:8000"
     volumes:
@@ -10,12 +13,7 @@ services:
       - ../plugins:/plugins:ro
       - /tmp/proxypi.sock:/tmp/proxypi.sock
     environment:
-      HTTP_PORT_SCRAPER: ${HTTP_PORT_SCRAPER}
-      NODE_ID_RANGE_REGEX: ${NODE_ID_RANGE_REGEX}
       NODE_ROLE: ${NODE_ROLE}
-      SSH_NETWORK_PREFIX: ${SSH_NETWORK_PREFIX}
-      WIREGUARD_LIGHTHOUSE_ID: ${WIREGUARD_LIGHTHOUSE_ID}
-      WIREGUARD_NETWORK_PREFIX: ${WIREGUARD_NETWORK_PREFIX}
     restart: unless-stopped
     networks:
       - default

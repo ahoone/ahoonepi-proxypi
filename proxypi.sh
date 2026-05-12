@@ -4,6 +4,7 @@
 
 source ui.sh
 source .env
+source config.env
 
 `# should use $WIREGUARD_PROXYPI_RANGE_REGEX here`
 SSH_PORT_PROXYPI_RANGE_REGEX="$SSH_NETWORK_PREFIX[0-9]{2}"
@@ -684,10 +685,10 @@ docker::restart() {
         cd /home/admin
 
         docker compose -f scraper/docker-compose.yml down
-        docker compose -f scraper/docker-compose.yml --env-file .env up --build -d
+        docker compose -f scraper/docker-compose.yml --env-file .env --env-file config.env up --build -d
 
         docker compose -f broker/docker-compose.yml down
-        docker compose -f broker/docker-compose.yml --env-file .env up --build -d
+        docker compose -f broker/docker-compose.yml --env-file .env --env-file config.env up --build -d
     else
         echob "NOT IMPLEMENTED FOR OTHER THAN NODE_ID=1"
         return $EXIT_CODE_NOT_IMPLEMENTED
