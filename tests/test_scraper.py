@@ -82,7 +82,7 @@ def test_kill_default_instance():
 
 
 def test_explicit_instance_dead():
-    #    sleep(EXPLICIT_NEW_INSTANCE_LIFESPAN)
+    sleep(EXPLICIT_NEW_INSTANCE_LIFESPAN)
     url = f"http://{ADDRESS}/browsers"
     response = requests.get(url, timeout=TIMEOUT_REQUESTS)
     assert response.status_code == 200, response.content
