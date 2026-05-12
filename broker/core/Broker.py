@@ -11,6 +11,7 @@ from core.NodeIdentifier import NodeIdentifier
 from core.ScraperImage import ScraperImage
 from core.schemas import ScrapeRequest
 
+
 class Broker:
 
     def __init__(self) -> None:
@@ -36,19 +37,17 @@ class Broker:
                 "level": level,
             }
             self.logger.insert(0, event)
-            self.logger = self.logger[:Config.BUFFER_LOGGER_SIZE]
+            self.logger = self.logger[: Config.BUFFER_LOGGER_SIZE]
 
     async def scrape(self, request: ScrapeRequest) -> None:
         # data = [(request.urls, request.tag)] if isinstance(request.urls, str) else [(url, request.tag) for url in request.urls]
         # NOT SUPPORTING MULTIPLE ELEMENTS AT ONCE
         data = [(str(request.url), request.antwortzeit, request.tag)]
-        query = (
-            f"INSERT INTO {Config.DB_TABLE_TARGETS} (url, antwortzeit, tag) VALUES (?, ?, ?)"
-        )
+        query = f"INSERT INTO {Config.DB_TABLE_TARGETS} (url, antwortzeit, tag) VALUES (?, ?, ?)"
         await DatabaseHandler.executemany(query, data)
 
     async def get_scraping_list(self) -> List[Dict[str, Any]]:
-        query = (f"""
+        query = f"""
             SELECT *
             FROM {Config.DB_TABLE_TARGETS} l
             WHERE 1=1
@@ -61,7 +60,7 @@ class Broker:
                 )
             ORDER BY antwortzeit ASC
             LIMIT {Config.BUFFER_SCRAPING_LIST}
-        """)
+        """
         return await DatabaseHandler.fetchall(query)
 
     async def __update_available_nodes(self) -> None:
@@ -136,7 +135,7 @@ class Broker:
 
     async def __get_target(self) -> Optional[Dict[str, Any]]:
         async with self.__lock_current_tasks:
-            query = (f"""
+            query = f"""
                 SELECT *
                 FROM {Config.DB_TABLE_TARGETS} l
                 WHERE 1=1
@@ -149,7 +148,7 @@ class Broker:
                             AND r.success = TRUE
                     )
                 ORDER BY l.antwortzeit ASC
-            """)
+            """
             return await DatabaseHandler.fetchone(query)
 
     async def __distribute_task(self) -> None:
@@ -165,7 +164,7 @@ class Broker:
         await self.log(f"browser {browser.instance_id} selected for {target['id']}")
         task = asyncio.create_task(browser.get(target["url"]))
         async with self.__lock_current_tasks:
-            self.__current_tasks[target['id']] = task
+            self.__current_tasks[target["id"]] = task
 
     async def __retrieve_task(self) -> None:
         completed: List[Tuple[Any]] = []
@@ -173,7 +172,15 @@ class Broker:
             for target_id, task in self.__current_tasks.items():
                 if task.done():
                     result = task.result()
-                    completed.append((target_id, result["request_timestamp"], result["response_timestamp"], result["success"], result["content"]))
+                    completed.append(
+                        (
+                            target_id,
+                            result["request_timestamp"],
+                            result["response_timestamp"],
+                            result["success"],
+                            result["content"],
+                        )
+                    )
             for x in completed:
                 del self.__current_tasks[x[0]]
         if len(completed) > 0:
@@ -192,7 +199,7 @@ class Broker:
         except Exception as e:
             traceback.print_exc()
 
-    async def background_update(self):
+    async def background_update(self) -> None:
         loop = asyncio.get_running_loop()
         next_update = loop.time()
         last_update = next_update

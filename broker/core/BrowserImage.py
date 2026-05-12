@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Literal
 from core.Config import Config
 from core.NodeIdentifier import NodeIdentifier
 
+
 class BrowserImage:
 
     def __init__(

@@ -18,6 +18,7 @@ PROXYPI_COMMAND_RAM = Template("ram $node_id")
 TIMEOUT_SCRAPER_FETCHING_INFO = 2  # seconds
 TIMEOUT_SCRAPER_HTTP_REQUEST = 4  # seconds
 
+
 class ScraperImage:
 
     def __init__(self) -> None:
@@ -89,7 +90,7 @@ class ScraperImage:
         await self.__fetch_info()
         # anything to update for the browsers?
 
-    async def available(self) -> bool: 
+    async def available(self) -> bool:
         """
         the MAX_INSTANCES_PER_SCRAPER should be move in an overall config file
         """

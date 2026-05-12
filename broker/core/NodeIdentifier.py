@@ -8,6 +8,7 @@ from core.Config import Config
 SEMAPHORE_UPDATE_REACHABLE_NODES = 200
 TIMEOUT_SCRAPER_PING = 0.1  # seconds
 
+
 class NodeIdentifier:
 
     node_ids: Set[int] = {

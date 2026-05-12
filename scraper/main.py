@@ -28,7 +28,7 @@ from typing import (
 import zendriver as uc
 
 sys.path.insert(0, "/plugins")
-import fast_api_ip_middleware
+from middleware import add_middleware
 
 # -------------------------------------------------------------------------------- #
 # -------------------------------------------------------------------------------- #
@@ -553,18 +553,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-
-@app.get("/check-ip", include_in_schema=False)
-async def check_ip(request: Request):
-    return await fast_api_ip_middleware.check_ip(request, ALLOWED_NETWORKS)
-
-
-@app.middleware("http")
-async def filter_ip_middleware(request: Request, call_next: Callable):
-    return await fast_api_ip_middleware.filter_ip_middleware(
-        request, call_next, ALLOWED_NETWORKS
-    )
-
+add_middleware(app, ALLOWED_NETWORKS)
 
 app.add_middleware(
     CORSMiddleware,

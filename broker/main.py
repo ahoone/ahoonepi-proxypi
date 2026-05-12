@@ -1,28 +1,18 @@
-
 import asyncio
 from contextlib import asynccontextmanager
 import datetime
-from fastapi import Body, FastAPI, status, Request, HTTPException
+from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import (
+    FileResponse,
     HTMLResponse,
     JSONResponse,
-    FileResponse,
     StreamingResponse,
 )
-
-import ipaddress
-import json
 import os
-
-import random
-import requests
 from starlette.background import BackgroundTask
-from string import Template, ascii_letters, digits
-import subprocess
 import sys
 import traceback
-from typing import Any, Callable, Dict, List, Literal, Union, Optional, Tuple, Set
 
 from core.Broker import Broker
 from core.Config import Config
@@ -31,22 +21,11 @@ from core.NodeIdentifier import NodeIdentifier
 from core.schemas import GetRequest, ScrapeRequest
 
 sys.path.insert(0, "/plugins")
-import fast_api_ip_middleware
+from middleware import add_middleware
 
 # -------------------------------------------------------------------------------- #
 # -------------------------------------------------------------------------------- #
 
-
-ALLOWED_NETWORKS = [
-    ipaddress.ip_network("127.0.0.0/8"),  # localhost
-    # ipaddress.ip_network("10.0.0.0/24"),      # VPN network
-    ipaddress.ip_network("10.0.0.1/32"),  # Lighthouse through VPN
-    ipaddress.ip_network("172.16.0.0/12"),  # Docker bridge networks (for dev)
-    ipaddress.ip_network(
-        "192.168.0.0/16"
-    ),  # Docker compose networks (for the proxypi socket)
-    ipaddress.ip_network("::1/128"),  # IPv6 localhost
-]
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -68,18 +47,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-
-@app.get("/check-ip", include_in_schema=False)
-async def check_ip(request: Request):
-    return await fast_api_ip_middleware.check_ip(request, ALLOWED_NETWORKS)
-
-
-@app.middleware("http")
-async def filter_ip_middleware(request: Request, call_next: Callable):
-    return await fast_api_ip_middleware.filter_ip_middleware(
-        request, call_next, ALLOWED_NETWORKS
-    )
-
+add_middleware(app, Config.ALLOWED_NETWORKS)
 
 app.add_middleware(
     CORSMiddleware,
@@ -88,7 +56,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 
 # -------------------------------------------------------------------------------- #
 # -------------------------------------------------------------------------------- #

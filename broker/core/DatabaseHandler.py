@@ -4,6 +4,7 @@ from typing import Any, Dict, List, Tuple
 
 from core.Config import Config
 
+
 class DatabaseHandler:
 
     @classmethod
@@ -11,7 +12,9 @@ class DatabaseHandler:
 
         async with aiosqlite.connect(Config.BROKER_DATABASE) as conn:
 
-            if Config.BROKER_CLEAR_DB_ON_STARTUP and os.path.exists(Config.BROKER_DATABASE):
+            if Config.BROKER_CLEAR_DB_ON_STARTUP and os.path.exists(
+                Config.BROKER_DATABASE
+            ):
                 os.remove(Config.BROKER_DATABASE)
 
             response = await conn.execute("SELECT name FROM sqlite_master")
@@ -72,7 +75,9 @@ class DatabaseHandler:
             return await cursor.fetchone()
 
     @classmethod
-    async def fetchall(cls, query: str, params: Tuple[Any] = None) -> List[Dict[str, Any]]:
+    async def fetchall(
+        cls, query: str, params: Tuple[Any] = None
+    ) -> List[Dict[str, Any]]:
         async with aiosqlite.connect(Config.BROKER_DATABASE) as conn:
             conn.row_factory = aiosqlite.Row
             cursor = await conn.execute(query, params)

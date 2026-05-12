@@ -2,8 +2,10 @@ import datetime
 from pydantic import HttpUrl, BaseModel, Field
 from typing import Optional
 
+
 class GetRequest(BaseModel):
     url: str
+
 
 class ScrapeRequest(BaseModel):
     """

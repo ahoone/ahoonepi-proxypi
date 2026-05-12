@@ -34,30 +34,18 @@ cd ahoonepi-proxy
 #### `.env`
 
 ```bash
-ALLOWED_NETWORKS_BROKER=placeholder
-ALLOWED_NETWORKS_SCRAPER=placeholder
 GIT_BRANCH=
 GIT_HOSTING_PROVIDER=
 GIT_REPOSITORY=
-HTTP_PORT_BROKER=8080
-HTTP_PORT_SCRAPER=8000
-LIGHTHOUSE_DUMMY_USER=proxypi
+LIGHTHOUSE_DUMMY_USER=
 LIGHTHOUSE_IP=
 LIGHTHOUSE_SSH_PORT=
-LIGHTHOUSE_WIREGUARD_LISTEN_PORT=51820
 LIGHTHOUSE_WIREGUARD_PUBLIC_KEY=
-NODE_ID_RANGE_REGEX=[1-9][0-9]?
-NODE_ROLE=LIGHTHOUSE,SCRAPER,DDNS_UPKEEPER
+NODE_ROLE=
 OVH_HOST=
 OVH_PASS=
 OVH_USER=
 PROXY_ID=
-SCRAPER_CPUS=1.5
-SCRAPER_MEMORY=2g
-SCRAPER_SHM_SIZE=512mb
-SSH_NETWORK_PREFIX=22
-WIREGUARD_LIGHTHOUSE_ID=1
-WIREGUARD_NETWORK_PREFIX=10.0.0
 ```
 
 Roles and components associated:
@@ -141,7 +129,7 @@ The number of the opened port is decided by concatenate the prefix `22` and the 
 ## To format the python code
 
 ```bash
-docker compose -f tests/docker-compose.yml --env-file .env up --build -d
+docker compose -f tests/docker-compose.yml --env-file config.env up --build -d
 docker logs tests
 ```
 
