@@ -2,10 +2,10 @@ import asyncio
 import datetime
 import random
 import traceback
-from typing import Any, Dict, List, Literal, Optional, Set, Tuple
+from typing import Any, Dict, List, Literal, NoReturn, Optional, Set, Tuple
 
+from Config import Config
 from core.BrowserImage import BrowserImage
-from core.Config import Config
 from core.DatabaseHandler import DatabaseHandler
 from core.NodeIdentifier import NodeIdentifier
 from core.ScraperImage import ScraperImage
@@ -199,7 +199,7 @@ class Broker:
         except Exception as e:
             traceback.print_exc()
 
-    async def background_update(self) -> None:
+    async def background_update(self) -> NoReturn:
         loop = asyncio.get_running_loop()
         next_update = loop.time()
         last_update = next_update

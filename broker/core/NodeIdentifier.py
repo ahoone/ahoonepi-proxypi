@@ -3,7 +3,7 @@ import exrex
 from ping3 import ping
 from typing import Set
 
-from core.Config import Config
+from Config import Config
 
 SEMAPHORE_UPDATE_REACHABLE_NODES = 200
 TIMEOUT_SCRAPER_PING = 0.1  # seconds

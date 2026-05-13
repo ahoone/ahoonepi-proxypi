@@ -2,7 +2,7 @@ import aiosqlite
 import os
 from typing import Any, Dict, List, Tuple
 
-from core.Config import Config
+from Config import Config
 
 
 class DatabaseHandler:

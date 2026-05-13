@@ -6,8 +6,8 @@ from string import Template
 import sys
 from typing import Any, Dict, List, Optional, Tuple, Union
 
+from Config import Config
 from core.BrowserImage import BrowserImage
-from core.Config import Config
 from core.NodeIdentifier import NodeIdentifier
 
 sys.path.insert(0, "/plugins")

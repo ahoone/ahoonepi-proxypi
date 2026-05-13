@@ -2,7 +2,7 @@ import asyncio
 import httpx
 from typing import Any, Dict, List, Literal
 
-from core.Config import Config
+from Config import Config
 from core.NodeIdentifier import NodeIdentifier
 
 

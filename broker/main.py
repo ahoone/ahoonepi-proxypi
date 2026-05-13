@@ -14,8 +14,8 @@ from starlette.background import BackgroundTask
 import sys
 import traceback
 
+from Config import Config
 from core.Broker import Broker
-from core.Config import Config
 from core.DatabaseHandler import DatabaseHandler
 from core.NodeIdentifier import NodeIdentifier
 from core.schemas import GetRequest, ScrapeRequest

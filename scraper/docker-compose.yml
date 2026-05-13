@@ -3,6 +3,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    env_file:
+      - path: ../config.env
+        required: true
     ports:
       - "${HTTP_PORT_SCRAPER}:8000"
     volumes:
