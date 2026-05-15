@@ -15,6 +15,9 @@ ssh-keygen -t ed25519 -f ~/.ssh/id_lighthouse -N ""
 ssh-copy-id -i ~/.ssh/id_lighthouse.pub -p ${LIGHTHOUSE_SSH_PORT} ${LIGHTHOUSE_DUMMY_USER}@${LIGHTHOUSE_IP}
 ssh -i ~/.ssh/id_lighthouse -p ${LIGHTHOUSE_SSH_PORT} ${LIGHTHOUSE_DUMMY_USER}@${LIGHTHOUSE_IP} echo "Connection successful"
 
+CURRENT_USER=$(whoami)
+CURRENT_HOME=$HOME
+
 sudo bash -c "cat >/etc/systemd/system/reverse-ssh-tunnel.service" << EOF
 [Unit]
 Description=Reverse SSH Tunnel to Lighthouse
@@ -23,13 +26,13 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=$(whoami)
+User=${CURRENT_USER}
 ExecStart=/usr/bin/ssh -N -T \
     -o ServerAliveInterval=60 \
     -o ServerAliveCountMax=3 \
     -o ExitOnForwardFailure=yes \
     -o StrictHostKeyChecking=accept-new \
-    -i %h/.ssh/id_lighthouse \
+    -i ${CURRENT_HOME}/.ssh/id_lighthouse \
     -p ${LIGHTHOUSE_SSH_PORT} \
     -R 22$(printf "%02d" "$PROXY_ID"):localhost:22 \
     ${LIGHTHOUSE_DUMMY_USER}@${LIGHTHOUSE_IP}

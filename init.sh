@@ -102,13 +102,13 @@ if [[ "$NODE_ROLE" = *"LIGHTHOUSE"* ]]; then
         sudo adduser "$LIGHTHOUSE_DUMMY_USER"
     fi
 
-    echob "creating $SCRIPT_DIR/.ssh folder..."
-    mkdir -p "$SCRIPT_DIR/.ssh"
-    if ls "$SCRIPT_DIR/.ssh" | grep -q "id_proxy_access"; then
+    echob "creating $HOME/.ssh folder..."
+    mkdir -p "$HOME/.ssh"
+    if ls "$HOME/.ssh" | grep -q "id_proxy_access"; then
         echo "ssh public key for proxies already exists."
     else 
-        ssh-keygen -t ed25519 -f "$SCRIPT_DIR/.ssh/id_proxy_access" -N ""
-        echob "Created public ssh key for the proxies at '$SCRIPT_DIR/.ssh/id_proxy_access.pub'." 
+        ssh-keygen -t ed25519 -f "$HOME/.ssh/id_proxy_access" -N ""
+        echob "Created public ssh key for the proxies at '$HOME/.ssh/id_proxy_access.pub'." 
     fi | draw_box
 
 #    echob "starting broker container..."
