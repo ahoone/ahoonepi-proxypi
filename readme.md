@@ -1,35 +1,16 @@
 # ahoonepi-proxypi
 
-Repository hosting the infrastructure for all the Pis (installation + proxypi package + components).
+ahoonepi-proxypi provides an infrastructure to control multiple computers using its bash command line library (proxypi),
+and providing an automated scraping setup for the network (ahoonepi).
+It relies on [zendriver](https://github.com/cdpdriver/zendriver) (following [nodriver](https://github.com/ultrafunkamsterdam/nodriver/) abandon), provides chrome or chromium instances with a virtual display via Xvfb,
+all of it inside of containers, and allocates scraping requests to stay undetected.
 
-## TO DO
+# Usage
 
-- You can be both lighthouse and proxy for an extented network (not possible for now, wireguard configuration is overwritten for the steps of LIGHTHOUSE and PROXY)
-- forwarding websites (livebox/# and ahoonepi.fr:81 (nginx proxy manager) for distant access) and 8080 and 8000 (broker and scraper)
-- Nginx Proxy Manager web interface is accessible on localhost, port `81`, but is not exposed to the internet for security reasons.
-- Should add a crontab jobs and a small logs files to automatically ping the proxies to get their status.
-
-*It is ducking not good because flags' parameters are also treated as flags (not arguments for the function)*
-
-| Arg.             | For:                                                                  |
-|------------------|-----------------------------------------------------------------------|
-| -w (ping...)     | web format (list of dictionnaries)                                    |
-| -h               | human readable                                                        |
-| -l               | logs                                                                  |
-| -nwrg            | warnings (terminal window too small)                                  |
-| swarm-execute -o | get output                                                            |
-| ping-cloudflare  | Test if the proxy is able to bypass cloudflare. (nyi)                 |
-| restart          | [restart]="-a -b -s -n node_id"                                       |
 
 
 ## Initialization
 
-### Download
-
-```bash
-git clone https://github.com/ahoone/ahoonepi-proxypi .
-cd ahoonepi-proxy
-```
 
 #### `.env`
 
@@ -42,9 +23,6 @@ LIGHTHOUSE_IP=
 LIGHTHOUSE_SSH_PORT=
 LIGHTHOUSE_WIREGUARD_PUBLIC_KEY=
 NODE_ROLE=
-OVH_HOST=
-OVH_PASS=
-OVH_USER=
 PROXY_ID=
 ```
 

@@ -11,11 +11,6 @@ source .env
 echob "detected role: $NODE_ROLE"
 
 declare -A REQUIRED_ENV_VAR=(
-    [DDNS_UPKEEPER]="
-        OVH_USER
-        OVH_PASS
-        OVH_HOST
-    "
     [LIGHTHOUSE]="
         GIT_HOSTING_PROVIDER
         GIT_REPOSITORY
@@ -117,20 +112,6 @@ if [[ "$NODE_ROLE" = *"LIGHTHOUSE"* ]]; then
 
     echob "starting broker container..."
     echo -e $(sudo docker compose -f broker/docker-compose.yml --env-file .env up --build -d 2>&1) | draw_box && echob "✓ Broker running." || echob "✗ Broker failed running."
-
-fi
-
-
-#######################################
-#######################################
-
-
-if [[ "$NODE_ROLE" = *"DDNS_UPKEEPER"* ]]; then
-
-    echob "DDNS_UPKEEPER:"
-
-    echob "initializing ddns crontab job..."
-    ./ddns/init_ddns.sh
 
 fi
 
