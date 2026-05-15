@@ -1,5 +1,8 @@
 #!/bin/bash
-source .env
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+source "$SCRIPT_DIR/.env"
 
 set -euo pipefail
 
@@ -26,7 +29,7 @@ ExecStart=/usr/bin/ssh -N -T \
     -o ServerAliveCountMax=3 \
     -o ExitOnForwardFailure=yes \
     -o StrictHostKeyChecking=accept-new \
-    -i /home/admin/.ssh/id_lighthouse \
+    -i %h/.ssh/id_lighthouse \
     -p ${LIGHTHOUSE_SSH_PORT} \
     -R 22$(printf "%02d" "$PROXY_ID"):localhost:22 \
     ${LIGHTHOUSE_DUMMY_USER}@${LIGHTHOUSE_IP}

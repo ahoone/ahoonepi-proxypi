@@ -2,15 +2,17 @@
 #
 # https://google.github.io/styleguide/shellguide.html
 
-source ui.sh
-source .env
-source config.env
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+source "$SCRIPT_DIR/ui.sh"
+source "$SCRIPT_DIR/.env"
+source "$SCRIPT_DIR/config.env"
 
 `# should use $WIREGUARD_PROXYPI_RANGE_REGEX here`
 SSH_PORT_PROXYPI_RANGE_REGEX="$SSH_NETWORK_PREFIX[0-9]{2}"
 
 PROXYPI_USER="admin"
-LIGHTHOUSE_PRIVATE_KEY_PATH="/home/admin/.ssh/id_proxy_access"
+LIGHTHOUSE_PRIVATE_KEY_PATH="$HOME/.ssh/id_proxy_access"
 
 WIREGUARD_DEFAULT_PING_SAMPLE_SIZE="1"
 DEFAULT_SSH_CONNECTION_PLUS_INSTRUCTIONS_TIMEOUT="16"
@@ -680,22 +682,20 @@ wireguard::load() {
 #######################################
 docker::restart() {
     local node_id=$1
-
+    
     if [[ "$node_id" == "1" ]]; then
-        cd /home/admin
-
+        cd "$SCRIPT_DIR"
         docker compose -f scraper/docker-compose.yml down
         docker compose -f scraper/docker-compose.yml --env-file .env --env-file config.env up --build -d
-
         docker compose -f broker/docker-compose.yml down
         docker compose -f broker/docker-compose.yml --env-file .env --env-file config.env up --build -d
     else
         echob "NOT IMPLEMENTED FOR OTHER THAN NODE_ID=1"
         return $EXIT_CODE_NOT_IMPLEMENTED
     fi
-
     # TODO (ahoone): implementing for the proxies
 }
+
 
 #######################################
 #######################################

@@ -1,5 +1,7 @@
 #!/bin/bash
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 sudo apt-get install -y socat
 
 sudo bash -c "cat > /etc/systemd/system/proxypi.service" << EOF
@@ -9,9 +11,9 @@ After=network.target
 
 [Service]
 Environment=TERM=xterm-256color
-WorkingDirectory=/home/admin
+WorkingDirectory=$SCRIPT_DIR
 ExecStartPre=rm -f /tmp/proxypi.sock
-ExecStart=socat UNIX-LISTEN:/tmp/proxypi.sock,fork,mode=777 EXEC:/home/admin/proxypi_socket.sh
+ExecStart=socat UNIX-LISTEN:/tmp/proxypi.sock,fork,mode=777 EXEC:$SCRIPT_DIR/proxypi_socket.sh
 Restart=always
 RestartSec=3
 

@@ -1,6 +1,10 @@
 #!/bin/bash
-source ui.sh
-source .env
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+source "$SCRIPT_DIR/ui.sh"
+source "$SCRIPT_DIR/.env"
+source "$SCRIPT_DIR/config.env"
 
 
 #######################################
@@ -98,20 +102,17 @@ if [[ "$NODE_ROLE" = *"LIGHTHOUSE"* ]]; then
         sudo adduser "$LIGHTHOUSE_DUMMY_USER"
     fi
 
-    echob "creating $(pwd)/.ssh folder..."
-    mkdir -p .ssh
-    if ls .ssh | grep -q "id_proxy_access"; then
+    echob "creating $SCRIPT_DIR/.ssh folder..."
+    mkdir -p "$SCRIPT_DIR/.ssh"
+    if ls "$SCRIPT_DIR/.ssh" | grep -q "id_proxy_access"; then
         echo "ssh public key for proxies already exists."
     else 
-        ssh-keygen -t ed25519 -f ~/.ssh/id_proxy_access -N ""
-        echob "Created public ssh key for the proxies at '$(pwd)/.ssh/id_proxy_access.pub'." 
+        ssh-keygen -t ed25519 -f "$SCRIPT_DIR/.ssh/id_proxy_access" -N ""
+        echob "Created public ssh key for the proxies at '$SCRIPT_DIR/.ssh/id_proxy_access.pub'." 
     fi | draw_box
 
-    echob "starting Nginx Proxy Manager docker container..."
-    echo -e $(sudo docker compose -f nginx-proxy-manager/docker-compose.yml up -d 2>&1) | draw_box && echob "✓ NPM running." || echob "✗ NPM failed running."
-
-    echob "starting broker container..."
-    echo -e $(sudo docker compose -f broker/docker-compose.yml --env-file .env up --build -d 2>&1) | draw_box && echob "✓ Broker running." || echob "✗ Broker failed running."
+#    echob "starting broker container..."
+#    echo -e $(sudo docker compose -f broker/docker-compose.yml --env-file .env up --build -d 2>&1) | draw_box && echob "✓ Broker running." || echob "✗ Broker failed running."
 
 fi
 
@@ -138,7 +139,7 @@ if [[ "$NODE_ROLE" = *"SCRAPER"* ]]; then
 
     echob "SCRAPER:"
 
-    echob "starting scraper container..."
-    echo -e $(sudo docker compose -f scraper/docker-compose.yml --env-file .env up --build -d 2>&1) | draw_box && echob "✓ Scraper running." || echob "✗ Scraper failed running."
+#    echob "starting scraper container..."
+#    echo -e $(sudo docker compose -f scraper/docker-compose.yml --env-file .env up --build -d 2>&1) | draw_box && echob "✓ Scraper running." || echob "✗ Scraper failed running."
 
 fi

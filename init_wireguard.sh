@@ -1,6 +1,10 @@
 #!/bin/bash
-source ui.sh
-source .env
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+source "$SCRIPT_DIR/ui.sh"
+source "$SCRIPT_DIR/.env"
+source "$SCRIPT_DIR/config.env"
 
 set -euo pipefail
 
@@ -30,8 +34,8 @@ if [[ "$NODE_ROLE" = *"LIGHTHOUSE"* ]]; then
 [Interface]
 # Lighthouse server config
 Address = 10.0.0.1/24
-ListenPort = ${LIGHTHOUSE_WIREGUARD_LISTEN_PORT}
-PrivateKey = ${PRIVATE_KEY}
+ListenPort = $LIGHTHOUSE_WIREGUARD_LISTEN_PORT
+PrivateKey = $PRIVATE_KEY
 
 # Enable IP forwarding
 PostUp = sysctl -w net.ipv4.ip_forward=1
