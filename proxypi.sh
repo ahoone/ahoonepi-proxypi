@@ -8,10 +8,6 @@ source "$SCRIPT_DIR/ui.sh"
 source "$SCRIPT_DIR/.env"
 source "$SCRIPT_DIR/config.env"
 
-`# should use $WIREGUARD_PROXYPI_RANGE_REGEX here`
-SSH_PORT_PROXYPI_RANGE_REGEX="$SSH_NETWORK_PREFIX[0-9]{2}"
-
-PROXYPI_USER="admin"
 LIGHTHOUSE_PRIVATE_KEY_PATH="$HOME/.ssh/id_proxy_access"
 
 WIREGUARD_DEFAULT_PING_SAMPLE_SIZE="1"
@@ -167,10 +163,21 @@ _get_proxypi_id() {
 }
 
 
+filter_ports_in_range() {
+    local start=$1
+    local end=$2
+    awk -v start="$start" -v end="$end" '
+        $1 >= start && $1 <= end { print }
+    '
+}
+
+
 #######################################
-# Examines open ports between $SSH_NETWORK_PREFIX02 and $SSH_NETWORK_PREFIX99
+# Examines open ports in the specified range
 # Globals:
-#   SSH_PORT_PROXYPI_RANGE_REGEX
+#   NETWORK_SIZE
+#   SSH_NETWORK_BASE
+#   WIREGUARD_CIDR_PREFIX
 # Outputs:
 #   Ports to stdout
 # Returns:
@@ -178,13 +185,24 @@ _get_proxypi_id() {
 #   1 on no proxies found
 #######################################
 _proxypi_listen_ssh() {
+    if [[ "$WIREGUARD_CIDR_PREFIX" -eq 24 ]]; then
+        NETWORK_SIZE=255
+    else
+        return $EXIT_CODE_NOT_IMPLEMENTED
+    fi
+    
+    START=$SSH_NETWORK_BASE
+    END=$((SSH_NETWORK_BASE + NETWORK_SIZE - 1))
+    
     ports=$(
-        netstat -an | \
-        grep -F "LISTEN " | \
-        grep -F "tcp6" | \
-        grep -oE $SSH_PORT_PROXYPI_RANGE_REGEX | \
+        netstat -an |
+        grep -F "LISTEN " |
+        grep -F "tcp6" |
+        awk 'match($0, /:([0-9]+)[[:space:]]/, m) { print m[1] }' |
+        filter_ports_in_range "$START" "$END" |
         sort -n
     )
+    
     if [ -z "$ports" ]; then
         echob "No proxies found." >&2
         echo ""
@@ -377,7 +395,7 @@ ssh::copy_keys() {
 ssh::connect() {
     local proxy_id=$1
 
-    ssh -i "$LIGHTHOUSE_PRIVATE_KEY_PATH" -p $SSH_NETWORK_PREFIX"$(printf "%02d" $proxy_id)" "$PROXYPI_USER"@localhost
+    ssh -i "$LIGHTHOUSE_PRIVATE_KEY_PATH" -p ${SSH_NETWORK_PREFIX + $proxy_id} "$PROXYPI_USER"@localhost
 }
 
 
@@ -506,7 +524,7 @@ git::pull() {
 #######################################
 ssh::info() {
     local proxy_id=$1
-    local port="$SSH_NETWORK_PREFIX$(printf "%02d" $proxy_id)"
+    local port="${SSH_NETWORK_PREFIX + $proxy_id}"
 
     if [[ "$proxy_id" == "1" ]]; then
         echo "{\"hostname\": \"$(hostname)\", \"port\": \"$port\", \"ipv6\": \"$(curl ifconfig.me 2>/dev/null || echo 'N/A')\"}"
@@ -545,7 +563,7 @@ ssh::info() {
 #######################################
 ssh::ram() {
     local proxy_id=$1
-    local port="$SSH_NETWORK_PREFIX$(printf "%02d" $proxy_id)"
+    local port="${SSH_NETWORK_PREFIX + $proxy_id}"
 
     if [[ "$proxy_id" == "1" ]]; then
         echo "{\"ram_specs\": \"$(free -h | awk '/^Mem:/{print $2}')\", \"ram_usage\": \"$(free | awk '/^Mem:/{printf "%.0f%%", $3/$2*100}')\"}"

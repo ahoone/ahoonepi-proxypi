@@ -7,68 +7,40 @@ all of it inside of containers, and allocates scraping requests to stay undetect
 
 # Usage
 
+Be aware that the project runs for now with high control:
+- runs with sudo rights,
+- docker commmand line without sudo,
+- creates a dummy user,
+- preferably on a fresh installed OS,
 
+Start the project on the main computer that will be the lighthouse.
+Create a `.env` and launch `./init.sh` (handles dependencies, ie docker and wireguard).
+After rebooting, check that a `broker` container is running.
+You should be able to access http://localhost:8080/ (or `HTTP_PORT_BROKER` from `config.env`).
+
+To pursue the installation of proxies, creates an `admin` user (defined in `proxypi.sh`).
+Complete the `.env` with the information you need from the lighthouse.
+Be aware that the `PROXY_ID` should be unique among your network, and should be between 2 and 254 included.
+On the lighthouse, run `proxypi load-ssh` and `proxypi load-wireguard`.
+You should now see the proxy appear on the dashboard.
 
 ## Initialization
 
 
 #### `.env`
 
-```bash
-GIT_BRANCH=
-GIT_HOSTING_PROVIDER=
-GIT_REPOSITORY=
-LIGHTHOUSE_DUMMY_USER=
+```
 LIGHTHOUSE_IP=
 LIGHTHOUSE_SSH_PORT=
 LIGHTHOUSE_WIREGUARD_PUBLIC_KEY=
-NODE_ROLE=
+NODE_ROLE=  # LIGHTHOUSE, PROXY, SCRAPER
 PROXY_ID=
 ```
 
-Roles and components associated:
-- `LIGHTHOUSE` : accepts connections on the specified range and controls them
-- `PROXY` : connects to a lighthouse
-- `SCRAPER` : uses its scraper component
-- `NAS` : joins the lighthouse storage infrastructure
-
-```bash
-./init.sh
-sudo reboot
-```
 
 
-### Scripts
 
-## Access remote to the server
 
-`SSHFS` is not perfect (unproperly dismount when inactive) and makes the connection crashes if not properly done.
-
-To mount the remote server:
-```bash
-sudo apt install sshfs
-sudo mkdir /mnt/remote
-sudo sshfs -o allow_other,default_permissions user@device:/home/user /mnt/remote
-```
-
-And to disconnect:
-```bash
-sudo fusermount -u /mnt/remote
-```
-
-## Main commands
-
-### Proxies management
-
-Add the alias for the `proxypi` library:
-```bash
-source .bash_aliases
-proxypi
-```
-
-> **It is absolutely normal for wireguard ping to be ~3ms, about 150 times faster than SSH connection, which includes much more steps.**
-
-> **Wireguard default VPN host is 10.0.0.1 so the first ahoonepi proxy is 10.0.0.2 (ahoonepi-proxy-2).**
 
 
 ### Scraper component

@@ -1,5 +1,4 @@
 import asyncio
-import exrex
 from ping3 import ping
 from typing import Set
 
@@ -11,12 +10,12 @@ TIMEOUT_SCRAPER_PING = 0.1  # seconds
 
 class NodeIdentifier:
 
-    node_ids: Set[int] = {
-        int(x)
-        for x in exrex.generate(
-            Config.NODE_ID_RANGE_REGEX, limit=exrex.count(Config.NODE_ID_RANGE_REGEX)
-        )
-    }
+    WIREGUARD_CIDR_PREFIX = os.getenv("WIREGUARD_CIDR_PREFIX")
+    if WIREGUARD_CIDR_PREFIX == 24:
+        node_ids: Set[int] = set(range(255))
+    else:
+        raise ValueError(f"CIDR prefix {WIREGUARD_CIDR_PREFIX} not implemented")
+
     reachable_nodes: Set[int] = None
 
     @staticmethod
