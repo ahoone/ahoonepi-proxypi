@@ -1,4 +1,5 @@
 import asyncio
+import os
 from ping3 import ping
 from typing import Set
 
@@ -10,7 +11,7 @@ TIMEOUT_SCRAPER_PING = 0.1  # seconds
 
 class NodeIdentifier:
 
-    WIREGUARD_CIDR_PREFIX = os.getenv("WIREGUARD_CIDR_PREFIX")
+    WIREGUARD_CIDR_PREFIX = int(os.getenv("WIREGUARD_CIDR_PREFIX"))
     if WIREGUARD_CIDR_PREFIX == 24:
         node_ids: Set[int] = set(range(255))
     else:
@@ -65,9 +66,7 @@ class NodeIdentifier:
             raise ValueError("Invalid node_id")
         self.node_id: int = node_id
         self.vpn_address: str = f"{Config.WIREGUARD_NETWORK_PREFIX}.{node_id}"
-        self.ssh_port: int = int(
-            f"{Config.SSH_NETWORK_PREFIX}{str(node_id).zfill(len(str(max(NodeIdentifier.node_ids))))}"
-        )
+        self.ssh_port: int = int(Config.SSH_NETWORK_BASE) + node_id - 2
 
     async def available(self) -> bool:
         """

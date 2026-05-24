@@ -148,31 +148,6 @@ help() {
 
 
 #######################################
-# Given the proxypi hostname output its index without heading 0
-# Arguments:
-#   $1: hostname
-# Outputs:
-#   Index to stdout
-# Returns:
-#   0 on success
-#######################################
-_get_proxypi_id() {
-    proxypi_hostname=$1
-    proxypi_id=$(echo "$proxypi_hostname" | tr -d -c 0-9)
-    echo $((10#$proxypi_id))
-}
-
-
-filter_ports_in_range() {
-    local start=$1
-    local end=$2
-    awk -v start="$start" -v end="$end" '
-        $1 >= start && $1 <= end { print }
-    '
-}
-
-
-#######################################
 # Examines open ports in the specified range
 # Globals:
 #   NETWORK_SIZE
@@ -194,14 +169,7 @@ _proxypi_listen_ssh() {
     START=$SSH_NETWORK_BASE
     END=$((SSH_NETWORK_BASE + NETWORK_SIZE - 1))
     
-    ports=$(
-        netstat -an |
-        grep -F "LISTEN " |
-        grep -F "tcp6" |
-        awk 'match($0, /:([0-9]+)[[:space:]]/, m) { print m[1] }' |
-        filter_ports_in_range "$START" "$END" |
-        sort -n
-    )
+    ports=$(netstat -an | grep '0.0.0.0' | awk -v start=2202 -v end=2456 '{split($4, buf, ":"); port=buf[2]; if (port>=start && port<=end) print port}')
     
     if [ -z "$ports" ]; then
         echob "No proxies found." >&2
@@ -256,9 +224,9 @@ _proxypi_execute_command() {
 #######################################
 ssh::ping() {
 
-    local column_name=("HOSTNAME" "PORT" "IPv6 ADDRESS" "SSH (RTT) (ms)" "INTERNET (ms)")
+    local column_name=("HOSTNAME" "PROXY ID" "PORT" "IPv6 ADDRESS" "SSH (RTT) (ms)" "INTERNET (ms)")
     if ! "$FLAG_PING_INFO_FROM_VPN_ADDRESS"; then
-        local column_size=(24 8 45 16 16)
+        local column_size=(24 8 8 45 16 16)
         draw_tabular_header column_size column_name
     else
         local vpn_address=$FLAG_PARAMETER_VPN_ADDRESS
@@ -272,11 +240,12 @@ ssh::ping() {
     local internet_end_time=$(date +%s%3N)
     local internet_latency=$((internet_end_time - internet_start_time))
 
-    local label="$hostname $(echob '(lighthouse)')"
-    local entry=("$label" "" "$ipv6" "" "${internet_latency}")
+    local label_hostname="$hostname $(echob '(lighthouse)')"
+    local label_proxy_id="$(echob '1')"
+    local entry=("$label_hostname" "$label_proxy_id" "" "$ipv6" "" "${internet_latency}")
     if ! "$FLAG_PING_INFO_FROM_VPN_ADDRESS"; then
         draw_tabular_row column_size entry
-    elif [[ "$vpn_address" == "$WIREGUARD_NETWORK_PREFIX.$WIREGUARD_LIGHTHOUSE_ID" ]]; then
+    elif [[ "$vpn_address" == "$WIREGUARD_NETWORK_PREFIX.1" ]]; then
         echo "${entry[@]}"
     fi
 
@@ -285,6 +254,7 @@ ssh::ping() {
 
     local instructions="echo \
         \$(hostname) \
+        \$(source ahoonepi-proxypi/.env && echo \$PROXY_ID) \
         \$(date +%s%3N) \
         \$(curl ifconfig.me 2>/dev/null || echo 'N/A') \
         \$(date +%s%3N)"
@@ -302,21 +272,21 @@ ssh::ping() {
             
             ssh_result=$(_proxypi_execute_command "$port" "$instructions")
 
-            if [ -z "$ssh_result" ]; then
-                if ! "$FLAG_PING_INFO_FROM_VPN_ADDRESS"; then
-                    entry=("---" "$(echob $port)" "---" "$(echob UNREACHABLE)" "---")
-                    draw_tabular_row column_size entry
-                else
-                    continue
-                fi
-            fi
+#            if [ -z "$ssh_result" ]; then
+#                if ! "$FLAG_PING_INFO_FROM_VPN_ADDRESS"; then
+#                    entry=("---" "$(echob $port)" "---" "$(echob UNREACHABLE)" "---")
+#                    draw_tabular_row column_size entry
+#                else
+#                    continue
+#                fi
+#            fi
 
-            read hostname internet_start_time ipv6 internet_end_time <<< "$ssh_result"
+            read hostname proxy_id internet_start_time ipv6 internet_end_time <<< "$ssh_result"
             
             ssh_latency=$((ssh_end_time - ssh_start_time))
             internet_latency=$((internet_end_time - internet_start_time))
             
-            entry=("$hostname" "$port" "$ipv6" "$ssh_latency" "$internet_latency")
+            entry=("$hostname" "$proxy_id" "$port" "$ipv6" "$ssh_latency" "$internet_latency")
             if ! "$FLAG_PING_INFO_FROM_VPN_ADDRESS"; then
                 draw_tabular_row column_size entry
             else
@@ -394,8 +364,9 @@ ssh::copy_keys() {
 #######################################
 ssh::connect() {
     local proxy_id=$1
+    local port=$((SSH_NETWORK_BASE + proxy_id - 2))
 
-    ssh -i "$LIGHTHOUSE_PRIVATE_KEY_PATH" -p ${SSH_NETWORK_PREFIX + $proxy_id} "$PROXYPI_USER"@localhost
+    ssh -i "$LIGHTHOUSE_PRIVATE_KEY_PATH" -p "$port" "$PROXYPI_USER"@localhost
 }
 
 
@@ -524,7 +495,7 @@ git::pull() {
 #######################################
 ssh::info() {
     local proxy_id=$1
-    local port="${SSH_NETWORK_PREFIX + $proxy_id}"
+    local port=$((SSH_NETWORK_BASE + proxy_id - 2))
 
     if [[ "$proxy_id" == "1" ]]; then
         echo "{\"hostname\": \"$(hostname)\", \"port\": \"$port\", \"ipv6\": \"$(curl ifconfig.me 2>/dev/null || echo 'N/A')\"}"
@@ -535,9 +506,9 @@ ssh::info() {
         return 1
     fi
 
-    if ! [[ "$(./proxypi.sh ping-wireguard -a)" =~ "10.0.0.$proxy_id" ]]; then
-        return 2
-    fi
+#    if ! [[ "$(./proxypi.sh ping-wireguard -a)" =~ "10.0.0.$proxy_id" ]]; then
+#        return 2
+#    fi
 
     local instructions="echo \
         \$(hostname) \
@@ -563,7 +534,7 @@ ssh::info() {
 #######################################
 ssh::ram() {
     local proxy_id=$1
-    local port="${SSH_NETWORK_PREFIX + $proxy_id}"
+    local port=$((SSH_NETWORK_BASE + proxy_id - 2))
 
     if [[ "$proxy_id" == "1" ]]; then
         echo "{\"ram_specs\": \"$(free -h | awk '/^Mem:/{print $2}')\", \"ram_usage\": \"$(free | awk '/^Mem:/{printf "%.0f%%", $3/$2*100}')\"}"
@@ -610,12 +581,12 @@ wireguard::ping() {
         local column_size=(24 16 24 16 24 16)
         draw_tabular_header column_size column_name
     else
-        echo "$WIREGUARD_NETWORK_PREFIX.$WIREGUARD_LIGHTHOUSE_ID"
+        echo "$WIREGUARD_NETWORK_PREFIX.1"
     fi
 
-    local instructions='echo $(hostname) $(ping -c PING_COUNT PING_TARGET | awk '\''/packet loss/{loss=$6} /(rtt|round-trip)/{split($4,a,"/");avg=a[2]} END{print avg,loss}'\'')'
+    local instructions='echo $(hostname) echo $PROXY_ID $(ping -c PING_COUNT PING_TARGET | awk '\''/packet loss/{loss=$6} /(rtt|round-trip)/{split($4,a,"/");avg=a[2]} END{print avg,loss}'\'')'
     instructions="${instructions//PING_COUNT/${wireguard_ping_sample_size}}"
-    instructions="${instructions//PING_TARGET/${WIREGUARD_NETWORK_PREFIX}.${WIREGUARD_LIGHTHOUSE_ID}}"
+    instructions="${instructions//PING_TARGET/${WIREGUARD_NETWORK_PREFIX}.1}"
     
 
 
@@ -623,8 +594,7 @@ wireguard::ping() {
     for port in $(_proxypi_listen_ssh); do
         (
             ssh_result=$(_proxypi_execute_command "$port" "$instructions")
-            read proxypi_hostname upside_latency upside_loss <<< "$ssh_result"
-            proxypi_id=$(_get_proxypi_id "$proxypi_hostname")
+            read proxypi_hostname proxypi_id upside_latency upside_loss <<< "$ssh_result"
             target="${WIREGUARD_NETWORK_PREFIX}.${proxypi_id}"
 
             # If no packets where exchanged (ie proxy is not connected)
@@ -667,17 +637,16 @@ wireguard::ping() {
 wireguard::load() {
     local instructions="echo \
         \$(hostname) \
+        \$(echo \$PROXY_ID) \
         \$(sudo wg show wg0 public-key)"
 
-    local ssh_result proxypi_hostname proxypi_public_key proxypi_id
+    local ssh_result proxypi_hostname proxypi_id proxypi_public_key
 
     # TODO (ahoone): No parallelization // RACE CONDITION ON WG SET WG0 PEER AND SAVE
 
     for port in $(_proxypi_listen_ssh); do
         ssh_result=$(_proxypi_execute_command "$port" "$instructions")
-        read proxypi_hostname proxypi_public_key <<< "$ssh_result"
-
-        proxypi_id=$(_get_proxypi_id "$proxypi_hostname")
+        read proxypi_hostname proxypi_id proxypi_public_key <<< "$ssh_result"
 
         if [ -z "$proxypi_public_key" ]; then
             echob "ProxyPi $proxypi_hostname have not been initialized (no public key)"

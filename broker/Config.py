@@ -5,10 +5,8 @@ import ipaddress
 class Config:
 
     HTTP_PORT_SCRAPER = os.environ["HTTP_PORT_SCRAPER"]
-    NODE_ID_RANGE_REGEX = os.environ["NODE_ID_RANGE_REGEX"]
     NODE_ROLE = os.environ["NODE_ROLE"].split(",")
-    SSH_NETWORK_PREFIX = os.environ["SSH_NETWORK_PREFIX"]
-    WIREGUARD_LIGHTHOUSE_ID = os.environ["WIREGUARD_LIGHTHOUSE_ID"]
+    SSH_NETWORK_BASE = os.environ["SSH_NETWORK_BASE"]
     WIREGUARD_NETWORK_PREFIX = os.environ["WIREGUARD_NETWORK_PREFIX"]
 
     if "LIGHTHOUSE" not in NODE_ROLE:

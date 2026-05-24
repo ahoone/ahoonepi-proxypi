@@ -6,8 +6,7 @@ from time import sleep
 
 HTTP_PORT_BROKER = os.getenv("HTTP_PORT_BROKER")
 WIREGUARD_NETWORK_PREFIX = os.getenv("WIREGUARD_NETWORK_PREFIX")
-WIREGUARD_LIGHTHOUSE_ID = os.getenv("WIREGUARD_LIGHTHOUSE_ID")
-ADDRESS = f"{WIREGUARD_NETWORK_PREFIX}.{WIREGUARD_LIGHTHOUSE_ID}:{HTTP_PORT_BROKER}"
+ADDRESS = f"{WIREGUARD_NETWORK_PREFIX}.1:{HTTP_PORT_BROKER}"
 
 TIMEOUT_REQUESTS = 10  # in seconds, may take some time as we are waiting for either "complete" or "interactive" status
 TIME_BETWEEN_TESTS = 0.5  # in seconds

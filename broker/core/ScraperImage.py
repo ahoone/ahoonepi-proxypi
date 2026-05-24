@@ -14,8 +14,6 @@ sys.path.insert(0, "/plugins")
 import proxypi
 
 PROXYPI_COMMAND_INFO = Template("info $node_id")
-PROXYPI_COMMAND_RAM = Template("ram $node_id")
-TIMEOUT_SCRAPER_FETCHING_INFO = 2  # seconds
 TIMEOUT_SCRAPER_HTTP_REQUEST = 4  # seconds
 
 
@@ -38,6 +36,7 @@ class ScraperImage:
             "online": self.online,
             "hostname": self.hostname,
             "node_id": self.passport.node_id,
+            "passport": self.passport,
             "ram_specs": self.ram_specs,
             "ram_usage": self.ram_usage,
             "ipv6": self.ipv6,
@@ -61,18 +60,22 @@ class ScraperImage:
         self.__dict__.update(json.loads(response))
 
     async def __fetch_info(self) -> None:
-        ram_response = await proxypi.run(
-            PROXYPI_COMMAND_RAM.safe_substitute(node_id=self.passport.node_id)
+        info_response = requests.get(
+            f"http://{self.passport.vpn_address}:{Config.HTTP_PORT_SCRAPER}/health",
+            timeout=TIMEOUT_SCRAPER_HTTP_REQUEST,
         )
-        data = json.loads(ram_response)
-        self.ram_specs = data["ram_specs"]
-        self.ram_usage = data["ram_usage"]
+        print(info_response.text)
+        info_response_as_dict = json.loads(info_response.text)
+        try:
+            self.__dict__.update(info_response_as_dict)
+        except Exception as e:
+            print(e)
 
         self.browsers = {}
         # SHOULD BE UPGRADED TO HTTPX
         scraper_response = requests.get(
             f"http://{self.passport.vpn_address}:{Config.HTTP_PORT_SCRAPER}/browsers",
-            timeout=TIMEOUT_SCRAPER_FETCHING_INFO,  # the timeout seems to block the update
+            timeout=TIMEOUT_SCRAPER_HTTP_REQUEST,
         )
         scraper_response_as_dict = json.loads(scraper_response.text)
         if not scraper_response.ok:

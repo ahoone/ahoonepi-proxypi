@@ -66,11 +66,15 @@ async def health() -> Dict[str, Any]:
     Also useful to get the availability of the scraper.
     """
     try:
+        ram_total, ram_used, ram_free = map(int, os.popen("free -b").readlines()[1].split()[1:4])
+
         return {
             "is_running_as_root": os.getuid() == 0,
             "can_create_browser": Config.MAX_INSTANCES_PER_SCRAPER
             - len(app.state.scraper.browsers)
             > 0,
+            "ram_specs": f"{ram_total // 1024**3}GiB",
+            "ram_usage": f"{(100 * ram_used) // ram_total}%",
         }
     except Exception as e:
         line = sys.exc_info()[2].tb_lineno
