@@ -348,6 +348,8 @@ ssh::exec() {
 #######################################
 ssh::copy_keys() {
     for port in $(_proxypi_listen_ssh); do
+        local proxy_id=$((port - SSH_NETWORK_BASE + 2))
+        echob "for $port (proxy id: $proxy_id)"
         ssh-copy-id -i "$LIGHTHOUSE_PRIVATE_KEY_PATH".pub -p "$port" "$PROXYPI_USER"@localhost
     done
 }

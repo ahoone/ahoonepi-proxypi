@@ -13,7 +13,7 @@ set -euo pipefail
 : "${PROXY_ID:?Environment variable PROXY_ID not set}"
 : "${SSH_NETWORK_BASE:?Environment variable SSH_NETWORK_BASE not set}"
 
-local port=$((SSH_NETWORK_BASE + PROXY_ID - 2))
+port=$((SSH_NETWORK_BASE + PROXY_ID - 2))
 
 ssh-keygen -t ed25519 -f ~/.ssh/id_lighthouse -N ""
 ssh-copy-id -i ~/.ssh/id_lighthouse.pub -p ${LIGHTHOUSE_SSH_PORT} ${LIGHTHOUSE_DUMMY_USER}@${LIGHTHOUSE_IP}
@@ -38,7 +38,7 @@ ExecStart=/usr/bin/ssh -N -T \
     -o StrictHostKeyChecking=accept-new \
     -i ${CURRENT_HOME}/.ssh/id_lighthouse \
     -p ${LIGHTHOUSE_SSH_PORT} \
-    -R"${port}:localhost:22 \
+    -R ${port}:localhost:22 \
     ${LIGHTHOUSE_DUMMY_USER}@${LIGHTHOUSE_IP}
 Restart=always
 RestartSec=10
