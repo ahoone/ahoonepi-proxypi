@@ -166,10 +166,10 @@ _proxypi_listen_ssh() {
         return $EXIT_CODE_NOT_IMPLEMENTED
     fi
     
-    START=$SSH_NETWORK_BASE
-    END=$((SSH_NETWORK_BASE + NETWORK_SIZE - 1))
+    local start=$SSH_NETWORK_BASE
+    local end=$((SSH_NETWORK_BASE + NETWORK_SIZE - 1))
     
-    ports=$(netstat -an | grep '0.0.0.0' | awk -v start=2202 -v end=2456 '{split($4, buf, ":"); port=buf[2]; if (port>=start && port<=end) print port}')
+    ports=$(netstat -an | grep '0.0.0.0' | awk -v start=$start -v end=$end '{split($4, buf, ":"); port=buf[2]; if (port>=start && port<=end) print port}')
     
     if [ -z "$ports" ]; then
         echob "No proxies found." >&2
@@ -370,7 +370,6 @@ ssh::connect() {
 
     ssh -i "$LIGHTHOUSE_PRIVATE_KEY_PATH" -p "$port" "$PROXYPI_USER"@localhost
 }
-
 
 
 #######################################
