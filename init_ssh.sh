@@ -47,6 +47,8 @@ RestartSec=10
 WantedBy=multi-user.target
 EOF
 
+# If you want to change the proxy id
+# sudo systemctl stop reverse-ssh-tunnel.service
 sudo systemctl daemon-reload
 sudo systemctl enable reverse-ssh-tunnel.service
 sudo systemctl start reverse-ssh-tunnel.service

@@ -161,7 +161,7 @@ help() {
 #######################################
 _proxypi_listen_ssh() {
     if [[ "$WIREGUARD_CIDR_PREFIX" -eq 24 ]]; then
-        NETWORK_SIZE=255
+        NETWORK_SIZE=253
     else
         return $EXIT_CODE_NOT_IMPLEMENTED
     fi
@@ -585,18 +585,20 @@ wireguard::ping() {
         echo "$WIREGUARD_NETWORK_PREFIX.1"
     fi
 
-    local instructions='echo $(hostname) echo $PROXY_ID $(ping -c PING_COUNT PING_TARGET | awk '\''/packet loss/{loss=$6} /(rtt|round-trip)/{split($4,a,"/");avg=a[2]} END{print avg,loss}'\'')'
+    local instructions='echo $(hostname) $(ping -c PING_COUNT PING_TARGET | awk '\''/packet loss/{loss=$6} /(rtt|round-trip)/{split($4,a,"/");avg=a[2]} END{print avg,loss}'\'')'
     instructions="${instructions//PING_COUNT/${wireguard_ping_sample_size}}"
     instructions="${instructions//PING_TARGET/${WIREGUARD_NETWORK_PREFIX}.1}"
     
 
 
-    local ssh_result target proxypi_hostname proxypi_id upside_latency upside_loss downside_result downside_latency downside_loss entry
+    local ssh_result target proxypi_hostname upside_latency upside_loss downside_result downside_latency downside_loss entry
     for port in $(_proxypi_listen_ssh); do
         (
             ssh_result=$(_proxypi_execute_command "$port" "$instructions")
-            read proxypi_hostname proxypi_id upside_latency upside_loss <<< "$ssh_result"
-            target="${WIREGUARD_NETWORK_PREFIX}.${proxypi_id}"
+            read proxypi_hostname upside_latency upside_loss <<< "$ssh_result"
+            local proxy_id=$((port - SSH_NETWORK_BASE + 2))
+            target="${WIREGUARD_NETWORK_PREFIX}.${proxy_id}"
+
 
             # If no packets where exchanged (ie proxy is not connected)
             if [[ "$upside_latency" == *"100%"* ]]; then
@@ -638,7 +640,6 @@ wireguard::ping() {
 wireguard::load() {
     local instructions="echo \
         \$(hostname) \
-        \$(echo \$PROXY_ID) \
         \$(sudo wg show wg0 public-key)"
 
     local ssh_result proxypi_hostname proxypi_id proxypi_public_key
@@ -647,12 +648,13 @@ wireguard::load() {
 
     for port in $(_proxypi_listen_ssh); do
         ssh_result=$(_proxypi_execute_command "$port" "$instructions")
-        read proxypi_hostname proxypi_id proxypi_public_key <<< "$ssh_result"
+        read proxypi_hostname proxypi_public_key <<< "$ssh_result"
+        local proxy_id=$((port - SSH_NETWORK_BASE + 2))
 
         if [ -z "$proxypi_public_key" ]; then
             echob "ProxyPi $proxypi_hostname have not been initialized (no public key)"
         else
-            sudo wg set wg0 peer ${proxypi_public_key} allowed-ips ${WIREGUARD_NETWORK_PREFIX}.${proxypi_id}/32 || return 1
+            sudo wg set wg0 peer ${proxypi_public_key} allowed-ips ${WIREGUARD_NETWORK_PREFIX}.${proxy_id}/32 || return 1
             sudo wg-quick save wg0 2>/dev/null
         fi
     done
@@ -744,8 +746,8 @@ while [[ $# -gt 0 ]]; do
 
     case "$fct" in
         connect)
-            if [[ -z "$1" || ! "$1" =~ ^([2-9]|[1-9][0-9])$ ]]; then
-                echob "Error: the id specified is outside the range 2-99"
+            if [[ -z "$1" || "$1" -lt 2 || "$1" -gt 254 ]]; then
+                echob "Error: the id specified is outside the range 2-254"
                 echob "Example: $0 connect 2"
                 help; exit $EXIT_CODE_WRONG_PARAMETERS
             fi
@@ -756,8 +758,8 @@ while [[ $# -gt 0 ]]; do
             ;;
 
         info)
-            if [[ -z "$1" || ! "$1" =~ ^([1-9]|[1-9][0-9])$ ]]; then
-                echob "Error: the id specified is outside the range 1-99"
+            if [[ -z "$1" || "$1" -lt 1 || "$1" -gt 254 ]]; then
+                echob "Error: the id specified is outside the range 1-254"
                 echob "Example: $0 connect 2"
                 help; exit $EXIT_CODE_WRONG_PARAMETERS
             fi
@@ -768,8 +770,8 @@ while [[ $# -gt 0 ]]; do
             ;;
 
         ram)
-            if [[ -z "$1" || ! "$1" =~ ^([1-9]|[1-9][0-9])$ ]]; then
-                echob "Error: the id specified is outside the range 1-99"
+            if [[ -z "$1" || "$1" -lt 1 || "$1" -gt 254 ]]; then
+                echob "Error: the id specified is outside the range 1-254"
                 echob "Example: $0 connect 2"
                 help; exit $EXIT_CODE_WRONG_PARAMETERS
             fi
@@ -802,8 +804,8 @@ while [[ $# -gt 0 ]]; do
             ;;
 
         restart)
-            if [[ -z "$1" || ! "$1" =~ ^([1-9]|[1-9][0-9])$ ]]; then
-                echob "Error: the id specified is outside the range 1-99"
+            if [[ -z "$1" || "$1" -lt 1 || "$1" -gt 254 ]]; then
+                echob "Error: the id specified is outside the range 1-254"
                 echob "Example: $0 restart 2"
                 help; exit $EXIT_CODE_WRONG_PARAMETERS
             fi
