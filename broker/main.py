@@ -9,6 +9,7 @@ from fastapi.responses import (
     JSONResponse,
     StreamingResponse,
 )
+import httpx
 import os
 from starlette.background import BackgroundTask
 import sys

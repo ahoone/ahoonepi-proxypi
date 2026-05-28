@@ -22,10 +22,11 @@ class ScraperImage:
     def __init__(self) -> None:
         self.online: bool = None
         self.passport: NodeIdentifier = None
-        self.hostname: str = None  # UNIQUE
+        self.hostname: str = None  # should be UNIQUE
         self.ipv6: str = None
         self.ram_specs: str = None
         self.ram_usage: str = None
+        self.available: bool = False
         # self.electricity_consumption: ?
         self.browsers: Dict[str, BrowserImage] = {}  # instance_id: browser
         self.score: float = 0.0
@@ -55,55 +56,41 @@ class ScraperImage:
         self.online = True
         self.passport = NodeIdentifier(node_id)
         response = await proxypi.run(
-            PROXYPI_COMMAND_INFO.safe_substitute(node_id=self.passport.node_id)
+            PROXYPI_COMMAND_INFO.safe_substitute(node_id=node_id)
         )
-        self.__dict__.update(json.loads(response))
-
-    async def __fetch_info(self) -> None:
-        info_response = requests.get(
-            f"http://{self.passport.vpn_address}:{Config.HTTP_PORT_SCRAPER}/health",
-            timeout=TIMEOUT_SCRAPER_HTTP_REQUEST,
-        )
-        print(info_response.text)
-        info_response_as_dict = json.loads(info_response.text)
-        try:
-            self.__dict__.update(info_response_as_dict)
-        except Exception as e:
-            print(e)
-
-        self.browsers = {}
-        # SHOULD BE UPGRADED TO HTTPX
-        scraper_response = requests.get(
-            f"http://{self.passport.vpn_address}:{Config.HTTP_PORT_SCRAPER}/browsers",
-            timeout=TIMEOUT_SCRAPER_HTTP_REQUEST,
-        )
-        scraper_response_as_dict = json.loads(scraper_response.text)
-        if not scraper_response.ok:
-            return
-        for instance_id, browser_as_dict in scraper_response_as_dict.items():
-            self.browsers[instance_id] = BrowserImage(
-                instance_id, self.passport, browser_as_dict
-            )
-
-        # dropping outdated/killed instances
-        # emptying self.browsers may be too memory intensive because of the browsing history
-        # but the BrowserImage just on top is always reloading everything...
+        response_as_dict = json.loads(response)
+        self.hostname = response_as_dict["hostname"]
+        self.ipv6 = response_as_dict["ipv6"]
 
     async def update(self) -> None:
-        await self.__fetch_info()
-        # anything to update for the browsers?
-
-    async def available(self) -> bool:
-        """
-        the MAX_INSTANCES_PER_SCRAPER should be move in an overall config file
-        """
         async with httpx.AsyncClient() as client:
-            response = await client.get(
-                f"http://{self.passport.vpn_address}:{Config.HTTP_PORT_SCRAPER}/available"
-            )
-            if response.status_code != 200:
-                return False
-            return json.loads(response.text)["available"]
+            try:
+                health_response, scraper_response = await asyncio.gather(
+                    client.get(
+                        f"http://{self.passport.vpn_address}:{Config.HTTP_PORT_SCRAPER}/health",
+                        timeout=TIMEOUT_SCRAPER_HTTP_REQUEST,
+                    ),
+                    client.get(
+                        f"http://{self.passport.vpn_address}:{Config.HTTP_PORT_SCRAPER}/browsers",
+                        timeout=TIMEOUT_SCRAPER_HTTP_REQUEST,
+                    ),
+                )
+            except Exception as e:
+                print(e)
+                return
+
+        if health_response.status_code == 200:
+            health_response_as_dict = json.loads(health_response.text)
+            self.available = health_response_as_dict["can_create_browser"]
+            self.ram_specs = health_response_as_dict["ram_specs"]
+            self.ram_usage = health_response_as_dict["ram_usage"]
+
+        if scraper_response.status_code == 200:
+            self.browsers = {}
+            for instance_id, browser_as_dict in json.loads(scraper_response.text).items():
+                self.browsers[instance_id] = BrowserImage(
+                    instance_id, self.passport, browser_as_dict
+                )
 
     async def new_instance(
         self,

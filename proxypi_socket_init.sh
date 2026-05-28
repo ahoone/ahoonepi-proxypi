@@ -4,12 +4,15 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 sudo apt-get install -y socat
 
+# we specify the service user is "admin"
+# because the id_proxy_access keys are stored in its .ssh
 sudo bash -c "cat > /etc/systemd/system/proxypi.service" << EOF
 [Unit]
 Description=Proxypi Access Unix socket server
 After=network.target
 
 [Service]
+User=admin
 Environment=TERM=xterm-256color
 WorkingDirectory=$SCRIPT_DIR
 ExecStartPre=rm -f /tmp/proxypi.sock

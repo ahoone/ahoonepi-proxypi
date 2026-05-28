@@ -92,7 +92,7 @@ class Broker:
         returns true if successfully creates a browser
         """
         tasks = [
-            (vpn_address, scraper.available())
+            (vpn_address, scraper.available)
             for vpn_address, scraper in self.scrapers.items()
             if scraper.online
         ]
