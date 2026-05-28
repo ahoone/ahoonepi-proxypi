@@ -125,6 +125,10 @@ if [[ "$NODE_ROLE" = *"PROXY"* ]]; then
 
     echob "PROXY:"
 
+    if [[ -z "$1" || "$1" -lt 2 || "$1" -gt 254 ]]; then
+        echob "duck off, proxy id must be in [2,254]"; exit
+    fi
+
     echob "initializing ssh reverse tunnel..."
     ./init_ssh.sh
 
