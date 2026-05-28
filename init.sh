@@ -125,7 +125,7 @@ if [[ "$NODE_ROLE" = *"PROXY"* ]]; then
 
     echob "PROXY:"
 
-    if [[ -z "$1" || "$1" -lt 2 || "$1" -gt 254 ]]; then
+    if [[ -z "$PROXY_ID" || "$PROXY_ID" -lt 2 || "$PROXY_ID" -gt 254 ]]; then
         echob "duck off, proxy id must be in [2,254]"; exit
     fi
 
