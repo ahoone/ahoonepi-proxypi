@@ -4,14 +4,15 @@ USER root
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y iputils-ping
+COPY aptfile .
+RUN apt-get update && \
+    xargs -a aptfile apt-get install -y && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt /app/requirements.txt
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-RUN pip install --no-cache-dir -r /app/requirements.txt
-
-COPY . /app/
-
-RUN chmod +x /app/start.sh
-
+COPY . .
+RUN chmod +x start.sh
 CMD ["/app/start.sh"]

@@ -1,6 +1,10 @@
 #!/bin/bash
-source ui.sh
-source .env
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+source "$SCRIPT_DIR/ui.sh"
+source "$SCRIPT_DIR/.env"
+source "$SCRIPT_DIR/config.env"
 
 
 #######################################
@@ -11,11 +15,6 @@ source .env
 echob "detected role: $NODE_ROLE"
 
 declare -A REQUIRED_ENV_VAR=(
-    [DDNS_UPKEEPER]="
-        OVH_USER
-        OVH_PASS
-        OVH_HOST
-    "
     [LIGHTHOUSE]="
         GIT_HOSTING_PROVIDER
         GIT_REPOSITORY
@@ -103,34 +102,17 @@ if [[ "$NODE_ROLE" = *"LIGHTHOUSE"* ]]; then
         sudo adduser "$LIGHTHOUSE_DUMMY_USER"
     fi
 
-    echob "creating $(pwd)/.ssh folder..."
-    mkdir -p .ssh
-    if ls .ssh | grep -q "id_proxy_access"; then
+    echob "creating $HOME/.ssh folder..."
+    mkdir -p "$HOME/.ssh"
+    if ls "$HOME/.ssh" | grep -q "id_proxy_access"; then
         echo "ssh public key for proxies already exists."
     else 
-        ssh-keygen -t ed25519 -f ~/.ssh/id_proxy_access -N ""
-        echob "Created public ssh key for the proxies at '$(pwd)/.ssh/id_proxy_access.pub'." 
+        ssh-keygen -t ed25519 -f "$HOME/.ssh/id_proxy_access" -N ""
+        echob "Created public ssh key for the proxies at '$HOME/.ssh/id_proxy_access.pub'." 
     fi | draw_box
 
-    echob "starting Nginx Proxy Manager docker container..."
-    echo -e $(sudo docker compose -f nginx-proxy-manager/docker-compose.yml up -d 2>&1) | draw_box && echob "✓ NPM running." || echob "✗ NPM failed running."
-
-    echob "starting broker container..."
-    echo -e $(sudo docker compose -f broker/docker-compose.yml --env-file .env up --build -d 2>&1) | draw_box && echob "✓ Broker running." || echob "✗ Broker failed running."
-
-fi
-
-
-#######################################
-#######################################
-
-
-if [[ "$NODE_ROLE" = *"DDNS_UPKEEPER"* ]]; then
-
-    echob "DDNS_UPKEEPER:"
-
-    echob "initializing ddns crontab job..."
-    ./ddns/init_ddns.sh
+#    echob "starting broker container..."
+#    echo -e $(sudo docker compose -f broker/docker-compose.yml --env-file .env up --build -d 2>&1) | draw_box && echob "✓ Broker running." || echob "✗ Broker failed running."
 
 fi
 
@@ -142,6 +124,10 @@ fi
 if [[ "$NODE_ROLE" = *"PROXY"* ]]; then
 
     echob "PROXY:"
+
+    if [[ -z "$1" || "$1" -lt 2 || "$1" -gt 254 ]]; then
+        echob "duck off, proxy id must be in [2,254]"; exit
+    fi
 
     echob "initializing ssh reverse tunnel..."
     ./init_ssh.sh
@@ -157,7 +143,7 @@ if [[ "$NODE_ROLE" = *"SCRAPER"* ]]; then
 
     echob "SCRAPER:"
 
-    echob "starting scraper container..."
-    echo -e $(sudo docker compose -f scraper/docker-compose.yml --env-file .env up --build -d 2>&1) | draw_box && echob "✓ Scraper running." || echob "✗ Scraper failed running."
+#    echob "starting scraper container..."
+#    echo -e $(sudo docker compose -f scraper/docker-compose.yml --env-file .env up --build -d 2>&1) | draw_box && echob "✓ Scraper running." || echob "✗ Scraper failed running."
 
 fi

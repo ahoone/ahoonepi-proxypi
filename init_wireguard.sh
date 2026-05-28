@@ -1,6 +1,10 @@
 #!/bin/bash
-source ui.sh
-source .env
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+source "$SCRIPT_DIR/ui.sh"
+source "$SCRIPT_DIR/.env"
+source "$SCRIPT_DIR/config.env"
 
 set -euo pipefail
 
@@ -29,9 +33,9 @@ if [[ "$NODE_ROLE" = *"LIGHTHOUSE"* ]]; then
     sudo bash -c "cat > /etc/wireguard/wg0.conf" << EOF
 [Interface]
 # Lighthouse server config
-Address = 10.0.0.1/24
-ListenPort = ${LIGHTHOUSE_WIREGUARD_LISTEN_PORT}
-PrivateKey = ${PRIVATE_KEY}
+Address = 10.0.0.1/$WIREGUARD_CIDR_PREFIX
+ListenPort = $LIGHTHOUSE_WIREGUARD_LISTEN_PORT
+PrivateKey = $PRIVATE_KEY
 
 # Enable IP forwarding
 PostUp = sysctl -w net.ipv4.ip_forward=1
@@ -45,14 +49,14 @@ if [[ "$NODE_ROLE" = *"PROXY"* ]]; then
     sudo bash -c "cat > /etc/wireguard/wg0.conf" << EOF
 [Interface]
 PrivateKey = ${PRIVATE_KEY}
-Address = 10.0.0.$(printf "%02d" "$PROXY_ID")/24
+Address = 10.0.0.${PROXY_ID}/${WIREGUARD_CIDR_PREFIX}
 ListenPort = ${LIGHTHOUSE_WIREGUARD_LISTEN_PORT}
 
 [Peer]
 # Lighthouse server
 PublicKey = ${LIGHTHOUSE_WIREGUARD_PUBLIC_KEY}
 Endpoint = ${LIGHTHOUSE_IP}:${LIGHTHOUSE_WIREGUARD_LISTEN_PORT}
-AllowedIPs = 10.0.0.0/24
+AllowedIPs = 10.0.0.0/${WIREGUARD_CIDR_PREFIX}
 PersistentKeepalive = 25
 EOF
 

@@ -1,0 +1,21 @@
+import datetime
+from pydantic import HttpUrl, BaseModel, Field
+from typing import Optional
+
+
+class GetRequest(BaseModel):
+    url: str
+
+
+class ScrapeRequest(BaseModel):
+    """
+    antwortzeit is the time you hope the response
+    default is the time of receiving the request
+    else is an isoformat string of datetime.datetime
+    """
+
+    url: HttpUrl
+    antwortzeit: Optional[datetime.datetime] = Field(
+        default_factory=datetime.datetime.now
+    )
+    tag: str

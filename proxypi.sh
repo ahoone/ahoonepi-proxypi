@@ -2,14 +2,13 @@
 #
 # https://google.github.io/styleguide/shellguide.html
 
-source ui.sh
-source .env
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-`# should use $WIREGUARD_PROXYPI_RANGE_REGEX here`
-SSH_PORT_PROXYPI_RANGE_REGEX="$SSH_NETWORK_PREFIX[0-9]{2}"
+source "$SCRIPT_DIR/ui.sh"
+source "$SCRIPT_DIR/.env"
+source "$SCRIPT_DIR/config.env"
 
-PROXYPI_USER="admin"
-LIGHTHOUSE_PRIVATE_KEY_PATH="/home/admin/.ssh/id_proxy_access"
+LIGHTHOUSE_PRIVATE_KEY_PATH="$HOME/.ssh/id_proxy_access"
 
 WIREGUARD_DEFAULT_PING_SAMPLE_SIZE="1"
 DEFAULT_SSH_CONNECTION_PLUS_INSTRUCTIONS_TIMEOUT="16"
@@ -149,25 +148,11 @@ help() {
 
 
 #######################################
-# Given the proxypi hostname output its index without heading 0
-# Arguments:
-#   $1: hostname
-# Outputs:
-#   Index to stdout
-# Returns:
-#   0 on success
-#######################################
-_get_proxypi_id() {
-    proxypi_hostname=$1
-    proxypi_id=$(echo "$proxypi_hostname" | tr -d -c 0-9)
-    echo $((10#$proxypi_id))
-}
-
-
-#######################################
-# Examines open ports between $SSH_NETWORK_PREFIX02 and $SSH_NETWORK_PREFIX99
+# Examines open ports in the specified range
 # Globals:
-#   SSH_PORT_PROXYPI_RANGE_REGEX
+#   NETWORK_SIZE
+#   SSH_NETWORK_BASE
+#   WIREGUARD_CIDR_PREFIX
 # Outputs:
 #   Ports to stdout
 # Returns:
@@ -175,13 +160,17 @@ _get_proxypi_id() {
 #   1 on no proxies found
 #######################################
 _proxypi_listen_ssh() {
-    ports=$(
-        netstat -an | \
-        grep -F "LISTEN " | \
-        grep -F "tcp6" | \
-        grep -oE $SSH_PORT_PROXYPI_RANGE_REGEX | \
-        sort -n
-    )
+    if [[ "$WIREGUARD_CIDR_PREFIX" -eq 24 ]]; then
+        NETWORK_SIZE=253
+    else
+        return $EXIT_CODE_NOT_IMPLEMENTED
+    fi
+    
+    local start=$SSH_NETWORK_BASE
+    local end=$((SSH_NETWORK_BASE + NETWORK_SIZE - 1))
+    
+    ports=$(netstat -an | grep '0.0.0.0' | awk -v start=$start -v end=$end '{split($4, buf, ":"); port=buf[2]; if (port>=start && port<=end) print port}')
+    
     if [ -z "$ports" ]; then
         echob "No proxies found." >&2
         echo ""
@@ -235,9 +224,9 @@ _proxypi_execute_command() {
 #######################################
 ssh::ping() {
 
-    local column_name=("HOSTNAME" "PORT" "IPv6 ADDRESS" "SSH (RTT) (ms)" "INTERNET (ms)")
+    local column_name=("HOSTNAME" "PROXY ID" "PORT" "IPv6 ADDRESS" "SSH (RTT) (ms)" "INTERNET (ms)")
     if ! "$FLAG_PING_INFO_FROM_VPN_ADDRESS"; then
-        local column_size=(24 8 45 16 16)
+        local column_size=(24 8 8 45 16 16)
         draw_tabular_header column_size column_name
     else
         local vpn_address=$FLAG_PARAMETER_VPN_ADDRESS
@@ -251,11 +240,12 @@ ssh::ping() {
     local internet_end_time=$(date +%s%3N)
     local internet_latency=$((internet_end_time - internet_start_time))
 
-    local label="$hostname $(echob '(lighthouse)')"
-    local entry=("$label" "" "$ipv6" "" "${internet_latency}")
+    local label_hostname="$hostname $(echob '(lighthouse)')"
+    local label_proxy_id="$(echob '1')"
+    local entry=("$label_hostname" "$label_proxy_id" "" "$ipv6" "" "${internet_latency}")
     if ! "$FLAG_PING_INFO_FROM_VPN_ADDRESS"; then
         draw_tabular_row column_size entry
-    elif [[ "$vpn_address" == "$WIREGUARD_NETWORK_PREFIX.$WIREGUARD_LIGHTHOUSE_ID" ]]; then
+    elif [[ "$vpn_address" == "$WIREGUARD_NETWORK_PREFIX.1" ]]; then
         echo "${entry[@]}"
     fi
 
@@ -264,6 +254,7 @@ ssh::ping() {
 
     local instructions="echo \
         \$(hostname) \
+        \$(source ahoonepi-proxypi/.env && echo \$PROXY_ID) \
         \$(date +%s%3N) \
         \$(curl ifconfig.me 2>/dev/null || echo 'N/A') \
         \$(date +%s%3N)"
@@ -281,21 +272,21 @@ ssh::ping() {
             
             ssh_result=$(_proxypi_execute_command "$port" "$instructions")
 
-            if [ -z "$ssh_result" ]; then
-                if ! "$FLAG_PING_INFO_FROM_VPN_ADDRESS"; then
-                    entry=("---" "$(echob $port)" "---" "$(echob UNREACHABLE)" "---")
-                    draw_tabular_row column_size entry
-                else
-                    continue
-                fi
-            fi
+#            if [ -z "$ssh_result" ]; then
+#                if ! "$FLAG_PING_INFO_FROM_VPN_ADDRESS"; then
+#                    entry=("---" "$(echob $port)" "---" "$(echob UNREACHABLE)" "---")
+#                    draw_tabular_row column_size entry
+#                else
+#                    continue
+#                fi
+#            fi
 
-            read hostname internet_start_time ipv6 internet_end_time <<< "$ssh_result"
+            read hostname proxy_id internet_start_time ipv6 internet_end_time <<< "$ssh_result"
             
             ssh_latency=$((ssh_end_time - ssh_start_time))
             internet_latency=$((internet_end_time - internet_start_time))
             
-            entry=("$hostname" "$port" "$ipv6" "$ssh_latency" "$internet_latency")
+            entry=("$hostname" "$proxy_id" "$port" "$ipv6" "$ssh_latency" "$internet_latency")
             if ! "$FLAG_PING_INFO_FROM_VPN_ADDRESS"; then
                 draw_tabular_row column_size entry
             else
@@ -357,6 +348,8 @@ ssh::exec() {
 #######################################
 ssh::copy_keys() {
     for port in $(_proxypi_listen_ssh); do
+        local proxy_id=$((port - SSH_NETWORK_BASE + 2))
+        echob "for $port (proxy id: $proxy_id)"
         ssh-copy-id -i "$LIGHTHOUSE_PRIVATE_KEY_PATH".pub -p "$port" "$PROXYPI_USER"@localhost
     done
 }
@@ -373,10 +366,10 @@ ssh::copy_keys() {
 #######################################
 ssh::connect() {
     local proxy_id=$1
+    local port=$((SSH_NETWORK_BASE + proxy_id - 2))
 
-    ssh -i "$LIGHTHOUSE_PRIVATE_KEY_PATH" -p $SSH_NETWORK_PREFIX"$(printf "%02d" $proxy_id)" "$PROXYPI_USER"@localhost
+    ssh -i "$LIGHTHOUSE_PRIVATE_KEY_PATH" -p "$port" "$PROXYPI_USER"@localhost
 }
-
 
 
 #######################################
@@ -503,7 +496,7 @@ git::pull() {
 #######################################
 ssh::info() {
     local proxy_id=$1
-    local port="$SSH_NETWORK_PREFIX$(printf "%02d" $proxy_id)"
+    local port=$((SSH_NETWORK_BASE + proxy_id - 2))
 
     if [[ "$proxy_id" == "1" ]]; then
         echo "{\"hostname\": \"$(hostname)\", \"port\": \"$port\", \"ipv6\": \"$(curl ifconfig.me 2>/dev/null || echo 'N/A')\"}"
@@ -514,9 +507,9 @@ ssh::info() {
         return 1
     fi
 
-    if ! [[ "$(./proxypi.sh ping-wireguard -a)" =~ "10.0.0.$proxy_id" ]]; then
-        return 2
-    fi
+#    if ! [[ "$(./proxypi.sh ping-wireguard -a)" =~ "10.0.0.$proxy_id" ]]; then
+#        return 2
+#    fi
 
     local instructions="echo \
         \$(hostname) \
@@ -542,7 +535,7 @@ ssh::info() {
 #######################################
 ssh::ram() {
     local proxy_id=$1
-    local port="$SSH_NETWORK_PREFIX$(printf "%02d" $proxy_id)"
+    local port=$((SSH_NETWORK_BASE + proxy_id - 2))
 
     if [[ "$proxy_id" == "1" ]]; then
         echo "{\"ram_specs\": \"$(free -h | awk '/^Mem:/{print $2}')\", \"ram_usage\": \"$(free | awk '/^Mem:/{printf "%.0f%%", $3/$2*100}')\"}"
@@ -589,22 +582,23 @@ wireguard::ping() {
         local column_size=(24 16 24 16 24 16)
         draw_tabular_header column_size column_name
     else
-        echo "$WIREGUARD_NETWORK_PREFIX.$WIREGUARD_LIGHTHOUSE_ID"
+        echo "$WIREGUARD_NETWORK_PREFIX.1"
     fi
 
     local instructions='echo $(hostname) $(ping -c PING_COUNT PING_TARGET | awk '\''/packet loss/{loss=$6} /(rtt|round-trip)/{split($4,a,"/");avg=a[2]} END{print avg,loss}'\'')'
     instructions="${instructions//PING_COUNT/${wireguard_ping_sample_size}}"
-    instructions="${instructions//PING_TARGET/${WIREGUARD_NETWORK_PREFIX}.${WIREGUARD_LIGHTHOUSE_ID}}"
+    instructions="${instructions//PING_TARGET/${WIREGUARD_NETWORK_PREFIX}.1}"
     
 
 
-    local ssh_result target proxypi_hostname proxypi_id upside_latency upside_loss downside_result downside_latency downside_loss entry
+    local ssh_result target proxypi_hostname upside_latency upside_loss downside_result downside_latency downside_loss entry
     for port in $(_proxypi_listen_ssh); do
         (
             ssh_result=$(_proxypi_execute_command "$port" "$instructions")
             read proxypi_hostname upside_latency upside_loss <<< "$ssh_result"
-            proxypi_id=$(_get_proxypi_id "$proxypi_hostname")
-            target="${WIREGUARD_NETWORK_PREFIX}.${proxypi_id}"
+            local proxy_id=$((port - SSH_NETWORK_BASE + 2))
+            target="${WIREGUARD_NETWORK_PREFIX}.${proxy_id}"
+
 
             # If no packets where exchanged (ie proxy is not connected)
             if [[ "$upside_latency" == *"100%"* ]]; then
@@ -648,20 +642,19 @@ wireguard::load() {
         \$(hostname) \
         \$(sudo wg show wg0 public-key)"
 
-    local ssh_result proxypi_hostname proxypi_public_key proxypi_id
+    local ssh_result proxypi_hostname proxypi_id proxypi_public_key
 
     # TODO (ahoone): No parallelization // RACE CONDITION ON WG SET WG0 PEER AND SAVE
 
     for port in $(_proxypi_listen_ssh); do
         ssh_result=$(_proxypi_execute_command "$port" "$instructions")
         read proxypi_hostname proxypi_public_key <<< "$ssh_result"
-
-        proxypi_id=$(_get_proxypi_id "$proxypi_hostname")
+        local proxy_id=$((port - SSH_NETWORK_BASE + 2))
 
         if [ -z "$proxypi_public_key" ]; then
             echob "ProxyPi $proxypi_hostname have not been initialized (no public key)"
         else
-            sudo wg set wg0 peer ${proxypi_public_key} allowed-ips ${WIREGUARD_NETWORK_PREFIX}.${proxypi_id}/32 || return 1
+            sudo wg set wg0 peer ${proxypi_public_key} allowed-ips ${WIREGUARD_NETWORK_PREFIX}.${proxy_id}/32 || return 1
             sudo wg-quick save wg0 2>/dev/null
         fi
     done
@@ -679,22 +672,20 @@ wireguard::load() {
 #######################################
 docker::restart() {
     local node_id=$1
-
+    
     if [[ "$node_id" == "1" ]]; then
-        cd /home/admin
-
+        cd "$SCRIPT_DIR"
         docker compose -f scraper/docker-compose.yml down
-        docker compose -f scraper/docker-compose.yml --env-file .env up --build -d
-
+        docker compose -f scraper/docker-compose.yml --env-file .env --env-file config.env up --build -d
         docker compose -f broker/docker-compose.yml down
-        docker compose -f broker/docker-compose.yml --env-file .env up --build -d
+        docker compose -f broker/docker-compose.yml --env-file .env --env-file config.env up --build -d
     else
         echob "NOT IMPLEMENTED FOR OTHER THAN NODE_ID=1"
         return $EXIT_CODE_NOT_IMPLEMENTED
     fi
-
     # TODO (ahoone): implementing for the proxies
 }
+
 
 #######################################
 #######################################
@@ -755,8 +746,8 @@ while [[ $# -gt 0 ]]; do
 
     case "$fct" in
         connect)
-            if [[ -z "$1" || ! "$1" =~ ^([2-9]|[1-9][0-9])$ ]]; then
-                echob "Error: the id specified is outside the range 2-99"
+            if [[ -z "$1" || "$1" -lt 2 || "$1" -gt 254 ]]; then
+                echob "Error: the id specified is outside the range 2-254"
                 echob "Example: $0 connect 2"
                 help; exit $EXIT_CODE_WRONG_PARAMETERS
             fi
@@ -767,8 +758,8 @@ while [[ $# -gt 0 ]]; do
             ;;
 
         info)
-            if [[ -z "$1" || ! "$1" =~ ^([1-9]|[1-9][0-9])$ ]]; then
-                echob "Error: the id specified is outside the range 1-99"
+            if [[ -z "$1" || "$1" -lt 1 || "$1" -gt 254 ]]; then
+                echob "Error: the id specified is outside the range 1-254"
                 echob "Example: $0 connect 2"
                 help; exit $EXIT_CODE_WRONG_PARAMETERS
             fi
@@ -779,8 +770,8 @@ while [[ $# -gt 0 ]]; do
             ;;
 
         ram)
-            if [[ -z "$1" || ! "$1" =~ ^([1-9]|[1-9][0-9])$ ]]; then
-                echob "Error: the id specified is outside the range 1-99"
+            if [[ -z "$1" || "$1" -lt 1 || "$1" -gt 254 ]]; then
+                echob "Error: the id specified is outside the range 1-254"
                 echob "Example: $0 connect 2"
                 help; exit $EXIT_CODE_WRONG_PARAMETERS
             fi
@@ -813,8 +804,8 @@ while [[ $# -gt 0 ]]; do
             ;;
 
         restart)
-            if [[ -z "$1" || ! "$1" =~ ^([1-9]|[1-9][0-9])$ ]]; then
-                echob "Error: the id specified is outside the range 1-99"
+            if [[ -z "$1" || "$1" -lt 1 || "$1" -gt 254 ]]; then
+                echob "Error: the id specified is outside the range 1-254"
                 echob "Example: $0 restart 2"
                 help; exit $EXIT_CODE_WRONG_PARAMETERS
             fi

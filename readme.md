@@ -1,108 +1,46 @@
 # ahoonepi-proxypi
 
-Repository hosting the infrastructure for all the Pis (installation + proxypi package + components).
+ahoonepi-proxypi provides an infrastructure to control multiple computers using its bash command line library (proxypi),
+and providing an automated scraping setup for the network (ahoonepi).
+It relies on [zendriver](https://github.com/cdpdriver/zendriver) (following [nodriver](https://github.com/ultrafunkamsterdam/nodriver/) abandon), provides chrome or chromium instances with a virtual display via Xvfb,
+all of it inside of containers, and allocates scraping requests to stay undetected.
 
-## TO DO
+# Usage
 
-- You can be both lighthouse and proxy for an extented network (not possible for now, wireguard configuration is overwritten for the steps of LIGHTHOUSE and PROXY)
-- forwarding websites (livebox/# and ahoonepi.fr:81 (nginx proxy manager) for distant access) and 8080 and 8000 (broker and scraper)
-- Nginx Proxy Manager web interface is accessible on localhost, port `81`, but is not exposed to the internet for security reasons.
-- Should add a crontab jobs and a small logs files to automatically ping the proxies to get their status.
+Be aware that the project runs for now with high control:
+- runs with sudo rights,
+- docker commmand line without sudo,
+- creates a dummy user,
+- preferably on a fresh installed OS,
 
-*It is ducking not good because flags' parameters are also treated as flags (not arguments for the function)*
+Start the project on the main computer that will be the lighthouse.
+Create a `.env` and launch `./init.sh` (handles dependencies, ie docker and wireguard).
+After rebooting, check that a `broker` container is running.
+You should be able to access http://localhost:8080/ (or `HTTP_PORT_BROKER` from `config.env`).
 
-| Arg.             | For:                                                                  |
-|------------------|-----------------------------------------------------------------------|
-| -w (ping...)     | web format (list of dictionnaries)                                    |
-| -h               | human readable                                                        |
-| -l               | logs                                                                  |
-| -nwrg            | warnings (terminal window too small)                                  |
-| swarm-execute -o | get output                                                            |
-| ping-cloudflare  | Test if the proxy is able to bypass cloudflare. (nyi)                 |
-| restart          | [restart]="-a -b -s -n node_id"                                       |
-
+To pursue the installation of proxies, creates an `admin` user (defined in `proxypi.sh`).
+Complete the `.env` with the information you need from the lighthouse.
+Be aware that the `PROXY_ID` should be unique among your network, and should be between 2 and 254 included.
+On the lighthouse, run `proxypi load-ssh` and `proxypi load-wireguard`.
+You should now see the proxy appear on the dashboard.
 
 ## Initialization
 
-### Download
-
-```bash
-git clone https://github.com/ahoone/ahoonepi-proxypi .
-cd ahoonepi-proxy
-```
 
 #### `.env`
 
-```bash
-ALLOWED_NETWORKS_BROKER=placeholder
-ALLOWED_NETWORKS_SCRAPER=placeholder
-GIT_BRANCH=
-GIT_HOSTING_PROVIDER=
-GIT_REPOSITORY=
-HTTP_PORT_BROKER=8080
-HTTP_PORT_SCRAPER=8000
-LIGHTHOUSE_DUMMY_USER=proxypi
+```
 LIGHTHOUSE_IP=
 LIGHTHOUSE_SSH_PORT=
-LIGHTHOUSE_WIREGUARD_LISTEN_PORT=51820
 LIGHTHOUSE_WIREGUARD_PUBLIC_KEY=
-NODE_ID_RANGE_REGEX=[1-9][0-9]?
-NODE_ROLE=LIGHTHOUSE,SCRAPER,DDNS_UPKEEPER
-OVH_HOST=
-OVH_PASS=
-OVH_USER=
+NODE_ROLE=  # LIGHTHOUSE, PROXY, SCRAPER
 PROXY_ID=
-SCRAPER_CPUS=1.5
-SCRAPER_MEMORY=2g
-SCRAPER_SHM_SIZE=512mb
-SSH_NETWORK_PREFIX=22
-WIREGUARD_LIGHTHOUSE_ID=1
-WIREGUARD_NETWORK_PREFIX=10.0.0
-```
-
-Roles and components associated:
-- `LIGHTHOUSE` : accepts connections on the specified range and controls them
-- `PROXY` : connects to a lighthouse
-- `SCRAPER` : uses its scraper component
-- `NAS` : joins the lighthouse storage infrastructure
-
-```bash
-./init.sh
-sudo reboot
 ```
 
 
-### Scripts
 
-## Access remote to the server
 
-`SSHFS` is not perfect (unproperly dismount when inactive) and makes the connection crashes if not properly done.
 
-To mount the remote server:
-```bash
-sudo apt install sshfs
-sudo mkdir /mnt/remote
-sudo sshfs -o allow_other,default_permissions user@device:/home/user /mnt/remote
-```
-
-And to disconnect:
-```bash
-sudo fusermount -u /mnt/remote
-```
-
-## Main commands
-
-### Proxies management
-
-Add the alias for the `proxypi` library:
-```bash
-source .bash_aliases
-proxypi
-```
-
-> **It is absolutely normal for wireguard ping to be ~3ms, about 150 times faster than SSH connection, which includes much more steps.**
-
-> **Wireguard default VPN host is 10.0.0.1 so the first ahoonepi proxy is 10.0.0.2 (ahoonepi-proxy-2).**
 
 
 ### Scraper component
@@ -113,7 +51,7 @@ The scraper API runs permanently.
 > The same container is deployed on the proxies.
 
 ```bash
-docker compose -f scraper/docker-compose.yml --env-file .env up --build -d
+docker compose -f scraper/docker-compose.yml --env-file .env --env-file config.env up --build -d
 ```
 
 ```bash
@@ -141,7 +79,7 @@ The number of the opened port is decided by concatenate the prefix `22` and the 
 ## To format the python code
 
 ```bash
-docker compose -f tests/docker-compose.yml --env-file .env up --build -d
+docker compose -f tests/docker-compose.yml --env-file config.env up --build -d
 docker logs tests
 ```
 
@@ -149,5 +87,5 @@ docker logs tests
 python -m venv ~/py_envs
 source ~/py_envs/bin/activate
 python -m venv ~/py_envs
-black *
+black .
 ```
