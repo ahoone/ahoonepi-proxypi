@@ -123,7 +123,7 @@
 
     const NODES_SOCKET = '/nodes';
     const NODES_REFRESH_PERIOD = 1_000;
-    const BROKER_SOCKET = "/broker";
+    const BROKER_SOCKET = "/get_unscraped_targets";
     const BROKER_REFRESH_PERIOD = 1_000;
     const LOGGER_SOCKET = "/logger";
     const LOGGER_REFRESH_PERIOD = 1_000;
@@ -290,10 +290,7 @@
     function renderBroker(rawRows) {
         const container = document.querySelector('.card.broker');
         const rows = Array.isArray(rawRows) ? rawRows : [];
-        
-        if (rows.length) {
-            upsertTable(container, rows, function(r, idx) { return r.id || idx; }, BROKER_COLUMNS);
-        }
+        upsertTable(container, rows, function(r, idx) { return r.id || idx; }, BROKER_COLUMNS);
         container.querySelector('#ts-broker').textContent = new Date().toLocaleTimeString();
     }
 

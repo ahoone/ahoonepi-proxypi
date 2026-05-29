@@ -15,6 +15,7 @@ import proxypi
 
 PROXYPI_COMMAND_INFO = Template("info $node_id")
 TIMEOUT_SCRAPER_HTTP_REQUEST = 4  # seconds
+TIMEOUT_SCRAPER_HTTP_REQUEST_NEW_INSTANCE = 10  # seconds
 
 
 class ScraperImage:
@@ -87,7 +88,9 @@ class ScraperImage:
 
         if scraper_response.status_code == 200:
             self.browsers = {}
-            for instance_id, browser_as_dict in json.loads(scraper_response.text).items():
+            for instance_id, browser_as_dict in json.loads(
+                scraper_response.text
+            ).items():
                 self.browsers[instance_id] = BrowserImage(
                     instance_id, self.passport, browser_as_dict
                 )
@@ -107,6 +110,6 @@ class ScraperImage:
             response = await client.post(
                 f"http://{self.passport.vpn_address}:{Config.HTTP_PORT_SCRAPER}/new-instance",
                 json=payload,
-                timeout=TIMEOUT_SCRAPER_HTTP_REQUEST,
+                timeout=TIMEOUT_SCRAPER_HTTP_REQUEST_NEW_INSTANCE,
             )
             return response.status_code == 201

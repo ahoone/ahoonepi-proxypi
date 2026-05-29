@@ -19,7 +19,7 @@ from Config import Config
 from core.Broker import Broker
 from core.DatabaseHandler import DatabaseHandler
 from core.NodeIdentifier import NodeIdentifier
-from core.schemas import GetRequest, ScrapeRequest
+from core.schemas import CollectRequest, GetRequest, ScrapeRequest
 
 sys.path.insert(0, "/plugins")
 from middleware import add_middleware
@@ -111,12 +111,37 @@ async def get(request: GetRequest):
 @app.post("/scrape", status_code=status.HTTP_202_ACCEPTED)
 async def scrape(request: ScrapeRequest):
     try:
-        await app.state.broker.scrape(request)
+        uuid = await app.state.broker.scrape(request)
+        return {"uuid": uuid}
     except Exception as e:
         line = sys.exc_info()[2].tb_lineno
         raise HTTPException(
             status_code=500, detail=f"{type(e).__name__} at line {line}: {str(e)}"
         )
+
+
+@app.get("/collect")
+async def collect(request: CollectRequest):
+    """
+    returns just the successful request
+    but should return a more complete object if:
+    - the request is not done yet (anticipated time)
+    - if all tries failed
+    It also should mark the uuid as collected, and delete the entry
+    """
+    try:
+        response = await app.state.broker.collect(request)
+    except Exception as e:
+        line = sys.exc_info()[2].tb_lineno
+        raise HTTPException(
+            status_code=500, detail=f"{type(e).__name__} at line {line}: {str(e)}"
+        )
+    if not response:
+        raise HTTPException(
+            status_code=425,
+            detail=f"Still have not processed the target (or the id is wrong)",
+        )
+    return response
 
 
 @app.get("/nodes")
@@ -130,10 +155,21 @@ async def nodes():
         )
 
 
-@app.get("/broker")
-async def broker():
+@app.get("/get_unscraped_targets")
+async def get_unscraped_targets():
     try:
-        return await app.state.broker.get_scraping_list()
+        return await app.state.broker.get_unscraped_targets()
+    except Exception as e:
+        line = sys.exc_info()[2].tb_lineno
+        raise HTTPException(
+            status_code=500, detail=f"{type(e).__name__} at line {line}: {str(e)}"
+        )
+
+
+@app.get("/results")
+async def results():
+    try:
+        return await app.state.broker.get_scraped_targets()
     except Exception as e:
         line = sys.exc_info()[2].tb_lineno
         raise HTTPException(

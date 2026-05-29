@@ -3,13 +3,14 @@ import datetime
 import random
 import traceback
 from typing import Any, Dict, List, Literal, NoReturn, Optional, Set, Tuple
+from uuid import uuid4, UUID
 
 from Config import Config
 from core.BrowserImage import BrowserImage
 from core.DatabaseHandler import DatabaseHandler
 from core.NodeIdentifier import NodeIdentifier
 from core.ScraperImage import ScraperImage
-from core.schemas import ScrapeRequest
+from core.schemas import CollectRequest, ScrapeRequest
 
 
 class Broker:
@@ -39,14 +40,27 @@ class Broker:
             self.logger.insert(0, event)
             self.logger = self.logger[: Config.BUFFER_LOGGER_SIZE]
 
-    async def scrape(self, request: ScrapeRequest) -> None:
+    async def scrape(self, request: ScrapeRequest) -> UUID:
         # data = [(request.urls, request.tag)] if isinstance(request.urls, str) else [(url, request.tag) for url in request.urls]
         # NOT SUPPORTING MULTIPLE ELEMENTS AT ONCE
-        data = [(str(request.url), request.antwortzeit, request.tag)]
-        query = f"INSERT INTO {Config.DB_TABLE_TARGETS} (url, antwortzeit, tag) VALUES (?, ?, ?)"
+        uuid = uuid4()
+        data = [(str(uuid), str(request.url), request.antwortzeit, request.tag)]
+        query = f"INSERT INTO {Config.DB_TABLE_TARGETS} (id, url, antwortzeit, tag) VALUES (?, ?, ?, ?)"
         await DatabaseHandler.executemany(query, data)
+        return uuid
 
-    async def get_scraping_list(self) -> List[Dict[str, Any]]:
+    async def collect(self, request: CollectRequest) -> Dict[str, Any]:
+        query = f"""
+            SELECT *
+            FROM {Config.DB_TABLE_REQUESTS}
+            WHERE 1=1
+                AND success = TRUE
+                AND {Config.DB_TABLE_TARGETS}_id = '{request.uuid}'
+            ORDER BY id ASC
+        """
+        return await DatabaseHandler.fetchone(query)
+
+    async def get_unscraped_targets(self) -> List[Dict[str, Any]]:
         query = f"""
             SELECT *
             FROM {Config.DB_TABLE_TARGETS} l
@@ -59,7 +73,17 @@ class Broker:
                         AND r.success = TRUE
                 )
             ORDER BY antwortzeit ASC
-            LIMIT {Config.BUFFER_SCRAPING_LIST}
+            LIMIT {Config.LIMIT_SQL_QUERIES}
+        """
+        return await DatabaseHandler.fetchall(query)
+
+    async def get_scraped_targets(self) -> List[Dict[str, Any]]:
+        query = f"""
+            SELECT *
+            FROM {Config.DB_TABLE_REQUESTS}
+            WHERE success = TRUE
+            ORDER BY id ASC
+            LIMIT {Config.LIMIT_SQL_QUERIES}
         """
         return await DatabaseHandler.fetchall(query)
 
@@ -83,27 +107,19 @@ class Broker:
         ]
         await asyncio.gather(*updates)
 
-    @staticmethod
-    def __random_id() -> str:
-        return "".join(random.choices(ascii_letters + digits, k=8))
-
     async def __create_browser(self) -> bool:
         """
         returns true if successfully creates a browser
         """
-        tasks = [
-            (vpn_address, scraper.available)
-            for vpn_address, scraper in self.scrapers.items()
-            if scraper.online
-        ]
-        results = await asyncio.gather(*[task for _, task in tasks])
         availables = [
-            vpn_address for (vpn_address, _), result in zip(tasks, results) if result
+            scraper.passport.node_id
+            for scraper in self.scrapers.values()
+            if scraper.available
         ]
         if len(availables) == 0:
             await self.log("unable to create a new instance", level="WARNING")
             return False
-        random_id = self.__random_id()
+        random_id = f"{random.choice(Config.SCRAPER_ADJECTIVES)} {random.choice(Config.SCRAPER_FIRST_NAMES)}"
         await self.scrapers[random.choice(availables)].new_instance(random_id)
         await self.log(f"created browser {random_id}")
         return True
@@ -120,7 +136,8 @@ class Broker:
                     [
                         browser
                         for browser in scraper.browsers.values()
-                        if browser.status == "idle" and browser.score < THRESHOLD_SCORE
+                        if browser.status == "idle"
+                        and browser.score < Config.THRESHOLD_SCORE
                     ]
                 )
                 for scraper in self.scrapers.values()
@@ -134,12 +151,15 @@ class Broker:
         return random.choice(browsers) if browsers else None
 
     async def __get_target(self) -> Optional[Dict[str, Any]]:
+        current_tasks_ids_placeholder = "".join(
+            [f"AND l.id != '{current_id}' " for current_id in self.__current_tasks]
+        )
         async with self.__lock_current_tasks:
             query = f"""
                 SELECT *
                 FROM {Config.DB_TABLE_TARGETS} l
                 WHERE 1=1
-                    {''.join([f'AND l.id != {current_id} ' for current_id in self.__current_tasks])}
+                    {current_tasks_ids_placeholder}
                     AND NOT EXISTS (
                         SELECT 1
                         FROM {Config.DB_TABLE_REQUESTS} r
@@ -156,7 +176,7 @@ class Broker:
         if not target:
             await self.log("no target found")
             return
-        await self.log(f"selected target {target['id']} ({target['url']})")
+        await self.log(f"selected target {target['url']}")
         browser = await self.get_available_browser()
         if not browser:
             await self.log(f"no browser available for {target['id']}", level="WARNING")

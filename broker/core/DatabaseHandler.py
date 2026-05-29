@@ -25,11 +25,11 @@ class DatabaseHandler:
             if Config.DB_TABLE_TARGETS not in existing_tables:
                 await DatabaseHandler.execute(f"""
                     CREATE TABLE {Config.DB_TABLE_TARGETS} (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        id TEXT PRIMARY KEY NOT NULL,
                         url TEXT NOT NULL,
                         antwortzeit DATETIME NOT NULL,
                         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                        tag TEXT
+                        tag TEXT NOT NULL
                     );
                 """)
 
@@ -37,7 +37,7 @@ class DatabaseHandler:
                 await DatabaseHandler.execute(f"""
                     CREATE TABLE {Config.DB_TABLE_REQUESTS} (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        {Config.DB_TABLE_TARGETS}_id INTEGER NOT NULL,
+                        {Config.DB_TABLE_TARGETS}_id TEXT NOT NULL,
                         request_timestamp DATETIME NOT NULL,
                         response_timestamp DATETIME,
                         success BOOLEAN,

@@ -1,6 +1,12 @@
 import datetime
 from pydantic import HttpUrl, BaseModel, Field
 from typing import Optional
+from uuid import UUID
+
+
+class CollectRequest(BaseModel):
+    uuid: UUID
+    # flag to delete when retrieve ?
 
 
 class GetRequest(BaseModel):

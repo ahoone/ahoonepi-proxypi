@@ -1,3 +1,4 @@
+import json
 import os
 import pytest
 import random
@@ -28,12 +29,31 @@ def test_broker_available():
     assert response.status_code == 200, response.content
 
 
-# def test_broker_receive_scrape_request():
-#     url = f"http://{ADDRESS}/scrape"
-#     payload = {
-#         "url": "http://example.com",
-#         "antwortzeit": "2019-08-24T14:15:22Z",
-#         "tag": "string",
-#     }
-#     response = requests.post(url, json=payload, timeout=TIMEOUT_REQUESTS)
-#     assert response.status_code == 202, response.content
+def test_broker_scrape_and_collect():
+    url = f"http://{ADDRESS}/scrape"
+    payload = {
+        "url": "http://example.com",
+        "tag": "test_sending_scraping_request",
+    }
+    response = requests.post(url, json=payload, timeout=TIMEOUT_REQUESTS)
+    assert response.status_code == 202, response.content
+    response_as_dict = json.loads(response.text)
+    assert "uuid" in response_as_dict, response_as_dict
+    uuid = response_as_dict["uuid"]
+
+    url = f"http://{ADDRESS}/collect"
+    payload = {"uuid": uuid}
+    response = requests.get(url, json=payload, timeout=TIMEOUT_REQUESTS)
+    assert response.status_code == 425, response.content
+
+    sleep(2)
+
+    response = requests.get(url, json=payload, timeout=TIMEOUT_REQUESTS)
+    assert response.status_code == 200, response.content
+    response_as_dict = json.loads(response.text)
+    assert "success" in response_as_dict, response_as_dict
+    assert response_as_dict["success"] == True, response_as_dict
+    assert (
+        "This domain is for use in documentation examples without needing permission."
+        in response_as_dict["content"]
+    )

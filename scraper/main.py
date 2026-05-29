@@ -66,7 +66,9 @@ async def health() -> Dict[str, Any]:
     Also useful to get the availability of the scraper.
     """
     try:
-        ram_total, ram_used, ram_free = map(int, os.popen("free -b").readlines()[1].split()[1:4])
+        ram_total, ram_used, ram_free = map(
+            int, os.popen("free -b").readlines()[1].split()[1:4]
+        )
 
         return {
             "is_running_as_root": os.getuid() == 0,
