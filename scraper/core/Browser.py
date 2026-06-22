@@ -7,6 +7,7 @@ from typing import Any, AsyncGenerator, BinaryIO, Dict, List, Literal, Set, Tupl
 import zendriver as uc
 
 from Config import Config
+from core.schemas import GetRequest
 from engine.detection import herobrine_is_here
 from engine.erholungszeit import erholungszeit
 from engine.score import score
@@ -232,21 +233,21 @@ class Browser:
         current_state = await page.evaluate("document.readyState")
         return current_state
 
-    async def get_or_abort(self, url: str) -> str:
+    async def get_or_abort(self, request: GetRequest) -> str:
         try:
             async with self.__get_lock:
-                return await self.get(url)
+                return await self.get(request)
         except asyncio.CancelledError:
             self.browsing_history.append(
                 {
-                    "url": url,
+                    "url": request.url,
                     "status": "aborted",
                     "timestamp": datetime.datetime.now().isoformat(),
                 }
             )
             return ""
 
-    async def get(self, url: str) -> str:
+    async def get(self, request: GetRequest) -> str:
 
         access_record = {}
 
@@ -255,7 +256,7 @@ class Browser:
             await asyncio.sleep(delta)
 
         try:
-            page = await self.__driver.get(url)
+            page = await self.__driver.get(request.url)
             access_record["page_state"] = await self.smart_wait(page)
             self.erholungszeit = datetime.datetime.now() + datetime.timedelta(
                 milliseconds=erholungszeit()
@@ -269,7 +270,7 @@ class Browser:
 
             access_record.update(
                 {
-                    "url": url,
+                    "url": request.url,
                     "status": "success",
                     "content_length": len(html),
                     "timestamp": datetime.datetime.now().isoformat(),
@@ -281,7 +282,7 @@ class Browser:
         except BotSpottedError as e:
             access_record.update(
                 {
-                    "url": url,
+                    "url": request.url,
                     "status": "blocked",
                     "html": e.html,
                     "timestamp": datetime.datetime.now().isoformat(),
@@ -293,7 +294,7 @@ class Browser:
         except Exception as e:
             access_record.update(
                 {
-                    "url": url,
+                    "url": request.url,
                     "status": "failed",
                     "error": str(e)[:MAXIMUM_SIZE_ERROR_MESSAGE],
                     "timestamp": datetime.datetime.now().isoformat(),

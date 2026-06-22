@@ -23,7 +23,7 @@ class Scraper:
 
     async def get(self, request: GetRequest) -> str:
         task = asyncio.create_task(
-            self.browsers[request.instance_id].get_or_abort(request.url)
+            self.browsers[request.instance_id].get_or_abort(request)
         )
         self.__browser_active_tasks[request.instance_id].add(task)
         try:

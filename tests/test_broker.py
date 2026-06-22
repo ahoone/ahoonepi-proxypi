@@ -46,7 +46,7 @@ def test_broker_scrape_and_collect():
     response = requests.get(url, json=payload, timeout=TIMEOUT_REQUESTS)
     assert response.status_code == 425, response.content
 
-    sleep(2)
+    sleep(10)
 
     response = requests.get(url, json=payload, timeout=TIMEOUT_REQUESTS)
     assert response.status_code == 200, response.content

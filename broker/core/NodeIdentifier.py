@@ -17,7 +17,7 @@ class NodeIdentifier:
     else:
         raise ValueError(f"CIDR prefix {WIREGUARD_CIDR_PREFIX} not implemented")
 
-    reachable_nodes: Set[int] = None
+    reachable_nodes: Set[int] = set()
 
     @staticmethod
     async def ping(

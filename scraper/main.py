@@ -72,9 +72,7 @@ async def health() -> Dict[str, Any]:
 
         return {
             "is_running_as_root": os.getuid() == 0,
-            "can_create_browser": Config.MAX_INSTANCES_PER_SCRAPER
-            - len(app.state.scraper.browsers)
-            > 0,
+            "can_create_browser": len(app.state.scraper.browsers) <= Config.MAX_INSTANCES_PER_SCRAPER,
             "ram_specs": f"{ram_total // 1024**3}GiB",
             "ram_usage": f"{(100 * ram_used) // ram_total}%",
         }
@@ -90,9 +88,7 @@ async def health() -> Dict[str, Any]:
 async def available() -> Dict[str, bool]:
     try:
         return {
-            "available": Config.MAX_INSTANCES_PER_SCRAPER
-            - len(app.state.scraper.browsers)
-            > 0
+            "available": len(app.state.scraper.browsers) <= Config.MAX_INSTANCES_PER_SCRAPER,
         }
     except Exception as e:
         line = sys.exc_info()[2].tb_lineno

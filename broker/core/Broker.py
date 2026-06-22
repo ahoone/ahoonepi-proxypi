@@ -151,10 +151,10 @@ class Broker:
         return random.choice(browsers) if browsers else None
 
     async def __get_target(self) -> Optional[Dict[str, Any]]:
-        current_tasks_ids_placeholder = "".join(
-            [f"AND l.id != '{current_id}' " for current_id in self.__current_tasks]
-        )
         async with self.__lock_current_tasks:
+            current_tasks_ids_placeholder = "".join(
+                [f"AND l.id != '{current_id}' " for current_id in self.__current_tasks]
+            )
             query = f"""
                 SELECT *
                 FROM {Config.DB_TABLE_TARGETS} l
@@ -191,16 +191,21 @@ class Broker:
         async with self.__lock_current_tasks:
             for target_id, task in self.__current_tasks.items():
                 if task.done():
-                    result = task.result()
-                    completed.append(
-                        (
-                            target_id,
-                            result["request_timestamp"],
-                            result["response_timestamp"],
-                            result["success"],
-                            result["content"],
+                    exc = task.exception()
+                    if exc:
+                        await self.log(f"task {target_id} failed: {exc}", level="WARNING")
+                        completed.append((target_id, datetime.datetime.now(), None, None, None))
+                    else:
+                        result = task.result()
+                        completed.append(
+                            (
+                                target_id,
+                                result["request_timestamp"],
+                                result["response_timestamp"],
+                                result["success"],
+                                result["content"],
+                            )
                         )
-                    )
             for x in completed:
                 del self.__current_tasks[x[0]]
         if len(completed) > 0:

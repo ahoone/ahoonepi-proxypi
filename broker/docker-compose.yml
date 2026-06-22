@@ -10,6 +10,8 @@ services:
       - "${HTTP_PORT_BROKER}:8000"
     volumes:
       - ./:/app
+      - ./data:/data
+      # - sqlite_data:/data
       - ../plugins:/plugins:ro
       - /tmp/proxypi.sock:/tmp/proxypi.sock
     environment:
@@ -17,6 +19,10 @@ services:
     restart: unless-stopped
     networks:
       - default
+
+# volumes:
+#   sqlite_data:
+#     driver: local
 
 networks:
   default:

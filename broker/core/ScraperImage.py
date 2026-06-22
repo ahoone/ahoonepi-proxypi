@@ -77,7 +77,7 @@ class ScraperImage:
                     ),
                 )
             except Exception as e:
-                print(e)
+                print(f"[{self.passport.vpn_address}:{Config.HTTP_PORT_SCRAPER}] {e}")
                 return
 
         if health_response.status_code == 200:
