@@ -1,7 +1,7 @@
-from pydantic import BaseModel
 from typing import List, Tuple, Union
 
 from Config import Config
+from pydantic import BaseModel
 
 
 class BotSpottedError(Exception):
@@ -23,4 +23,4 @@ class KillRequest(BaseModel):
 class GetRequest(BaseModel):
     instance_id: str
     url: str
-    flag_lazy_loading: bool = False
+    flag_lazy_loading: bool = Config.TRIGGER_LAZY_LOADING_BY_DEFAULT

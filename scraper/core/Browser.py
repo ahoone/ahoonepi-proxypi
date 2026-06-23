@@ -4,10 +4,10 @@ import os
 import subprocess
 import threading
 from typing import Any, AsyncGenerator, BinaryIO, Dict, List, Literal, Set, Tuple
-import zendriver as uc
 
+import zendriver as uc
 from Config import Config
-from core.schemas import GetRequest
+from core.schemas import BotSpottedError, GetRequest
 from engine.detection import herobrine_is_here
 from engine.erholungszeit import erholungszeit
 from engine.score import score
@@ -27,7 +27,6 @@ TIMEOUT_TERMINATE_STREAM = 6  # seconds
 
 
 class Browser:
-
     display = 100  # First Xvfb (instead of 99)
 
     def __init__(self) -> None:
@@ -247,7 +246,44 @@ class Browser:
             )
             return ""
 
+    async def trigger_lazy_loading(self, page: uc.Tab) -> bool:
+        """
+        INCOMPLETE
+        Should:
+            - scroll down repeatedly
+            - wait for network idle
+            - wait for dom stabilization
+            - very images are complete
+            - no keywords like "skeleton", "anim_skeleton", "bg-c_skeleton"
+
+        Returns:
+            bool: True if achieved network inactivity in given time.
+        """
+
+        time_limit = datetime.datetime.now() + datetime.timedelta(
+            seconds=Config.TIME_LIMIT_LAZY_LOADING,
+        )
+        # scroll_height = 0  # percentages of the screen height
+        while datetime.datetime.now() < time_limit:
+            await page.scroll_down(1000)
+            await asyncio.sleep(4)
+            return True
+
+        return False
+
     async def get(self, request: GetRequest) -> str:
+        """
+        Moves the current page and captures its html content.
+
+        Args:
+            request (GetRequest): .
+
+        Returns:
+            str: The html code.
+
+        Raises:
+            BotSpottedError: .
+        """
 
         access_record = {}
 
@@ -256,7 +292,7 @@ class Browser:
             await asyncio.sleep(delta)
 
         try:
-            page = await self.__driver.get(request.url)
+            page = await self.__driver.get(request.url, new_tab=False, new_window=False)
             access_record["page_state"] = await self.smart_wait(page)
             self.erholungszeit = datetime.datetime.now() + datetime.timedelta(
                 milliseconds=erholungszeit()
@@ -268,16 +304,10 @@ class Browser:
                 raise BotSpottedError(html)
                 # should also raise a html error to the broker
 
-            access_record.update(
-                {
-                    "url": request.url,
-                    "status": "success",
-                    "content_length": len(html),
-                    "timestamp": datetime.datetime.now().isoformat(),
-                }
-            )
-            self.browsing_history.append(access_record)
-            return html
+            if request.flag_lazy_loading:
+                access_record["success_lazy_loading"] = await self.trigger_lazy_loading(
+                    page
+                )
 
         except BotSpottedError as e:
             access_record.update(
@@ -302,6 +332,17 @@ class Browser:
             )
             self.browsing_history.append(access_record)
             return ""
+
+        access_record.update(
+            {
+                "url": request.url,
+                "status": "success",
+                "content_length": len(html),
+                "timestamp": datetime.datetime.now().isoformat(),
+            }
+        )
+        self.browsing_history.append(access_record)
+        return html
 
     def __kill_streaming_process(self) -> None:
         if not self.__streaming_process:
