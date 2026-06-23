@@ -1,16 +1,16 @@
 import asyncio
-from contextlib import asynccontextmanager
 import datetime
-from fastapi import FastAPI, status, Request, HTTPException, WebSocket
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse, HTMLResponse, JSONResponse
 import os
 import sys
+from contextlib import asynccontextmanager
 from typing import Any, Dict, Optional
 
 from Config import Config
-from core.Scraper import Scraper
 from core.schemas import GetRequest, KillRequest, NewInstanceRequest
+from core.Scraper import Scraper
+from fastapi import FastAPI, HTTPException, Request, WebSocket, status
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 
 sys.path.insert(0, "/plugins")
 from middleware import add_middleware
@@ -72,7 +72,8 @@ async def health() -> Dict[str, Any]:
 
         return {
             "is_running_as_root": os.getuid() == 0,
-            "can_create_browser": len(app.state.scraper.browsers) <= Config.MAX_INSTANCES_PER_SCRAPER,
+            "can_create_browser": len(app.state.scraper.browsers)
+            < Config.MAX_INSTANCES_PER_SCRAPER,
             "ram_specs": f"{ram_total // 1024**3}GiB",
             "ram_usage": f"{(100 * ram_used) // ram_total}%",
         }
@@ -88,7 +89,8 @@ async def health() -> Dict[str, Any]:
 async def available() -> Dict[str, bool]:
     try:
         return {
-            "available": len(app.state.scraper.browsers) <= Config.MAX_INSTANCES_PER_SCRAPER,
+            "available": len(app.state.scraper.browsers)
+            < Config.MAX_INSTANCES_PER_SCRAPER,
         }
     except Exception as e:
         line = sys.exc_info()[2].tb_lineno
