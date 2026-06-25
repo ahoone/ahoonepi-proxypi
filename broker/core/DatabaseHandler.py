@@ -1,21 +1,21 @@
-import aiosqlite
-import os
 from typing import Any, Dict, List, Tuple
 
+import aiosqlite
 from Config import Config
 
 
 class DatabaseHandler:
-
     @classmethod
     async def initialize(cls) -> None:
 
         async with aiosqlite.connect(Config.BROKER_DATABASE) as conn:
-
-            # if Config.BROKER_CLEAR_DB_ON_STARTUP and os.path.exists(
-            #     Config.BROKER_DATABASE
-            # ):
-            #     os.remove(Config.BROKER_DATABASE)
+            if Config.BROKER_CLEAR_DB_ON_STARTUP:
+                await DatabaseHandler.execute(f"""
+                    DROP TABLE IF EXISTS {Config.DB_TABLE_TARGETS};
+                """)
+                await DatabaseHandler.execute(f"""
+                    DROP TABLE IF EXISTS {Config.DB_TABLE_REQUESTS};
+                """)
 
             response = await conn.execute("SELECT name FROM sqlite_master")
             if not response:

@@ -1,9 +1,8 @@
-import os
 import ipaddress
+import os
 
 
 class Config:
-
     MAX_INSTANCES_PER_SCRAPER = int(os.getenv("MAX_INSTANCES_PER_SCRAPER"))
     NODE_ROLE = os.getenv("NODE_ROLE").split(",")
     if "SCRAPER" not in NODE_ROLE:
@@ -31,3 +30,6 @@ class Config:
     ERHOLUNGSZEIT_SPREAD = 0.5  # variance
 
     REFRESH_RATE_SCRAPER = 0.1  # seconds
+
+    TRIGGER_LAZY_LOADING_BY_DEFAULT = True
+    TIME_LIMIT_LAZY_LOADING = 10  # seconds

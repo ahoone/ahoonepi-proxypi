@@ -2,9 +2,10 @@
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-source "$SCRIPT_DIR/ui.sh"
 source "$SCRIPT_DIR/.env"
 source "$SCRIPT_DIR/config.env"
+
+source "$SCRIPT_DIR/proxypi/ui.sh"
 
 
 #######################################
@@ -97,7 +98,7 @@ if [[ "$NODE_ROLE" = *"LIGHTHOUSE"* ]]; then
     echob "creating proxypi host user..."
     if getent passwd | grep -q "^$LIGHTHOUSE_DUMMY_USER:"; then
         echo "$LIGHTHOUSE_DUMMY_USER user already exists!"
-    else 
+    else
         # Needs a home directory. SSH public keys from proxies are stored in '~/.ssh'.
         sudo adduser "$LIGHTHOUSE_DUMMY_USER"
     fi
@@ -106,9 +107,9 @@ if [[ "$NODE_ROLE" = *"LIGHTHOUSE"* ]]; then
     mkdir -p "$HOME/.ssh"
     if ls "$HOME/.ssh" | grep -q "id_proxy_access"; then
         echo "ssh public key for proxies already exists."
-    else 
+    else
         ssh-keygen -t ed25519 -f "$HOME/.ssh/id_proxy_access" -N ""
-        echob "Created public ssh key for the proxies at '$HOME/.ssh/id_proxy_access.pub'." 
+        echob "Created public ssh key for the proxies at '$HOME/.ssh/id_proxy_access.pub'."
     fi | draw_box
 
 #    echob "starting broker container..."

@@ -1,6 +1,16 @@
 import asyncio
-from contextlib import asynccontextmanager
 import datetime
+import os
+import sys
+import traceback
+from contextlib import asynccontextmanager
+
+import httpx
+from Config import Config
+from core.Broker import Broker
+from core.DatabaseHandler import DatabaseHandler
+from core.NodeIdentifier import NodeIdentifier
+from core.schemas import CollectRequest, GetRequest, ScrapeRequest
 from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import (
@@ -9,17 +19,7 @@ from fastapi.responses import (
     JSONResponse,
     StreamingResponse,
 )
-import httpx
-import os
 from starlette.background import BackgroundTask
-import sys
-import traceback
-
-from Config import Config
-from core.Broker import Broker
-from core.DatabaseHandler import DatabaseHandler
-from core.NodeIdentifier import NodeIdentifier
-from core.schemas import CollectRequest, GetRequest, ScrapeRequest
 
 sys.path.insert(0, "/plugins")
 from middleware import add_middleware
@@ -39,6 +39,7 @@ async def lifespan(app: FastAPI):
     bg_task.cancel()
     try:
         await bg_task
+        await app.state.broker.terminate()
     except asyncio.CancelledError:
         pass
 
@@ -149,10 +150,8 @@ async def nodes():
     try:
         return app.state.broker.to_dict()
     except Exception as e:
-        line = sys.exc_info()[2].tb_lineno
-        raise HTTPException(
-            status_code=500, detail=f"{type(e).__name__} at line {line}: {str(e)}"
-        )
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=traceback.format_exc())
 
 
 @app.get("/get_unscraped_targets")

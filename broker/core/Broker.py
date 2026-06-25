@@ -3,18 +3,17 @@ import datetime
 import random
 import traceback
 from typing import Any, Dict, List, Literal, NoReturn, Optional, Set, Tuple
-from uuid import uuid4, UUID
+from uuid import UUID, uuid4
 
 from Config import Config
 from core.BrowserImage import BrowserImage
 from core.DatabaseHandler import DatabaseHandler
 from core.NodeIdentifier import NodeIdentifier
-from core.ScraperImage import ScraperImage
 from core.schemas import CollectRequest, ScrapeRequest
+from core.ScraperImage import ScraperImage
 
 
 class Broker:
-
     def __init__(self) -> None:
         self.scrapers: Dict[int, ScraperImage] = {}  # node_id -> scraper
         self.logger: List[Dict[str, Any]] = []
@@ -23,7 +22,7 @@ class Broker:
         self.__current_tasks: Dict[int, asyncio.Task] = {}
         self.__lock_current_tasks: asyncio.Lock = asyncio.Lock()
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> List[Dict[str, Any]]:
         return [scraper.to_dict() for scraper in self.scrapers.values()]
 
     async def log(
@@ -193,8 +192,13 @@ class Broker:
                 if task.done():
                     exc = task.exception()
                     if exc:
-                        await self.log(f"task {target_id} failed: {exc}", level="WARNING")
-                        completed.append((target_id, datetime.datetime.now(), None, None, None))
+                        await self.log(
+                            f"task {target_id} failed: {type(exc).__name__}: {exc!r}",
+                            level="WARNING",
+                        )
+                        completed.append(
+                            (target_id, datetime.datetime.now(), None, False, None)
+                        )
                     else:
                         result = task.result()
                         completed.append(
@@ -244,3 +248,9 @@ class Broker:
             if scraper.hostname == hostname:
                 return scraper
         return None
+
+    async def terminate(self) -> None:
+        await asyncio.gather(
+            *(scraper.passport.close_client() for scraper in self.scrapers.values()),
+            return_exceptions=True,
+        )
