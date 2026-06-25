@@ -197,7 +197,7 @@ class Broker:
                             level="WARNING",
                         )
                         completed.append(
-                            (target_id, datetime.datetime.now(), None, None, None)
+                            (target_id, datetime.datetime.now(), None, False, None)
                         )
                     else:
                         result = task.result()

@@ -1,7 +1,8 @@
-from fastapi import FastAPI, Request, Response
-from fastapi.responses import JSONResponse
 import ipaddress
 from typing import Awaitable, Callable, List, Union
+
+from fastapi import FastAPI, Request, Response
+from fastapi.responses import JSONResponse
 
 
 def add_middleware(
@@ -51,16 +52,17 @@ def add_middleware(
         client_ip = request.client.host
         try:
             client_ip_obj = ipaddress.ip_address(client_ip)
-            allowed = any(client_ip_obj in network for network in allowed_networks)
-            if not allowed:
-                return JSONResponse(
-                    status_code=403,
-                    content={"detail": f"Access forbidden from IP: {client_ip}"},
-                )
-            response = await call_next(request)
-            return response
-        except ValueError as e:
+        except ValueError:
             return JSONResponse(
                 status_code=400,
-                content={"detail": f"Unknown error for {client_ip}: {e}"},
+                content={"detail": f"Invalid IP address: {client_ip}"},
             )
+
+        allowed = any(client_ip_obj in network for network in allowed_networks)
+        if not allowed:
+            return JSONResponse(
+                status_code=403,
+                content={"detail": f"Access forbidden from IP: {client_ip}"},
+            )
+
+        return await call_next(request)

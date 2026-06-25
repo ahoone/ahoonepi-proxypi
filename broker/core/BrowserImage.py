@@ -5,6 +5,9 @@ from typing import Any, Dict, List, Literal
 from Config import Config
 from core.NodeIdentifier import NodeIdentifier
 
+# this timeout is large because it accounts for lazy loading / others
+TIMEOUT_HTTP_SCRAPING = 60  # seconds
+
 
 class BrowserImage:
     def __init__(
@@ -23,6 +26,15 @@ class BrowserImage:
         )
         self.score: float = scraper_response["score"]
 
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "created_at": self.created_at,
+            "expires_at": self.expires_at,
+            "browsing_history": self.browsing_history,
+            "status": self.status,
+            "score": self.score,
+        }
+
     async def get(self, url: str) -> Dict[str, Any]:
         """
         should be cancellable
@@ -33,11 +45,12 @@ class BrowserImage:
         response = await self.passport.client.post(
             f"http://{self.passport.vpn_address}:{Config.HTTP_PORT_SCRAPER}/get",
             json={"instance_id": self.instance_id, "url": url},
+            timeout=TIMEOUT_HTTP_SCRAPING,
         )
         response_timestamp = loop.time()
         return {
             "request_timestamp": request_timestamp,
             "response_timestamp": response_timestamp,
-            "success": True,  # Should examine the content
+            "success": response.status_code == 200,  # Should examine the content
             "content": response.json(),
         }

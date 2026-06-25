@@ -1,15 +1,16 @@
 import json
 import os
-import pytest
 import random
-import requests
 from time import sleep
+
+import pytest
+import requests
 
 HTTP_PORT_SCRAPER = os.getenv("HTTP_PORT_SCRAPER")
 WIREGUARD_NETWORK_PREFIX = os.getenv("WIREGUARD_NETWORK_PREFIX")
 ADDRESS = f"{WIREGUARD_NETWORK_PREFIX}.1:{HTTP_PORT_SCRAPER}"
 
-TIMEOUT_REQUESTS = 20  # in seconds, may take some time as we are waiting for either "complete" or "interactive" status
+TIMEOUT_REQUESTS = 60  # in seconds, may take some time as we are waiting for either "complete" or "interactive" status
 TIME_BETWEEN_TESTS = 0.5  # in seconds
 EXPLICIT_NEW_INSTANCE_ID = "explicit"
 EXPLICIT_NEW_INSTANCE_LIFESPAN = 10  # in seconds

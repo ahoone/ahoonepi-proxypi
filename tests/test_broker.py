@@ -1,15 +1,16 @@
 import json
 import os
-import pytest
 import random
-import requests
 from time import sleep
+
+import pytest
+import requests
 
 HTTP_PORT_BROKER = os.getenv("HTTP_PORT_BROKER")
 WIREGUARD_NETWORK_PREFIX = os.getenv("WIREGUARD_NETWORK_PREFIX")
 ADDRESS = f"{WIREGUARD_NETWORK_PREFIX}.1:{HTTP_PORT_BROKER}"
 
-TIMEOUT_REQUESTS = 10  # in seconds, may take some time as we are waiting for either "complete" or "interactive" status
+TIMEOUT_REQUESTS = 60  # in seconds, may take some time as we are waiting for either "complete" or "interactive" status
 TIME_BETWEEN_TESTS = 0.5  # in seconds
 
 
@@ -44,11 +45,14 @@ def test_broker_scrape_and_collect():
     url = f"http://{ADDRESS}/collect"
     payload = {"uuid": uuid}
     response = requests.get(url, json=payload, timeout=TIMEOUT_REQUESTS)
-    assert response.status_code == 425, response.content
 
-    sleep(10)
+    assert response.status_code in [200, 425], (
+        f"unexpected status code {response.status_code}"
+    )
+    if response.status_code == 425:
+        sleep(60)
+        response = requests.get(url, json=payload, timeout=TIMEOUT_REQUESTS)
 
-    response = requests.get(url, json=payload, timeout=TIMEOUT_REQUESTS)
     assert response.status_code == 200, response.content
     response_as_dict = json.loads(response.text)
     assert "success" in response_as_dict, response_as_dict

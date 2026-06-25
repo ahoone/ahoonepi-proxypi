@@ -36,6 +36,7 @@ class ScraperImage:
         self.__next_refresh_timestamp: float = None
 
     def to_dict(self) -> Dict[str, Any]:
+
         return {
             "online": self.online,
             "hostname": self.hostname,
@@ -45,7 +46,13 @@ class ScraperImage:
             "ram_usage": self.ram_usage,
             "ipv6": self.ipv6,
             "browsers": dict(
-                sorted(self.browsers.items(), key=lambda x: x[1].created_at)
+                sorted(
+                    [
+                        (browser.instance_id, browser.to_dict())
+                        for browser in self.browsers.values()
+                    ],
+                    key=lambda x: x[1]["created_at"],
+                )
             ),
         }
 
