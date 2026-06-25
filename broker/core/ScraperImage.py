@@ -4,6 +4,7 @@ import sys
 from string import Template
 from typing import Any, Dict, List, Optional, Tuple, Union
 
+import httpx
 import requests
 from Config import Config
 from core.BrowserImage import BrowserImage
@@ -15,6 +16,8 @@ import proxypi
 PROXYPI_COMMAND_INFO = Template("info $node_id")
 TIMEOUT_SCRAPER_HTTP_REQUEST = 4  # seconds
 TIMEOUT_SCRAPER_HTTP_REQUEST_NEW_INSTANCE = 10  # seconds
+REFRESH_PERIOD_SCRAPER = 1  # seconds
+BACKOFF_REFRESH_PERIOD_SCRAPER = 180  # seconds
 
 
 class ScraperImage:
@@ -30,6 +33,7 @@ class ScraperImage:
         self.browsers: Dict[str, BrowserImage] = {}  # instance_id: browser
         self.score: float = 0.0
         self.__lock_updating: asyncio.Lock = asyncio.Lock()
+        self.__next_refresh_timestamp: float = None
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -60,8 +64,13 @@ class ScraperImage:
         response_as_dict = json.loads(response)
         self.hostname = response_as_dict["hostname"]
         self.ipv6 = response_as_dict["ipv6"]
+        self.__next_refresh_timestamp = asyncio.get_event_loop().time()
 
     async def update(self) -> None:
+        loop = asyncio.get_event_loop()
+        if loop.time() < self.__next_refresh_timestamp:
+            return
+
         try:
             health_response, scraper_response = await asyncio.gather(
                 self.passport.client.get(
@@ -73,6 +82,12 @@ class ScraperImage:
                     timeout=TIMEOUT_SCRAPER_HTTP_REQUEST,
                 ),
             )
+        except httpx.ConnectError as e:
+            print(
+                f"Unable to connect to {self.passport.vpn_address}. Will backoff for {BACKOFF_REFRESH_PERIOD_SCRAPER} seconds. Check for the scraper container running."
+            )
+            self.__next_refresh_timestamp = loop.time() + BACKOFF_REFRESH_PERIOD_SCRAPER
+            return
         except Exception as e:
             print(f"[{self.passport.vpn_address}:{Config.HTTP_PORT_SCRAPER}] {e}")
             return
@@ -91,6 +106,8 @@ class ScraperImage:
                 self.browsers[instance_id] = BrowserImage(
                     instance_id, self.passport, browser_as_dict
                 )
+
+        self.__next_refresh_timestamp = loop.time() + REFRESH_PERIOD_SCRAPER
 
     async def new_instance(
         self,

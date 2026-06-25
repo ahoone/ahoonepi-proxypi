@@ -150,10 +150,8 @@ async def nodes():
     try:
         return app.state.broker.to_dict()
     except Exception as e:
-        line = sys.exc_info()[2].tb_lineno
-        raise HTTPException(
-            status_code=500, detail=f"{type(e).__name__} at line {line}: {str(e)}"
-        )
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=traceback.format_exc())
 
 
 @app.get("/get_unscraped_targets")

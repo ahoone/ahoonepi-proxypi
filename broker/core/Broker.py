@@ -22,7 +22,7 @@ class Broker:
         self.__current_tasks: Dict[int, asyncio.Task] = {}
         self.__lock_current_tasks: asyncio.Lock = asyncio.Lock()
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> List[Dict[str, Any]]:
         return [scraper.to_dict() for scraper in self.scrapers.values()]
 
     async def log(
