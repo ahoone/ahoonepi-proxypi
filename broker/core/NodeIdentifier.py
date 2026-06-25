@@ -1,16 +1,16 @@
 import asyncio
 import os
-from ping3 import ping
-from typing import Set
+from typing import Dict, Set, Union
 
+import httpx
 from Config import Config
+from ping3 import ping
 
 SEMAPHORE_UPDATE_REACHABLE_NODES = 200
 TIMEOUT_SCRAPER_PING = 0.1  # seconds
 
 
 class NodeIdentifier:
-
     WIREGUARD_CIDR_PREFIX = int(os.getenv("WIREGUARD_CIDR_PREFIX"))
     if WIREGUARD_CIDR_PREFIX == 24:
         node_ids: Set[int] = set(range(255))
@@ -67,6 +67,17 @@ class NodeIdentifier:
         self.node_id: int = node_id
         self.vpn_address: str = f"{Config.WIREGUARD_NETWORK_PREFIX}.{node_id}"
         self.ssh_port: int = int(Config.SSH_NETWORK_BASE) + node_id - 2
+        self.client: httpx.AsyncClient = httpx.AsyncClient()
+
+    def to_dict(self) -> Dict[str, Union[str, int]]:
+        return {
+            "node_id": self.node_id,
+            "vpn_address": self.vpn_address,
+            "ssh_port": self.ssh_port,
+        }
+
+    async def close_client(self) -> None:
+        await self.client.aclose()
 
     async def available(self) -> bool:
         """

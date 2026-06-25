@@ -1,6 +1,5 @@
 import asyncio
 import datetime
-import httpx
 from typing import Any, Dict, List, Literal
 
 from Config import Config
@@ -8,7 +7,6 @@ from core.NodeIdentifier import NodeIdentifier
 
 
 class BrowserImage:
-
     def __init__(
         self,
         instance_id: str,
@@ -30,17 +28,16 @@ class BrowserImage:
         should be cancellable
         (therefore response_timestamp is not defined)
         """
-        async with httpx.AsyncClient() as client:
-            loop = asyncio.get_running_loop()
-            request_timestamp = loop.time()
-            response = await client.post(
-                f"http://{self.passport.vpn_address}:{Config.HTTP_PORT_SCRAPER}/get",
-                json={"instance_id": self.instance_id, "url": url},
-            )
-            response_timestamp = loop.time()
-            return {
-                "request_timestamp": request_timestamp,
-                "response_timestamp": response_timestamp,
-                "success": True,  # Should examine the content
-                "content": response.json(),
-            }
+        loop = asyncio.get_running_loop()
+        request_timestamp = loop.time()
+        response = await self.passport.client.post(
+            f"http://{self.passport.vpn_address}:{Config.HTTP_PORT_SCRAPER}/get",
+            json={"instance_id": self.instance_id, "url": url},
+        )
+        response_timestamp = loop.time()
+        return {
+            "request_timestamp": request_timestamp,
+            "response_timestamp": response_timestamp,
+            "success": True,  # Should examine the content
+            "content": response.json(),
+        }

@@ -29,9 +29,9 @@ wireguard::ping() {
 
 
     local ssh_result target proxypi_hostname upside_latency upside_loss downside_result downside_latency downside_loss entry
-    for port in $(_proxypi_listen_ssh); do
+    for port in $(ssh::listen); do
         (
-            ssh_result=$(_proxypi_execute_command "$port" "$instructions")
+            ssh_result=$(ssh::execute_command "$port" "$instructions")
             read proxypi_hostname upside_latency upside_loss <<< "$ssh_result"
             local proxy_id=$((port - SSH_NETWORK_BASE + 2))
             target="${WIREGUARD_NETWORK_PREFIX}.${proxy_id}"
@@ -83,8 +83,8 @@ wireguard::load() {
 
     # TODO (ahoone): No parallelization // RACE CONDITION ON WG SET WG0 PEER AND SAVE
 
-    for port in $(_proxypi_listen_ssh); do
-        ssh_result=$(_proxypi_execute_command "$port" "$instructions")
+    for port in $(ssh::listen); do
+        ssh_result=$(ssh::execute_command "$port" "$instructions")
         read proxypi_hostname proxypi_public_key <<< "$ssh_result"
         local proxy_id=$((port - SSH_NETWORK_BASE + 2))
 

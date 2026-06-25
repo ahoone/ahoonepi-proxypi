@@ -30,9 +30,9 @@ git::pull() {
     instructions="${instructions//GIT_TARGET/${GIT_HOSTING_PROVIDER}/${GIT_REPOSITORY}}"
 
     local ssh_result proxypi_hostname origin commit_head repo_status entry
-    for port in $(_proxypi_listen_ssh); do
+    for port in $(ssh::listen); do
         (
-            ssh_result=$(_proxypi_execute_command "$port" "$instructions")
+            ssh_result=$(ssh::execute_command "$port" "$instructions")
 
             IFS='|' read proxypi_hostname origin commit_head repo_status <<< "$ssh_result"
 
@@ -42,3 +42,5 @@ git::pull() {
     done
     wait
 }
+
+# git::checkout to change branches for the project

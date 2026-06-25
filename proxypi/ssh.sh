@@ -1,4 +1,67 @@
 #######################################
+# Examines open ports in the specified range
+# Globals:
+#   NETWORK_SIZE
+#   SSH_NETWORK_BASE
+#   WIREGUARD_CIDR_PREFIX
+# Outputs:
+#   Ports to stdout
+# Returns:
+#   0 on success
+#   1 on no proxies found
+#######################################
+ssh::listen() {
+    if [[ "$WIREGUARD_CIDR_PREFIX" -eq 24 ]]; then
+        NETWORK_SIZE=253
+    else
+        return $EXIT_CODE_NOT_IMPLEMENTED
+    fi
+
+    local start=$SSH_NETWORK_BASE
+    local end=$((SSH_NETWORK_BASE + NETWORK_SIZE - 1))
+
+    ports=$(netstat -an | grep '0.0.0.0' | awk -v start=$start -v end=$end '{split($4, buf, ":"); port=buf[2]; if (port>=start && port<=end) print port}')
+
+    if [ -z "$ports" ]; then
+        echob "No proxies found." >&2
+        echo ""
+        return 1
+    else
+        echo $ports
+    fi
+}
+
+#######################################
+# Execute command on remote proxy Pi
+# Globals:
+#   DEFAULT_SSH_CONNECTION_PLUS_INSTRUCTIONS_TIMEOUT
+#   LIGHTHOUSE_PRIVATE_KEY_PATH
+#   TCP_CONNECTION_TIMEOUT
+#   PROXYPI_USER
+# Arguments:
+#   $1: Port number of reverse SSH tunnel
+#   $2: Command string to execute
+#   $3: Specific timeout if given
+# Outputs:
+#   Command output to stdout
+# Returns:
+#   0 on success, non-zero on error
+#######################################
+ssh::execute_command() {
+    local port=$1
+    local instructions=$2
+    local command_timeout=${3:-$DEFAULT_SSH_CONNECTION_PLUS_INSTRUCTIONS_TIMEOUT}
+
+    timeout "$command_timeout" \
+        ssh -i "$LIGHTHOUSE_PRIVATE_KEY_PATH" \
+        -o StrictHostKeyChecking=no \
+        -o ConnectTimeout="$TCP_CONNECTION_TIMEOUT" \
+        -p "$port" \
+        "$PROXYPI_USER"@localhost \
+        "$instructions" 2>/dev/null
+}
+
+#######################################
 # Check connectivity to all proxy Pis
 # Globals :
 #   FLAG_PING_INFO_FROM_VPN_ADDRESS
@@ -46,17 +109,17 @@ ssh::ping() {
         \$(date +%s%3N)"
 
     local ssh_start_time ssh_result ssh_end_time
-    for port in $(_proxypi_listen_ssh); do
+    for port in $(ssh::listen); do
         (
             # if [[ "$FLAG_PING_INFO_FROM_VPN_ADDRESS" == "true" && "$port" != *"$vpn_address" ]]; then
             #   continue
             # fi
 
             ssh_start_time=$(date +%s%3N)
-            _proxypi_execute_command "$port" "whoami" &>/dev/null
+            ssh::execute_command "$port" "whoami" &>/dev/null
             ssh_end_time=$(date +%s%3N)
 
-            ssh_result=$(_proxypi_execute_command "$port" "$instructions")
+            ssh_result=$(ssh::execute_command "$port" "$instructions")
 
 #            if [ -z "$ssh_result" ]; then
 #                if ! "$FLAG_PING_INFO_FROM_VPN_ADDRESS"; then
@@ -112,9 +175,9 @@ ssh::exec() {
     instructions="${instructions//COMMAND/${command}}"
 
     local ssh_result start_time end_time proxypi_hostname command_status entry
-    for port in $(_proxypi_listen_ssh); do
+    for port in $(ssh::listen); do
         (
-            ssh_result=$(_proxypi_execute_command "$port" "$instructions" "$command_timeout")
+            ssh_result=$(ssh::execute_command "$port" "$instructions" "$command_timeout")
             IFS='|' read hostname start_time command_status end_time <<< "$ssh_result"
 
             command_latency=$((end_time - start_time))
@@ -133,7 +196,7 @@ ssh::exec() {
 #   0 on success, non-zero on error
 #######################################
 ssh::copy_keys() {
-    for port in $(_proxypi_listen_ssh); do
+    for port in $(ssh::listen); do
         local proxy_id=$((port - SSH_NETWORK_BASE + 2))
         echob "for $port (proxy id: $proxy_id)"
         ssh-copy-id -i "$LIGHTHOUSE_PRIVATE_KEY_PATH".pub -p "$port" "$PROXYPI_USER"@localhost
@@ -177,7 +240,7 @@ ssh::info() {
         return
     fi
 
-    if ! [[ "$(_proxypi_listen_ssh)" =~ "$port" ]]; then
+    if ! [[ "$(ssh::listen)" =~ "$port" ]]; then
         return 1
     fi
 
@@ -190,7 +253,7 @@ ssh::info() {
         \$(curl ifconfig.me 2>/dev/null || echo 'N/A')
     "
 
-    ssh_result=$(_proxypi_execute_command "$port" "$instructions")
+    ssh_result=$(ssh::execute_command "$port" "$instructions")
     read node_hostname node_ipv6 <<< "$ssh_result"
     echo "{\"hostname\": \"$node_hostname\", \"port\": \"$port\", \"ipv6\": \"$node_ipv6\"}"
 }
@@ -216,7 +279,7 @@ ssh::ram() {
         return
     fi
 
-    if ! [[ "$(_proxypi_listen_ssh)" =~ "$port" ]]; then
+    if ! [[ "$(ssh::listen)" =~ "$port" ]]; then
         return 1
     fi
 
@@ -229,7 +292,7 @@ ssh::ram() {
         \$(free | awk '/^Mem:/{printf \"\%.0f%%\", \$3/\$2*100}')
     "
 
-    ssh_result=$(_proxypi_execute_command "$port" "$instructions")
+    ssh_result=$(ssh::execute_command "$port" "$instructions")
     read ram ram_usage <<< "$ssh_result"
     echo "{\"ram_specs\": \"$ram\", \"ram_usage\": \"$ram_usage\"}"
 }

@@ -4,7 +4,6 @@
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-source "$SCRIPT_DIR/ui.sh"
 source "$SCRIPT_DIR/.env"
 source "$SCRIPT_DIR/config.env"
 
@@ -12,6 +11,7 @@ source "$SCRIPT_DIR/proxypi/apt.sh"
 source "$SCRIPT_DIR/proxypi/docker.sh"
 source "$SCRIPT_DIR/proxypi/git.sh"
 source "$SCRIPT_DIR/proxypi/ssh.sh"
+source "$SCRIPT_DIR/proxypi/ui.sh"
 source "$SCRIPT_DIR/proxypi/wireguard.sh"
 
 
@@ -25,7 +25,7 @@ TCP_CONNECTION_TIMEOUT="8"
 #######################################
 #######################################
 
-
+# should be rename aliases
 declare -A FCT_MAP=(
     [apt-update]="apt::update"
     [apt-upgrade]="apt::upgrade"
@@ -61,6 +61,11 @@ declare -A FCT_DESCR=(
 declare -A FCT_FLAGS=(
     [ping]="-w vpn_address"  # DEPRECATED! UNPROPER IMPLEMENTATION
     [ping-wireguard]="-a"
+)
+
+
+declare -A FCT_FLAGS_DESCR=(
+    [ping-wireguard -a]="just print the available ip addresses. used by the scraper component"
 )
 
 declare -A FCT_ARGS=(
@@ -154,71 +159,6 @@ help() {
 
         draw_tabular_row column_size entry TABULAR_EMPTY_STYLE
     done
-}
-
-
-#######################################
-# Examines open ports in the specified range
-# Globals:
-#   NETWORK_SIZE
-#   SSH_NETWORK_BASE
-#   WIREGUARD_CIDR_PREFIX
-# Outputs:
-#   Ports to stdout
-# Returns:
-#   0 on success
-#   1 on no proxies found
-#######################################
-_proxypi_listen_ssh() {
-    if [[ "$WIREGUARD_CIDR_PREFIX" -eq 24 ]]; then
-        NETWORK_SIZE=253
-    else
-        return $EXIT_CODE_NOT_IMPLEMENTED
-    fi
-
-    local start=$SSH_NETWORK_BASE
-    local end=$((SSH_NETWORK_BASE + NETWORK_SIZE - 1))
-
-    ports=$(netstat -an | grep '0.0.0.0' | awk -v start=$start -v end=$end '{split($4, buf, ":"); port=buf[2]; if (port>=start && port<=end) print port}')
-
-    if [ -z "$ports" ]; then
-        echob "No proxies found." >&2
-        echo ""
-        return 1
-    else
-        echo $ports
-    fi
-}
-
-
-#######################################
-# Execute command on remote proxy Pi
-# Globals:
-#   DEFAULT_SSH_CONNECTION_PLUS_INSTRUCTIONS_TIMEOUT
-#   LIGHTHOUSE_PRIVATE_KEY_PATH
-#   TCP_CONNECTION_TIMEOUT
-#   PROXYPI_USER
-# Arguments:
-#   $1: Port number of reverse SSH tunnel
-#   $2: Command string to execute
-#   $3: Specific timeout if given
-# Outputs:
-#   Command output to stdout
-# Returns:
-#   0 on success, non-zero on error
-#######################################
-_proxypi_execute_command() {
-    local port=$1
-    local instructions=$2
-    local command_timeout=${3:-$DEFAULT_SSH_CONNECTION_PLUS_INSTRUCTIONS_TIMEOUT}
-
-    timeout "$command_timeout" \
-        ssh -i "$LIGHTHOUSE_PRIVATE_KEY_PATH" \
-        -o StrictHostKeyChecking=no \
-        -o ConnectTimeout="$TCP_CONNECTION_TIMEOUT" \
-        -p "$port" \
-        "$PROXYPI_USER"@localhost \
-        "$instructions" 2>/dev/null
 }
 
 

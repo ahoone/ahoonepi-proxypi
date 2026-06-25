@@ -1,11 +1,10 @@
 import asyncio
-import httpx
 import json
-import requests
-from string import Template
 import sys
+from string import Template
 from typing import Any, Dict, List, Optional, Tuple, Union
 
+import requests
 from Config import Config
 from core.BrowserImage import BrowserImage
 from core.NodeIdentifier import NodeIdentifier
@@ -19,7 +18,6 @@ TIMEOUT_SCRAPER_HTTP_REQUEST_NEW_INSTANCE = 10  # seconds
 
 
 class ScraperImage:
-
     def __init__(self) -> None:
         self.online: bool = None
         self.passport: NodeIdentifier = None
@@ -38,7 +36,7 @@ class ScraperImage:
             "online": self.online,
             "hostname": self.hostname,
             "node_id": self.passport.node_id,
-            "passport": self.passport,
+            "passport": self.passport.to_dict(),
             "ram_specs": self.ram_specs,
             "ram_usage": self.ram_usage,
             "ipv6": self.ipv6,
@@ -64,21 +62,20 @@ class ScraperImage:
         self.ipv6 = response_as_dict["ipv6"]
 
     async def update(self) -> None:
-        async with httpx.AsyncClient() as client:
-            try:
-                health_response, scraper_response = await asyncio.gather(
-                    client.get(
-                        f"http://{self.passport.vpn_address}:{Config.HTTP_PORT_SCRAPER}/health",
-                        timeout=TIMEOUT_SCRAPER_HTTP_REQUEST,
-                    ),
-                    client.get(
-                        f"http://{self.passport.vpn_address}:{Config.HTTP_PORT_SCRAPER}/browsers",
-                        timeout=TIMEOUT_SCRAPER_HTTP_REQUEST,
-                    ),
-                )
-            except Exception as e:
-                print(f"[{self.passport.vpn_address}:{Config.HTTP_PORT_SCRAPER}] {e}")
-                return
+        try:
+            health_response, scraper_response = await asyncio.gather(
+                self.passport.client.get(
+                    f"http://{self.passport.vpn_address}:{Config.HTTP_PORT_SCRAPER}/health",
+                    timeout=TIMEOUT_SCRAPER_HTTP_REQUEST,
+                ),
+                self.passport.client.get(
+                    f"http://{self.passport.vpn_address}:{Config.HTTP_PORT_SCRAPER}/browsers",
+                    timeout=TIMEOUT_SCRAPER_HTTP_REQUEST,
+                ),
+            )
+        except Exception as e:
+            print(f"[{self.passport.vpn_address}:{Config.HTTP_PORT_SCRAPER}] {e}")
+            return
 
         if health_response.status_code == 200:
             health_response_as_dict = json.loads(health_response.text)
@@ -101,15 +98,14 @@ class ScraperImage:
         lifespan_in_seconds: Optional[int] = None,
         window_size: Optional[Union[List[int], Tuple[int, int]]] = None,
     ) -> bool:
-        async with httpx.AsyncClient() as client:
-            payload = {"instance_id": instance_id}
-            if lifespan_in_seconds:
-                payload["lifespan_in_seconds"] = lifespan_in_seconds
-            if window_size:
-                payload["window_size"] = window_size
-            response = await client.post(
-                f"http://{self.passport.vpn_address}:{Config.HTTP_PORT_SCRAPER}/new-instance",
-                json=payload,
-                timeout=TIMEOUT_SCRAPER_HTTP_REQUEST_NEW_INSTANCE,
-            )
-            return response.status_code == 201
+        payload = {"instance_id": instance_id}
+        if lifespan_in_seconds:
+            payload["lifespan_in_seconds"] = lifespan_in_seconds
+        if window_size:
+            payload["window_size"] = window_size
+        response = await self.passport.client.post(
+            f"http://{self.passport.vpn_address}:{Config.HTTP_PORT_SCRAPER}/new-instance",
+            json=payload,
+            timeout=TIMEOUT_SCRAPER_HTTP_REQUEST_NEW_INSTANCE,
+        )
+        return response.status_code == 201

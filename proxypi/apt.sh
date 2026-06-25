@@ -21,9 +21,9 @@ apt::update() {
     local instructions='echo $(hostname) $(sudo apt-get update >/dev/null && echo "✓ Up to date." || echo "✗ Update.s available.")'
 
     local ssh_result proxypi_hostname
-    for port in $(_proxypi_listen_ssh); do
+    for port in $(ssh::listen); do
         (
-            ssh_result=$(_proxypi_execute_command "$port" "$instructions")
+            ssh_result=$(ssh::execute_command "$port" "$instructions")
             read proxypi_hostname apt_status <<< "$ssh_result"
 
             entry=("$proxypi_hostname" "$port" "$apt_status")
@@ -50,9 +50,9 @@ apt::upgrade() {
     local instructions='echo $(hostname) $(sudo -n apt-get upgrade -y >/dev/null && echo "✓ Up to date." || echo "✗ Failed.")'
 
     local ssh_result proxypi_hostname apt_status entry
-    for port in $(_proxypi_listen_ssh); do
+    for port in $(ssh::listen); do
         (
-            ssh_result=$(_proxypi_execute_command "$port" "$instructions")
+            ssh_result=$(ssh::execute_command "$port" "$instructions")
             read proxypi_hostname apt_status <<< "$ssh_result"
 
             entry=("$proxypi_hostname" "$port" "$apt_status")

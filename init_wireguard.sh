@@ -2,9 +2,10 @@
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-source "$SCRIPT_DIR/ui.sh"
 source "$SCRIPT_DIR/.env"
 source "$SCRIPT_DIR/config.env"
+
+source "$SCRIPT_DIR/proxypi/ui.sh"
 
 set -euo pipefail
 
