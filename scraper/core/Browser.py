@@ -308,6 +308,7 @@ class Browser:
                 access_record["success_lazy_loading"] = await self.trigger_lazy_loading(
                     page
                 )
+                html = await page.get_content()
 
         except BotSpottedError as e:
             access_record.update(
