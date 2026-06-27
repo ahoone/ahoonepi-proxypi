@@ -15,6 +15,8 @@ class DatabaseHandler:
         await cls.__connection.execute("PRAGMA journal_mode=WAL;")
         await cls.__connection.commit()
 
+        await cls.initialize_database()
+
     @classmethod
     async def close(cls) -> None:
 
@@ -24,7 +26,6 @@ class DatabaseHandler:
 
     @classmethod
     async def initialize_database(cls) -> None:
-
         if Config.BROKER_CLEAR_DB_ON_STARTUP:
             await cls.__connection.execute(f"""
                 DROP TABLE IF EXISTS {Config.DB_TABLE_TARGETS};
@@ -32,35 +33,40 @@ class DatabaseHandler:
             await cls.__connection.execute(f"""
                 DROP TABLE IF EXISTS {Config.DB_TABLE_REQUESTS};
             """)
-
-        response = await cls.__connection.execute("SELECT name FROM sqlite_master")
-        if not response:
-            return
-        existing_tables = await response.fetchall()
-
-        if Config.DB_TABLE_TARGETS not in existing_tables:
             await cls.__connection.execute(f"""
-                CREATE TABLE IF NOT EXISTS {Config.DB_TABLE_TARGETS} (
-                    id TEXT PRIMARY KEY NOT NULL,
-                    url TEXT NOT NULL,
-                    antwortzeit DATETIME NOT NULL,
-                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    tag TEXT NOT NULL
-                );
+                DROP TABLE IF EXISTS {Config.DB_TABLE_LOGS};
             """)
 
-        if Config.DB_TABLE_REQUESTS not in existing_tables:
-            await cls.__connection.execute(f"""
-                CREATE TABLE IF NOT EXISTS {Config.DB_TABLE_REQUESTS} (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    {Config.DB_TABLE_TARGETS}_id TEXT NOT NULL,
-                    request_timestamp DATETIME NOT NULL,
-                    response_timestamp DATETIME,
-                    success BOOLEAN,
-                    content BLOB,
-                    FOREIGN KEY ({Config.DB_TABLE_TARGETS}_id) REFERENCES {Config.DB_TABLE_TARGETS}(id)
-                );
-            """)
+        await cls.__connection.execute(f"""
+            CREATE TABLE IF NOT EXISTS {Config.DB_TABLE_TARGETS} (
+                id TEXT PRIMARY KEY NOT NULL,
+                url TEXT NOT NULL,
+                antwortzeit DATETIME NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                tag TEXT NOT NULL
+            );
+        """)
+
+        await cls.__connection.execute(f"""
+            CREATE TABLE IF NOT EXISTS {Config.DB_TABLE_REQUESTS} (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                {Config.DB_TABLE_TARGETS}_id TEXT NOT NULL,
+                request_timestamp DATETIME NOT NULL,
+                response_timestamp DATETIME,
+                success BOOLEAN,
+                content BLOB,
+                FOREIGN KEY ({Config.DB_TABLE_TARGETS}_id) REFERENCES {Config.DB_TABLE_TARGETS}(id)
+            );
+        """)
+
+        await cls.__connection.execute(f"""
+            CREATE TABLE IF NOT EXISTS {Config.DB_TABLE_LOGS} (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp DATETIME NOT NULL,
+                detail TEXT,
+                level TEXT NOT NULL
+            );
+        """)
 
         await cls.__connection.commit()
 

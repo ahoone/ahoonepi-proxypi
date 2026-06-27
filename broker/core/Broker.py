@@ -38,7 +38,11 @@ class Broker:
             }
             self.logger.insert(0, event)
             self.logger = self.logger[: Config.BUFFER_LOGGER_SIZE]
-        # await
+        query = f"INSERT INTO {Config.DB_TABLE_LOGS} (timestamp, detail, level) VALUES (?, ?, ?)"
+        await DatabaseHandler.execute(
+            query,
+            (event["timestamp"], event["detail"], event["level"]),
+        )
 
     async def scrape(self, request: ScrapeRequest) -> UUID:
         # data = [(request.urls, request.tag)] if isinstance(request.urls, str) else [(url, request.tag) for url in request.urls]
