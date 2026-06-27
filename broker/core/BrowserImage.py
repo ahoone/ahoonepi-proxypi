@@ -1,12 +1,22 @@
 import asyncio
 import datetime
+from dataclasses import dataclass
 from typing import Any, Dict, List, Literal
 
+import httpx
 from Config import Config
 from core.NodeIdentifier import NodeIdentifier
 
 # this timeout is large because it accounts for lazy loading / others
 TIMEOUT_HTTP_SCRAPING = 60  # seconds
+
+
+@dataclass
+class BrowserImageGetResult:
+    request_timestamp: float
+    response_timestamp: float
+    success: bool
+    content: str
 
 
 class BrowserImage:
@@ -35,22 +45,29 @@ class BrowserImage:
             "score": self.score,
         }
 
-    async def get(self, url: str) -> Dict[str, Any]:
+    async def get(self, url: str) -> BrowserImageGetResult:
         """
         should be cancellable
         (therefore response_timestamp is not defined)
         """
         loop = asyncio.get_running_loop()
         request_timestamp = loop.time()
-        response = await self.passport.client.post(
-            f"http://{self.passport.vpn_address}:{Config.HTTP_PORT_SCRAPER}/get",
-            json={"instance_id": self.instance_id, "url": url},
-            timeout=TIMEOUT_HTTP_SCRAPING,
-        )
+        try:
+            response = await self.passport.client.post(
+                f"http://{self.passport.vpn_address}:{Config.HTTP_PORT_SCRAPER}/get",
+                json={"instance_id": self.instance_id, "url": url},
+                timeout=TIMEOUT_HTTP_SCRAPING,
+            )
+            success = response.status_code == 200  # Should examine the content
+            content = response.json()
+        except httpx.TimeoutException as e:
+            success = False
+            content = str(e)
+            print(e)
+        except Exception as e:
+            success = False
+            content = str(e)
         response_timestamp = loop.time()
-        return {
-            "request_timestamp": request_timestamp,
-            "response_timestamp": response_timestamp,
-            "success": response.status_code == 200,  # Should examine the content
-            "content": response.json(),
-        }
+        return BrowserImageGetResult(
+            request_timestamp, response_timestamp, success, content
+        )

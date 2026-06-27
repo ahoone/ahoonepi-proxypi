@@ -5,13 +5,14 @@ test.py
 *.key
 keys.json
 
-# Logs
 *.conf
 *.log
 *.log.[0-9]*
 *.log.[0-9]*.gz
 *.sqlite
 *.db
+*.db-shm
+*.db-wal
 
 .Trash-1000/
 

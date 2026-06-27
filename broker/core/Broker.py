@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Literal, NoReturn, Optional, Set, Tuple
 from uuid import UUID, uuid4
 
 from Config import Config
-from core.BrowserImage import BrowserImage
+from core.BrowserImage import BrowserImage, BrowserImageGetResult
 from core.DatabaseHandler import DatabaseHandler
 from core.NodeIdentifier import NodeIdentifier
 from core.schemas import CollectRequest, ScrapeRequest
@@ -38,6 +38,7 @@ class Broker:
             }
             self.logger.insert(0, event)
             self.logger = self.logger[: Config.BUFFER_LOGGER_SIZE]
+        # await
 
     async def scrape(self, request: ScrapeRequest) -> UUID:
         # data = [(request.urls, request.tag)] if isinstance(request.urls, str) else [(url, request.tag) for url in request.urls]
@@ -123,7 +124,7 @@ class Broker:
         await self.log(f"created browser {random_id}")
         return True
 
-    async def get_available_browser(self) -> BrowserImage:
+    async def get_available_browser(self) -> Optional[BrowserImage]:
         """
         returns the object (BrowserImage) browser that can handle the job
         """
@@ -181,35 +182,38 @@ class Broker:
             await self.log(f"no browser available for {target['id']}", level="WARNING")
             return
         await self.log(f"browser {browser.instance_id} selected for {target['id']}")
-        task = asyncio.create_task(browser.get(target["url"]))
         async with self.__lock_current_tasks:
-            self.__current_tasks[target["id"]] = task
+            self.__current_tasks[target["id"]] = asyncio.create_task(
+                browser.get(target["url"])
+            )
 
     async def __retrieve_task(self) -> None:
-        completed: List[Tuple[Any]] = []
+        completed: List[Tuple[int, float, float, bool, str]] = []
         async with self.__lock_current_tasks:
             for target_id, task in self.__current_tasks.items():
                 if task.done():
-                    exc = task.exception()
-                    if exc:
+                    # Here we do not examine for task.exception()
+                    # because BrowserImage.get() is already formatting any exception
+                    # and task should not be cancelled
+                    # but should be done to be in this if block
+                    # (see https://docs.python.org/3/library/asyncio-task.html#asyncio.Task.exception)
+                    # We need to be careful here about using try/except block
+                    # because we do not want to swallow the error
+                    result: BrowserImageGetResult = task.result()
+                    if not result.success:
                         await self.log(
-                            f"task {target_id} failed: {type(exc).__name__}: {exc!r}",
+                            f"task {target_id} failed: {result.content}",
                             level="WARNING",
                         )
-                        completed.append(
-                            (target_id, datetime.datetime.now(), None, False, None)
+                    completed.append(
+                        (
+                            target_id,
+                            result.request_timestamp,
+                            result.response_timestamp,
+                            result.success,
+                            result.content,
                         )
-                    else:
-                        result = task.result()
-                        completed.append(
-                            (
-                                target_id,
-                                result["request_timestamp"],
-                                result["response_timestamp"],
-                                result["success"],
-                                result["content"],
-                            )
-                        )
+                    )
             for x in completed:
                 del self.__current_tasks[x[0]]
         if len(completed) > 0:
