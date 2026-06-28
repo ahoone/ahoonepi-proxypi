@@ -5,7 +5,6 @@ from string import Template
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import httpx
-import requests
 from Config import Config
 from core.BrowserImage import BrowserImage
 from core.NodeIdentifier import NodeIdentifier
@@ -21,6 +20,25 @@ BACKOFF_REFRESH_PERIOD_SCRAPER = 180  # seconds
 
 
 class ScraperImage:
+    """
+    Traceback (most recent call last):
+      File "/app/core/Broker.py", line 232, in __update
+        await self.__update_available_nodes()
+      File "/app/core/Broker.py", line 100, in __update_available_nodes
+        self.scrapers[node_id] = await ScraperImage.create(node_id)
+      File "/app/core/ScraperImage.py", line 62, in create
+        await scraperImage.__initialize(node_id)
+      File "/app/core/ScraperImage.py", line 71, in __initialize
+        response_as_dict = json.loads(response)
+      File "/usr/local/lib/python3.10/json/__init__.py", line 346, in loads
+        return _default_decoder.decode(s)
+      File "/usr/local/lib/python3.10/json/decoder.py", line 337, in decode
+        obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+      File "/usr/local/lib/python3.10/json/decoder.py", line 355, in raw_decode
+        raise JSONDecodeError("Expecting value", s, err.value) from None
+    json.decoder.JSONDecodeError: Expecting value: line 2 column 1 (char 1)
+    """
+
     def __init__(self) -> None:
         self.online: bool = None
         self.passport: NodeIdentifier = None

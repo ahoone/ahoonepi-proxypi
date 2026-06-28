@@ -63,11 +63,16 @@ class BrowserImage:
         except httpx.TimeoutException as e:
             success = False
             content = str(e)
-            print(e)
+            print(
+                f"Request went timeout on {self.passport.vpn_address}:({self.instance_id}) with error: {e}"
+            )
         except Exception as e:
             success = False
             content = str(e)
         response_timestamp = loop.time()
         return BrowserImageGetResult(
-            request_timestamp, response_timestamp, success, content
+            request_timestamp=request_timestamp,
+            response_timestamp=response_timestamp,
+            success=success,
+            content=content,
         )
