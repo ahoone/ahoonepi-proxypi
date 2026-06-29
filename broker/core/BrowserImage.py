@@ -9,6 +9,7 @@ from core.NodeIdentifier import NodeIdentifier
 
 # this timeout is large because it accounts for lazy loading / others
 TIMEOUT_HTTP_SCRAPING = 60  # seconds
+TIMEOUT_HTTP_KILL = 10  # seconds
 
 
 @dataclass
@@ -76,3 +77,17 @@ class BrowserImage:
             success=success,
             content=content,
         )
+
+    async def kill(self) -> bool:
+        try:
+            response = await self.passport.client.post(
+                f"http://{self.passport.vpn_address}:{Config.HTTP_PORT_SCRAPER}/kill",
+                json={"instance_id": self.instance_id},
+                timeout=TIMEOUT_HTTP_SCRAPING,
+            )
+            return response.status_code == 200
+        except Exception as e:
+            print(
+                f"Request went timeout on {self.passport.vpn_address}:({self.instance_id}) with error: {e}"
+            )
+            return False

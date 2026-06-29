@@ -180,6 +180,7 @@ class Broker:
                 FROM {Config.DB_TABLE_TARGETS} l
                 WHERE 1=1
                     {current_tasks_ids_placeholder}
+                    AND l.enabled = 1
                     AND NOT EXISTS (
                         SELECT 1
                         FROM {Config.DB_TABLE_REQUESTS} r
@@ -207,9 +208,16 @@ class Broker:
                 browser.get(target["url"])
             )
 
-    async def __unwrap_task(self, target_id: int, task: asyncio.Task) -> RecordRequest:
+    async def __unwrap_task(
+        self,
+        target_id: int,
+        task: asyncio.Task,
+        flag_cancel_if_not_done: bool = False,
+    ) -> Optional[RecordRequest]:
         """
-        should handle the task cancelletion
+        implements a flag to cancel a task if it is not done
+        (useful to clean the environment)
+        Returns a RecordRequest if the task is done or if the flag_cancel_if_not_done is set to true.
         """
         if task.done():
             # Here we do not examine for task.exception()
@@ -232,8 +240,27 @@ class Broker:
                 success=result.success,
                 content=result.content,
             )
+        if flag_cancel_if_not_done:
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError as e:
+                print(f"Cancelletion of task {target_id} failed: {e}")
+            return RecordRequest(
+                target_id=target_id,
+                request_timestamp=datetime.datetime.now(),
+                response_timestamp=datetime.datetime.now(),
+                success=False,
+                content="Task was cancelled due to: flag_cancel_if_not_done",
+            )
+        return None
 
-    async def __retrieve_task(self) -> None:
+    async def __retrieve_tasks(self) -> None:
+        """
+        retrieves all completed tasks
+        remove them from the current tasks dictionnary
+        load the records in the database
+        """
         completed: List[RecordRequest] = []
         async with self.__lock_current_tasks:
             for target_id, task in self.__current_tasks.items():
@@ -256,7 +283,7 @@ class Broker:
             await self.__update_available_nodes()
             await self.__update_nodes()
             await self.__distribute_task()
-            await self.__retrieve_task()
+            await self.__retrieve_tasks()
         except Exception as e:
             traceback.print_exc()
 
@@ -295,15 +322,33 @@ class Broker:
         and give them an error code in the database
         """
         async with self.__lock_current_tasks:
-            cancelled: Dict[int, asyncio.Task] = {}
+            completed: List[RecordRequest] = []
             for target_id, task in self.__current_tasks.items():
-                task.cancel()
-                cancelled[target_id] = task
-                # if a task was done, it should loads it in the table
+                record = await self.__unwrap_task(
+                    target_id, task, flag_cancel_if_not_done=True
+                )
+                completed.append(record)  # record can not be null
+            if len(completed) > 0:
+                query = f"""
+                    INSERT INTO {Config.DB_TABLE_REQUESTS} ({Config.DB_TABLE_TARGETS}_id, request_timestamp, response_timestamp, success, content)
+                    VALUES (?, ?, ?, ?, ?)
+                """
+                await DatabaseHandler.executemany(
+                    query, [astuple(record) for record in completed]
+                )
             self.__current_tasks = {}
 
     async def clear(self, request: ClearRequest) -> bool:
         async with self.__lock_hibernate:
-            if request.clear_unassigned_targets:
-                pass
             await self.cancel_running_tasks()
+            results = await asyncio.gather(
+                *[
+                    scraper.kill_browsers()
+                    for scraper in self.scrapers.values()
+                    if scraper.online
+                ]
+            )
+            if request.flag_clear_unassigned_targets:
+                await DatabaseHandler.clear_unassigned_targets()
+            # return all(results)
+            return True

@@ -151,3 +151,9 @@ class ScraperImage:
             timeout=TIMEOUT_SCRAPER_HTTP_REQUEST_NEW_INSTANCE,
         )
         return response.status_code == 201
+
+    async def kill_browsers(self) -> bool:
+        results = await asyncio.gather(
+            *[browser.kill() for browser in self.browsers.values()]
+        )
+        return all(results)

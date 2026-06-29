@@ -25,6 +25,34 @@ class DatabaseHandler:
             cls.__connection = None
 
     @classmethod
+    async def execute(cls, query: str, params: Optional[Tuple[Any]] = None) -> None:
+        """
+        handlers not aiming for reuse (does not return a cursor)
+        but here we only have just one type of fetch per query
+        """
+        await cls.__connection.execute(query, params)
+        await cls.__connection.commit()
+
+    @classmethod
+    async def executemany(cls, query: str, params: Optional[Tuple[Any]] = None) -> None:
+        await cls.__connection.executemany(query, params)
+        await cls.__connection.commit()
+
+    @classmethod
+    async def fetchone(
+        cls, query: str, params: Optional[Tuple[Any]] = None
+    ) -> Dict[str, Any]:
+        cursor = await cls.__connection.execute(query, params)
+        return await cursor.fetchone()
+
+    @classmethod
+    async def fetchall(
+        cls, query: str, params: Optional[Tuple[Any]] = None
+    ) -> List[Dict[str, Any]]:
+        cursor = await cls.__connection.execute(query, params)
+        return await cursor.fetchall()
+
+    @classmethod
     async def initialize_database(cls) -> None:
         if Config.BROKER_CLEAR_DB_ON_STARTUP:
             await cls.__connection.execute(f"""
@@ -43,7 +71,8 @@ class DatabaseHandler:
                 url TEXT NOT NULL,
                 antwortzeit DATETIME NOT NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                tag TEXT NOT NULL
+                tag TEXT NOT NULL,
+                enabled BOOLEAN DEFAULT 1 NOT NULL
             );
         """)
 
@@ -71,29 +100,21 @@ class DatabaseHandler:
         await cls.__connection.commit()
 
     @classmethod
-    async def execute(cls, query: str, params: Optional[Tuple[Any]] = None) -> None:
+    async def clear_unassigned_targets(cls):
         """
-        handlers not aiming for reuse (does not return a cursor)
-        but here we only have just one type of fetch per query
+        clear unassigned targets that have no reference in requests
+        we cannot drop the rows as if a try has been make, there is a request record
+        pointing to the target url (which we have to keep a reference to)
         """
-        await cls.__connection.execute(query, params)
-        await cls.__connection.commit()
-
-    @classmethod
-    async def executemany(cls, query: str, params: Optional[Tuple[Any]] = None) -> None:
-        await cls.__connection.executemany(query, params)
-        await cls.__connection.commit()
-
-    @classmethod
-    async def fetchone(
-        cls, query: str, params: Optional[Tuple[Any]] = None
-    ) -> Dict[str, Any]:
-        cursor = await cls.__connection.execute(query, params)
-        return await cursor.fetchone()
-
-    @classmethod
-    async def fetchall(
-        cls, query: str, params: Optional[Tuple[Any]] = None
-    ) -> List[Dict[str, Any]]:
-        cursor = await cls.__connection.execute(query, params)
-        return await cursor.fetchall()
+        await cls.__connection.execute(f"""
+            UPDATE {Config.DB_TABLE_TARGETS} AS l
+            SET enabled = 0
+            WHERE 1=1
+            AND enabled = 1
+            AND NOT EXISTS (
+                SELECT 1
+                FROM {Config.DB_TABLE_REQUESTS} AS r
+                WHERE 1=1
+                    AND l.id = r.{Config.DB_TABLE_TARGETS}_id
+            );
+        """)

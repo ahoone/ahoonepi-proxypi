@@ -29,4 +29,4 @@ class ScrapeRequest(BaseModel):
 
 
 class ClearRequest(BaseModel):
-    clear_unassigned_targets: Optional[bool] = True
+    flag_clear_unassigned_targets: Optional[bool] = True
