@@ -10,7 +10,7 @@ from Config import Config
 from core.BrowserImage import BrowserImage, BrowserImageGetResult
 from core.DatabaseHandler import DatabaseHandler
 from core.NodeIdentifier import NodeIdentifier
-from core.schemas import ClearRequest, CollectRequest, ScrapeRequest
+from core.schemas import ClearRequest, ScrapeRequest
 from core.ScraperImage import ScraperImage
 
 
@@ -68,44 +68,6 @@ class Broker:
         query = f"INSERT INTO {Config.DB_TABLE_TARGETS} (id, url, antwortzeit, tag) VALUES (?, ?, ?, ?)"
         await DatabaseHandler.executemany(query, data)
         return uuid
-
-    async def collect(self, request: CollectRequest) -> Dict[str, Any]:
-        query = f"""
-            SELECT *
-            FROM {Config.DB_TABLE_REQUESTS}
-            WHERE 1=1
-                AND success = TRUE
-                AND {Config.DB_TABLE_TARGETS}_id = '{request.uuid}'
-            ORDER BY id ASC
-        """
-        return await DatabaseHandler.fetchone(query)
-
-    async def get_unscraped_targets(self) -> List[Dict[str, Any]]:
-        query = f"""
-            SELECT *
-            FROM {Config.DB_TABLE_TARGETS} l
-            WHERE 1=1
-                AND NOT EXISTS (
-                    SELECT 1
-                    FROM {Config.DB_TABLE_REQUESTS} r
-                    WHERE 1=1
-                        AND r.{Config.DB_TABLE_TARGETS}_id = l.id
-                        AND r.success = TRUE
-                )
-            ORDER BY antwortzeit ASC
-            LIMIT {Config.LIMIT_SQL_QUERIES}
-        """
-        return await DatabaseHandler.fetchall(query)
-
-    async def get_scraped_targets(self) -> List[Dict[str, Any]]:
-        query = f"""
-            SELECT *
-            FROM {Config.DB_TABLE_REQUESTS}
-            WHERE success = TRUE
-            ORDER BY id ASC
-            LIMIT {Config.LIMIT_SQL_QUERIES}
-        """
-        return await DatabaseHandler.fetchall(query)
 
     async def __update_available_nodes(self) -> None:
         await NodeIdentifier.update_reachable_nodes()
@@ -327,7 +289,7 @@ class Broker:
                 record = await self.__unwrap_task(
                     target_id, task, flag_cancel_if_not_done=True
                 )
-                completed.append(record)  # record can not be null
+                completed.append(record)  # record IS not null
             if len(completed) > 0:
                 query = f"""
                     INSERT INTO {Config.DB_TABLE_REQUESTS} ({Config.DB_TABLE_TARGETS}_id, request_timestamp, response_timestamp, success, content)

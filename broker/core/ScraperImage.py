@@ -21,6 +21,9 @@ BACKOFF_REFRESH_PERIOD_SCRAPER = 180  # seconds
 
 class ScraperImage:
     """
+    Online is not really a boolean but should be a literal
+    -> ['offline', 'online without scraper', 'online with scraper running properly']
+
     Traceback (most recent call last):
       File "/app/core/Broker.py", line 232, in __update
         await self.__update_available_nodes()

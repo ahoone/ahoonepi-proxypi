@@ -118,3 +118,32 @@ class DatabaseHandler:
                     AND l.id = r.{Config.DB_TABLE_TARGETS}_id
             );
         """)
+
+    @classmethod
+    async def get_unscraped_targets(cls) -> List[Dict[str, Any]]:
+        query = f"""
+            SELECT *
+            FROM {Config.DB_TABLE_TARGETS} l
+            WHERE 1=1
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM {Config.DB_TABLE_REQUESTS} r
+                    WHERE 1=1
+                        AND r.{Config.DB_TABLE_TARGETS}_id = l.id
+                        AND r.success = TRUE
+                )
+            ORDER BY antwortzeit ASC
+            LIMIT {Config.LIMIT_SQL_QUERIES}
+        """
+        return await cls.fetchall(query)
+
+    @classmethod
+    async def get_scraped_targets(cls) -> List[Dict[str, Any]]:
+        query = f"""
+            SELECT *
+            FROM {Config.DB_TABLE_REQUESTS}
+            WHERE success = TRUE
+            ORDER BY id ASC
+            LIMIT {Config.LIMIT_SQL_QUERIES}
+        """
+        return await cls.fetchall(query)

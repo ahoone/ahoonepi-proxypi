@@ -131,7 +131,15 @@ async def collect(request: CollectRequest):
     It also should mark the uuid as collected, and delete the entry
     """
     try:
-        response = await app.state.broker.collect(request)
+        query = f"""
+            SELECT *
+            FROM {Config.DB_TABLE_REQUESTS}
+            WHERE 1=1
+                AND success = TRUE
+                AND {Config.DB_TABLE_TARGETS}_id = '{request.uuid}'
+            ORDER BY id ASC
+        """
+        response = await DatabaseHandler.fetchone(query)
     except Exception as e:
         line = sys.exc_info()[2].tb_lineno
         raise HTTPException(
@@ -157,7 +165,7 @@ async def nodes():
 @app.get("/get_unscraped_targets")
 async def get_unscraped_targets():
     try:
-        return await app.state.broker.get_unscraped_targets()
+        return await DatabaseHandler.get_unscraped_targets()
     except Exception as e:
         line = sys.exc_info()[2].tb_lineno
         raise HTTPException(
@@ -168,7 +176,7 @@ async def get_unscraped_targets():
 @app.get("/results")
 async def results():
     try:
-        return await app.state.broker.get_scraped_targets()
+        return await DatabaseHandler.get_scraped_targets()
     except Exception as e:
         line = sys.exc_info()[2].tb_lineno
         raise HTTPException(
