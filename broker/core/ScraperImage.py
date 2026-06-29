@@ -155,8 +155,5 @@ class ScraperImage:
         )
         return response.status_code == 201
 
-    async def kill_browsers(self) -> bool:
-        results = await asyncio.gather(
-            *[browser.kill() for browser in self.browsers.values()]
-        )
-        return all(results)
+    async def kill_browsers(self) -> None:
+        await asyncio.gather(*[browser.kill() for browser in self.browsers.values()])

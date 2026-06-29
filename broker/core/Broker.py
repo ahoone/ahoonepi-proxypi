@@ -3,6 +3,7 @@ import datetime
 import random
 import traceback
 from dataclasses import astuple, dataclass
+from itertools import filterfalse
 from typing import Any, Dict, List, Literal, NoReturn, Optional, Set
 from uuid import UUID, uuid4
 
@@ -223,12 +224,14 @@ class Broker:
         remove them from the current tasks dictionnary
         load the records in the database
         """
-        completed: List[RecordRequest] = []
         async with self.__lock_current_tasks:
-            for target_id, task in self.__current_tasks.items():
-                record = await self.__unwrap_task(target_id, task)
-                if record:
-                    completed.append(record)
+            completed: List[Optional[RecordRequest]] = await asyncio.gather(
+                *[
+                    self.__unwrap_task(target_id, task)
+                    for target_id, task in self.__current_tasks.items()
+                ]
+            )
+            completed: List[RecordRequest] = [_ for _ in completed if _]
             for record in completed:
                 del self.__current_tasks[record.target_id]
         if len(completed) > 0:
@@ -278,18 +281,19 @@ class Broker:
             return_exceptions=True,
         )
 
-    async def cancel_running_tasks(self) -> bool:
+    async def cancel_running_tasks(self) -> None:
         """
         cancel scraping tasks saved in ram
         and give them an error code in the database
         """
         async with self.__lock_current_tasks:
-            completed: List[RecordRequest] = []
-            for target_id, task in self.__current_tasks.items():
-                record = await self.__unwrap_task(
-                    target_id, task, flag_cancel_if_not_done=True
-                )
-                completed.append(record)  # record IS not null
+            # in here no record is None due to the flag
+            completed: List[RecordRequest] = await asyncio.gather(
+                *[
+                    self.__unwrap_task(target_id, task, flag_cancel_if_not_done=True)
+                    for target_id, task in self.__current_tasks.items()
+                ]
+            )
             if len(completed) > 0:
                 query = f"""
                     INSERT INTO {Config.DB_TABLE_REQUESTS} ({Config.DB_TABLE_TARGETS}_id, request_timestamp, response_timestamp, success, content)
@@ -300,10 +304,10 @@ class Broker:
                 )
             self.__current_tasks = {}
 
-    async def clear(self, request: ClearRequest) -> bool:
+    async def clear(self, request: ClearRequest) -> None:
         async with self.__lock_hibernate:
             await self.cancel_running_tasks()
-            results = await asyncio.gather(
+            await asyncio.gather(
                 *[
                     scraper.kill_browsers()
                     for scraper in self.scrapers.values()
@@ -312,5 +316,3 @@ class Broker:
             )
             if request.flag_clear_unassigned_targets:
                 await DatabaseHandler.clear_unassigned_targets()
-            # return all(results)
-            return True
