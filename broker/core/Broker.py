@@ -2,15 +2,30 @@ import asyncio
 import datetime
 import random
 import traceback
-from typing import Any, Dict, List, Literal, NoReturn, Optional, Set, Tuple
+from dataclasses import astuple, dataclass
+from typing import Any, Dict, List, Literal, NoReturn, Optional, Set
 from uuid import UUID, uuid4
 
 from Config import Config
 from core.BrowserImage import BrowserImage, BrowserImageGetResult
 from core.DatabaseHandler import DatabaseHandler
 from core.NodeIdentifier import NodeIdentifier
-from core.schemas import CollectRequest, ScrapeRequest
+from core.schemas import ClearRequest, CollectRequest, ScrapeRequest
 from core.ScraperImage import ScraperImage
+
+
+@dataclass
+class RecordRequest:
+    """
+    similar to core.BrowserImage.BrowserImageGetResult
+    but enhanced with the target_id (int)
+    """
+
+    target_id: int
+    request_timestamp: float
+    response_timestamp: float
+    success: bool
+    content: str
 
 
 class Broker:
@@ -21,6 +36,7 @@ class Broker:
         self.effective_refresh_period: float = None
         self.__current_tasks: Dict[int, asyncio.Task] = {}
         self.__lock_current_tasks: asyncio.Lock = asyncio.Lock()
+        self.__lock_hibernate: asyncio.Lock = asyncio.Lock()
 
     def to_dict(self) -> List[Dict[str, Any]]:
         return [scraper.to_dict() for scraper in self.scrapers.values()]
@@ -191,41 +207,49 @@ class Broker:
                 browser.get(target["url"])
             )
 
+    async def __unwrap_task(self, target_id: int, task: asyncio.Task) -> RecordRequest:
+        """
+        should handle the task cancelletion
+        """
+        if task.done():
+            # Here we do not examine for task.exception()
+            # because BrowserImage.get() is already formatting any exception
+            # and task should not be cancelled
+            # but should be done to be in this if block
+            # (see https://docs.python.org/3/library/asyncio-task.html#asyncio.Task.exception)
+            # We need to be careful here about using try/except block
+            # because we do not want to swallow the error
+            result: BrowserImageGetResult = task.result()
+            if not result.success:
+                await self.log(
+                    f"task {target_id} failed: {result.content}",
+                    level="WARNING",
+                )
+            return RecordRequest(
+                target_id=target_id,
+                request_timestamp=result.request_timestamp,
+                response_timestamp=result.response_timestamp,
+                success=result.success,
+                content=result.content,
+            )
+
     async def __retrieve_task(self) -> None:
-        completed: List[Tuple[int, float, float, bool, str]] = []
+        completed: List[RecordRequest] = []
         async with self.__lock_current_tasks:
             for target_id, task in self.__current_tasks.items():
-                if task.done():
-                    # Here we do not examine for task.exception()
-                    # because BrowserImage.get() is already formatting any exception
-                    # and task should not be cancelled
-                    # but should be done to be in this if block
-                    # (see https://docs.python.org/3/library/asyncio-task.html#asyncio.Task.exception)
-                    # We need to be careful here about using try/except block
-                    # because we do not want to swallow the error
-                    result: BrowserImageGetResult = task.result()
-                    if not result.success:
-                        await self.log(
-                            f"task {target_id} failed: {result.content}",
-                            level="WARNING",
-                        )
-                    completed.append(
-                        (
-                            target_id,
-                            result.request_timestamp,
-                            result.response_timestamp,
-                            result.success,
-                            result.content,
-                        )
-                    )
-            for x in completed:
-                del self.__current_tasks[x[0]]
+                record = await self.__unwrap_task(target_id, task)
+                if record:
+                    completed.append(record)
+            for record in completed:
+                del self.__current_tasks[record.target_id]
         if len(completed) > 0:
             query = f"""
                 INSERT INTO {Config.DB_TABLE_REQUESTS} ({Config.DB_TABLE_TARGETS}_id, request_timestamp, response_timestamp, success, content)
                 VALUES (?, ?, ?, ?, ?)
             """
-            await DatabaseHandler.executemany(query, completed)
+            await DatabaseHandler.executemany(
+                query, [astuple(record) for record in completed]
+            )
 
     async def __update(self) -> None:
         try:
@@ -242,6 +266,8 @@ class Broker:
         last_update = next_update
 
         while True:
+            if self.__lock_hibernate.locked():
+                continue
             await self.__update()
             now = loop.time()
             self.effective_refresh_period = now - last_update
@@ -262,3 +288,22 @@ class Broker:
             *(scraper.passport.close_client() for scraper in self.scrapers.values()),
             return_exceptions=True,
         )
+
+    async def cancel_running_tasks(self) -> bool:
+        """
+        cancel scraping tasks saved in ram
+        and give them an error code in the database
+        """
+        async with self.__lock_current_tasks:
+            cancelled: Dict[int, asyncio.Task] = {}
+            for target_id, task in self.__current_tasks.items():
+                task.cancel()
+                cancelled[target_id] = task
+                # if a task was done, it should loads it in the table
+            self.__current_tasks = {}
+
+    async def clear(self, request: ClearRequest) -> bool:
+        async with self.__lock_hibernate:
+            if request.clear_unassigned_targets:
+                pass
+            await self.cancel_running_tasks()

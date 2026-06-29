@@ -10,7 +10,7 @@ from Config import Config
 from core.Broker import Broker
 from core.DatabaseHandler import DatabaseHandler
 from core.NodeIdentifier import NodeIdentifier
-from core.schemas import CollectRequest, GetRequest, ScrapeRequest
+from core.schemas import ClearRequest, CollectRequest, GetRequest, ScrapeRequest
 from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import (
@@ -213,3 +213,13 @@ async def stream(hostname: str, instance_id: str):
         headers=dict(response.headers),
         background=BackgroundTask(client.aclose),
     )
+
+
+@app.post("/clear")
+async def clear(request: ClearRequest):
+    """
+    drops any running tasks and any running browser instance on all nodes
+    Makes the broker hibernate (skip its update cycle)
+    Will still load any task that was completed in the sqlite db
+    """
+    app.state.broker.clear(request)

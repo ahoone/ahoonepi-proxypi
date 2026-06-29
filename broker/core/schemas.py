@@ -1,7 +1,8 @@
 import datetime
-from pydantic import HttpUrl, BaseModel, Field
 from typing import Optional
 from uuid import UUID
+
+from pydantic import BaseModel, Field, HttpUrl
 
 
 class CollectRequest(BaseModel):
@@ -25,3 +26,7 @@ class ScrapeRequest(BaseModel):
         default_factory=datetime.datetime.now
     )
     tag: str
+
+
+class ClearRequest(BaseModel):
+    clear_unassigned_targets: Optional[bool] = True
