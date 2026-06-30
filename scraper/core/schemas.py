@@ -23,4 +23,4 @@ class KillRequest(BaseModel):
 class GetRequest(BaseModel):
     instance_id: str
     url: str
-    flag_lazy_loading: bool = Config.TRIGGER_LAZY_LOADING_BY_DEFAULT
+    flag_lazy_loading: bool

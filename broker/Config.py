@@ -31,6 +31,7 @@ class Config:
     LIMIT_SQL_QUERIES = 200
     REFRESH_PERIOD_BROKER = 1  # seconds
     THRESHOLD_SCORE = 300
+    TRIGGER_LAZY_LOADING_BY_DEFAULT = True
 
     SCRAPER_FIRST_NAMES = (
         "Noah",

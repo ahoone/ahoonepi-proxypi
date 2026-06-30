@@ -1,13 +1,15 @@
 import asyncio
 import json
 import sys
+from ipaddress import IPv6Address
 from string import Template
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import httpx
 from Config import Config
-from core.BrowserImage import BrowserImage
-from core.NodeIdentifier import NodeIdentifier
+from core.BrowserImage import BrowserImage, BrowserImageModel
+from core.NodeIdentifier import NodeIdentifier, NodeIdentifierModel
+from pydantic import BaseModel
 
 sys.path.insert(0, "/plugins")
 import proxypi
@@ -17,6 +19,17 @@ TIMEOUT_SCRAPER_HTTP_REQUEST = 4  # seconds
 TIMEOUT_SCRAPER_HTTP_REQUEST_NEW_INSTANCE = 10  # seconds
 REFRESH_PERIOD_SCRAPER = 1  # seconds
 BACKOFF_REFRESH_PERIOD_SCRAPER = 180  # seconds
+
+
+class ScraperImageModel(BaseModel):
+    online: bool
+    hostname: str
+    node_id: int
+    passport: NodeIdentifierModel
+    ram_specs: Optional[str]
+    ram_usage: Optional[str]
+    ipv6: IPv6Address
+    browsers: Dict[str, BrowserImageModel]
 
 
 class ScraperImage:
@@ -46,7 +59,7 @@ class ScraperImage:
         self.online: bool = None
         self.passport: NodeIdentifier = None
         self.hostname: str = None  # should be UNIQUE
-        self.ipv6: str = None
+        self.ipv6: IPv6Address = None
         self.ram_specs: str = None
         self.ram_usage: str = None
         self.available: bool = False
@@ -56,26 +69,26 @@ class ScraperImage:
         self.__lock_updating: asyncio.Lock = asyncio.Lock()
         self.__next_refresh_timestamp: float = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_model(self) -> ScraperImageModel:
 
-        return {
-            "online": self.online,
-            "hostname": self.hostname,
-            "node_id": self.passport.node_id,
-            "passport": self.passport.to_dict(),
-            "ram_specs": self.ram_specs,
-            "ram_usage": self.ram_usage,
-            "ipv6": self.ipv6,
-            "browsers": dict(
+        return ScraperImageModel(
+            online=self.online,
+            hostname=self.hostname,
+            node_id=self.passport.node_id,
+            passport=self.passport.to_dict(),
+            ram_specs=self.ram_specs,
+            ram_usage=self.ram_usage,
+            ipv6=self.ipv6,
+            browsers=dict(
                 sorted(
                     [
-                        (browser.instance_id, browser.to_dict())
+                        (browser.instance_id, browser.to_model())
                         for browser in self.browsers.values()
                     ],
-                    key=lambda x: x[1]["created_at"],
+                    key=lambda browser: browser[1].created_at,
                 )
             ),
-        }
+        )
 
     @classmethod
     async def create(cls, node_id: int) -> "ScraperImage":
@@ -91,7 +104,7 @@ class ScraperImage:
         )
         response_as_dict = json.loads(response)
         self.hostname = response_as_dict["hostname"]
-        self.ipv6 = response_as_dict["ipv6"]
+        self.ipv6 = IPv6Address(response_as_dict["ipv6"])
         self.__next_refresh_timestamp = asyncio.get_event_loop().time()
 
     async def update(self) -> None:

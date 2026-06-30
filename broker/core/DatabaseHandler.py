@@ -5,6 +5,10 @@ from Config import Config
 
 
 class DatabaseHandler:
+    """
+    the handlers should be dropped
+    """
+
     __connection: aiosqlite.Connection = None
 
     @classmethod
@@ -12,7 +16,8 @@ class DatabaseHandler:
 
         cls.__connection = await aiosqlite.connect(Config.BROKER_DATABASE)
         cls.__connection.row_factory = aiosqlite.Row
-        await cls.__connection.execute("PRAGMA journal_mode=WAL;")
+        # await cls.__connection.execute("PRAGMA journal_mode=WAL;")
+        # bug with this feature, extend the db infinitly
         await cls.__connection.commit()
 
         await cls.initialize_database()
@@ -25,7 +30,9 @@ class DatabaseHandler:
             cls.__connection = None
 
     @classmethod
-    async def execute(cls, query: str, params: Optional[Tuple[Any]] = None) -> None:
+    async def execute(
+        cls, query: str, params: Optional[Tuple[Any, ...]] = None
+    ) -> None:
         """
         handlers not aiming for reuse (does not return a cursor)
         but here we only have just one type of fetch per query
@@ -34,20 +41,22 @@ class DatabaseHandler:
         await cls.__connection.commit()
 
     @classmethod
-    async def executemany(cls, query: str, params: Optional[Tuple[Any]] = None) -> None:
+    async def executemany(
+        cls, query: str, params: Optional[Tuple[Any, ...]] = None
+    ) -> None:
         await cls.__connection.executemany(query, params)
         await cls.__connection.commit()
 
     @classmethod
     async def fetchone(
-        cls, query: str, params: Optional[Tuple[Any]] = None
+        cls, query: str, params: Optional[Tuple[Any, ...]] = None
     ) -> Dict[str, Any]:
         cursor = await cls.__connection.execute(query, params)
         return await cursor.fetchone()
 
     @classmethod
     async def fetchall(
-        cls, query: str, params: Optional[Tuple[Any]] = None
+        cls, query: str, params: Optional[Tuple[Any, ...]] = None
     ) -> List[Dict[str, Any]]:
         cursor = await cls.__connection.execute(query, params)
         return await cursor.fetchall()
@@ -72,6 +81,7 @@ class DatabaseHandler:
                 antwortzeit DATETIME NOT NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 tag TEXT NOT NULL,
+                flag_lazy_loading BOOLEAN NOT NULL,
                 enabled BOOLEAN DEFAULT 1 NOT NULL
             );
         """)
@@ -108,15 +118,7 @@ class DatabaseHandler:
         """
         await cls.__connection.execute(f"""
             UPDATE {Config.DB_TABLE_TARGETS} AS l
-            SET enabled = 0
-            WHERE 1=1
-            AND enabled = 1
-            AND NOT EXISTS (
-                SELECT 1
-                FROM {Config.DB_TABLE_REQUESTS} AS r
-                WHERE 1=1
-                    AND l.id = r.{Config.DB_TABLE_TARGETS}_id
-            );
+            SET enabled = 0;
         """)
 
     @classmethod
@@ -125,6 +127,7 @@ class DatabaseHandler:
             SELECT *
             FROM {Config.DB_TABLE_TARGETS} l
             WHERE 1=1
+                AND enabled = 1
                 AND NOT EXISTS (
                     SELECT 1
                     FROM {Config.DB_TABLE_REQUESTS} r

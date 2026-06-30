@@ -2,14 +2,22 @@ import asyncio
 import datetime
 from dataclasses import dataclass
 from typing import Any, Dict, List, Literal
+from uuid import UUID
 
 import httpx
 from Config import Config
 from core.NodeIdentifier import NodeIdentifier
+from pydantic import BaseModel
 
 # this timeout is large because it accounts for lazy loading / others
 TIMEOUT_HTTP_SCRAPING = 60  # seconds
 TIMEOUT_HTTP_KILL = 10  # seconds
+
+
+class BrowserImageGet(BaseModel):
+    id: UUID
+    url: str
+    flag_lazy_loading: bool
 
 
 @dataclass
@@ -18,6 +26,14 @@ class BrowserImageGetResult:
     response_timestamp: float
     success: bool
     content: str
+
+
+class BrowserImageModel(BaseModel):
+    created_at: datetime.datetime
+    expires_at: datetime.datetime
+    browsing_history: List[str]
+    status: Literal["idle", "requesting", "spotted", "waiting"]
+    score: float
 
 
 class BrowserImage:
@@ -37,16 +53,16 @@ class BrowserImage:
         )
         self.score: float = scraper_response["score"]
 
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "created_at": self.created_at,
-            "expires_at": self.expires_at,
-            "browsing_history": self.browsing_history,
-            "status": self.status,
-            "score": self.score,
-        }
+    def to_model(self) -> BrowserImageModel:
+        return BrowserImageModel(
+            created_at=self.created_at,
+            expires_at=self.expires_at,
+            browsing_history=self.browsing_history,
+            status=self.status,
+            score=self.score,
+        )
 
-    async def get(self, url: str) -> BrowserImageGetResult:
+    async def get(self, payload: BrowserImageGet) -> BrowserImageGetResult:
         """
         should be cancellable
         (therefore response_timestamp is not defined)
@@ -56,7 +72,8 @@ class BrowserImage:
         try:
             response = await self.passport.client.post(
                 f"http://{self.passport.vpn_address}:{Config.HTTP_PORT_SCRAPER}/get",
-                json={"instance_id": self.instance_id, "url": url},
+                json=payload.model_dump(mode="json")
+                | {"instance_id": self.instance_id},
                 timeout=TIMEOUT_HTTP_SCRAPING,
             )
             success = response.status_code == 200  # Should examine the content
