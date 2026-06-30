@@ -7,7 +7,7 @@ from uuid import UUID
 import httpx
 from Config import Config
 from core.NodeIdentifier import NodeIdentifier
-from pydantic import BaseModel
+from pydantic import BaseModel, HttpUrl
 
 # this timeout is large because it accounts for lazy loading / others
 TIMEOUT_HTTP_SCRAPING = 60  # seconds
@@ -16,7 +16,7 @@ TIMEOUT_HTTP_KILL = 10  # seconds
 
 class BrowserImageGet(BaseModel):
     id: UUID
-    url: str
+    url: HttpUrl
     flag_lazy_loading: bool
 
 

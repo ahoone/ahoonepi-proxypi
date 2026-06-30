@@ -1,8 +1,9 @@
 import datetime
+from typing import List
 from uuid import UUID
 
 from Config import Config
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, HttpUrl
 
 
 class CollectRequest(BaseModel):
@@ -15,7 +16,12 @@ class CollectRequestResponse(BaseModel):
 
 
 class ScrapeRequest(BaseModel):
-    url: str
+    url: HttpUrl | List[HttpUrl] = Field(
+        description=(
+            "Can be either an url or a list of urls. "
+            "They will all get the same tag and antwortzeit. "
+        ),
+    )
     antwortzeit: datetime.datetime = Field(
         default_factory=datetime.datetime.now,
         description=(
@@ -40,7 +46,7 @@ class ScrapeRequest(BaseModel):
 
 
 class ScrapeRequestResponse(BaseModel):
-    uuid: UUID
+    uuid: UUID | List[UUID]
 
 
 class ClearRequest(BaseModel):

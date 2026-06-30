@@ -109,7 +109,7 @@ async def scrape(request: ScrapeRequest) -> ScrapeRequestResponse:
     try:
         return await app.state.broker.scrape(request)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=traceback.format_exc())
 
 
 @app.get(
@@ -128,7 +128,7 @@ async def collect(request: CollectRequest) -> CollectRequestResponse:
     try:
         response = await DatabaseHandler.fetchone(query, (str(request.uuid),))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=traceback.format_exc())
     if not response:
         raise HTTPException(
             status_code=404,
@@ -138,7 +138,7 @@ async def collect(request: CollectRequest) -> CollectRequestResponse:
     try:
         response = await app.state.broker.get_running_tasks()
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=traceback.format_exc())
     if request.uuid in response:
         raise HTTPException(
             status_code=425,
@@ -156,7 +156,7 @@ async def collect(request: CollectRequest) -> CollectRequestResponse:
     try:
         response = await DatabaseHandler.fetchone(query)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=traceback.format_exc())
     if not response:
         raise HTTPException(
             status_code=425,
@@ -176,7 +176,7 @@ async def nodes() -> List[ScraperImageModel]:
     try:
         return app.state.broker.to_dict()
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=traceback.format_exc())
 
 
 @app.get("/get_unscraped_targets")
@@ -184,7 +184,7 @@ async def get_unscraped_targets():
     try:
         return await DatabaseHandler.get_unscraped_targets()
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=traceback.format_exc())
 
 
 @app.get("/results")
@@ -192,7 +192,7 @@ async def results():
     try:
         return await DatabaseHandler.get_scraped_targets()
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=traceback.format_exc())
 
 
 @app.get("/logger")
@@ -200,7 +200,7 @@ async def logger():
     try:
         return app.state.broker.logger
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=traceback.format_exc())
 
 
 @app.get("/stream/{hostname}/{instance_id}")
@@ -243,4 +243,4 @@ async def clear(request: ClearRequest):
     try:
         await app.state.broker.clear(request)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=traceback.format_exc())
