@@ -71,7 +71,7 @@ class TestBrokerCore:
         response = requests.post(url, json=payload, timeout=TIMEOUT_REQUESTS)
         assert response.status_code == 200, response.content
 
-        url = Config.ORIGIN_BROKER + "/unscraped_targets"
+        url = Config.ORIGIN_BROKER + "/get_unscraped_targets"
         response = requests.get(url, timeout=TIMEOUT_REQUESTS)
         assert response.status_code == 200, response.content
 

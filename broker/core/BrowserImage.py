@@ -1,6 +1,5 @@
 import asyncio
 import datetime
-from dataclasses import dataclass
 from typing import Any, Dict, List, Literal
 from uuid import UUID
 
@@ -20,10 +19,9 @@ class BrowserImageGet(BaseModel):
     flag_lazy_loading: bool
 
 
-@dataclass
-class BrowserImageGetResult:
-    request_timestamp: float
-    response_timestamp: float
+class BrowserImageGetResult(BaseModel):
+    request_timestamp: datetime.datetime
+    response_timestamp: datetime.datetime
     success: bool
     content: str
 

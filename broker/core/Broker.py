@@ -2,6 +2,7 @@ import asyncio
 import datetime
 import random
 import traceback
+from dataclasses import dataclass
 from typing import Any, Dict, List, Literal, NoReturn, Optional, Set, Tuple
 from uuid import UUID, uuid4
 
@@ -11,7 +12,7 @@ from core.DatabaseHandler import DatabaseHandler
 from core.NodeIdentifier import NodeIdentifier
 from core.schemas import ClearRequest, ScrapeRequest, ScrapeRequestResponse
 from core.ScraperImage import ScraperImage, ScraperImageModel
-from pydantic import BaseModel, HttpUrl
+from pydantic import BaseModel, Field, HttpUrl
 
 
 class RecordRequest(BaseModel):
@@ -27,15 +28,22 @@ class RecordRequest(BaseModel):
     content: str
 
 
+class Event(BaseModel):
+    timestamp: datetime.datetime = Field(default_factory=datetime.datetime.now)
+    detail: str
+    level: Literal["DEBUG", "INFO", "WARNING"]
+
+
 class Broker:
     def __init__(self) -> None:
         self.scrapers: Dict[int, ScraperImage] = {}  # node_id -> scraper
-        self.logger: List[Dict[str, Any]] = []
+        self.logger: List[Event] = []
         self.__lock_logger: asyncio.Lock = asyncio.Lock()
         self.effective_refresh_period: float = None
         self.__current_tasks: Dict[UUID, asyncio.Task] = {}
         self.__lock_current_tasks: asyncio.Lock = asyncio.Lock()
         self.__lock_hibernate: asyncio.Lock = asyncio.Lock()
+        self.__counter_update_loop: int = 0
 
     def to_dict(self) -> List[ScraperImageModel]:
         return [scraper.to_model() for scraper in self.scrapers.values()]
@@ -43,20 +51,16 @@ class Broker:
     async def log(
         self,
         detail: str,
-        level: Optional[Literal["INFO", "WARNING"]] = "INFO",
+        level: Optional[Literal["DEBUG", "INFO", "WARNING"]] = "INFO",
     ) -> None:
         async with self.__lock_logger:
-            event = {
-                "timestamp": datetime.datetime.now().isoformat(),
-                "detail": detail,
-                "level": level,
-            }
+            event = Event(detail=detail, level=level)
             self.logger.insert(0, event)
             self.logger = self.logger[: Config.BUFFER_LOGGER_SIZE]
         query = f"INSERT INTO {Config.DB_TABLE_LOGS} (timestamp, detail, level) VALUES (?, ?, ?)"
         await DatabaseHandler.execute(
             query,
-            (event["timestamp"], event["detail"], event["level"]),
+            (event.timestamp, event.detail, event.level),
         )
 
     async def scrape(self, request: ScrapeRequest) -> ScrapeRequestResponse:
@@ -306,11 +310,16 @@ class Broker:
         """
         if self.__lock_hibernate.locked():
             await self.log(
-                "broker is hibernating because of clearing method", level="WARNING"
+                "broker is hibernating because of clearing method",
+                level="WARNING",
             )
             return
         else:
             async with self.__lock_hibernate:
+                await self.log(
+                    f"Starting update loop: {self.__counter_update_loop}",
+                    level="DEBUG",
+                )
                 try:
                     await self.__update_available_nodes()
                     await self.__update_nodes()
@@ -318,6 +327,12 @@ class Broker:
                     await self.__retrieve_tasks()
                 except Exception:
                     traceback.print_exc()
+                finally:
+                    await self.log(
+                        f"Ending update loop: {self.__counter_update_loop}",
+                        level="DEBUG",
+                    )
+                    self.__counter_update_loop += 1
 
     async def background_update(self) -> NoReturn:
         loop = asyncio.get_running_loop()
