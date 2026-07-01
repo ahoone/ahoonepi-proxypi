@@ -71,9 +71,23 @@ class TestBrokerCore:
         response = requests.post(url, json=payload, timeout=TIMEOUT_REQUESTS)
         assert response.status_code == 200, response.content
 
+    def test_no_targets(self):
         url = Config.ORIGIN_BROKER + "/get_unscraped_targets"
         response = requests.get(url, timeout=TIMEOUT_REQUESTS)
         assert response.status_code == 200, response.content
+        assert len(json.loads(response.content)) == 0, response.content
+
+    def test_no_browsers(self):
+        sleep(
+            5
+        )  # need to wait a bit for the clear method to push to proxies and to retrieve the update
+        url = Config.ORIGIN_BROKER + "/nodes"
+        response = requests.get(url, timeout=TIMEOUT_REQUESTS)
+        assert response.status_code == 200, response.content
+        response_as_dict = json.loads(response.content)
+        for node in response_as_dict:
+            assert "browsers" in node, node
+            assert len(node["browsers"]) == 0, node
 
 
 # class TestBrokerIntense:
