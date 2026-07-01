@@ -1,11 +1,9 @@
 import asyncio
-import datetime
 import os
 import sys
 import traceback
 from contextlib import asynccontextmanager
 from typing import List
-from uuid import UUID
 
 import httpx
 from Config import Config
@@ -22,12 +20,7 @@ from core.schemas import (
 from core.ScraperImage import ScraperImageModel
 from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import (
-    FileResponse,
-    HTMLResponse,
-    JSONResponse,
-    StreamingResponse,
-)
+from fastapi.responses import FileResponse, StreamingResponse
 from starlette.background import BackgroundTask
 
 sys.path.insert(0, "/plugins")
@@ -108,7 +101,7 @@ async def css():
 async def scrape(request: ScrapeRequest) -> ScrapeRequestResponse:
     try:
         return await app.state.broker.scrape(request)
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=500, detail=traceback.format_exc())
 
 
@@ -127,7 +120,7 @@ async def collect(request: CollectRequest) -> CollectRequestResponse:
     """
     try:
         response = await DatabaseHandler.fetchone(query, (str(request.uuid),))
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=500, detail=traceback.format_exc())
     if not response:
         raise HTTPException(
@@ -137,7 +130,7 @@ async def collect(request: CollectRequest) -> CollectRequestResponse:
 
     try:
         response = await app.state.broker.get_running_tasks()
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=500, detail=traceback.format_exc())
     if request.uuid in response:
         raise HTTPException(
@@ -155,7 +148,7 @@ async def collect(request: CollectRequest) -> CollectRequestResponse:
     """
     try:
         response = await DatabaseHandler.fetchone(query)
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=500, detail=traceback.format_exc())
     if not response:
         raise HTTPException(
@@ -175,7 +168,7 @@ async def collect(request: CollectRequest) -> CollectRequestResponse:
 async def nodes() -> List[ScraperImageModel]:
     try:
         return app.state.broker.to_dict()
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=500, detail=traceback.format_exc())
 
 
@@ -183,7 +176,7 @@ async def nodes() -> List[ScraperImageModel]:
 async def get_unscraped_targets():
     try:
         return await DatabaseHandler.get_unscraped_targets()
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=500, detail=traceback.format_exc())
 
 
@@ -191,7 +184,7 @@ async def get_unscraped_targets():
 async def results():
     try:
         return await DatabaseHandler.get_scraped_targets()
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=500, detail=traceback.format_exc())
 
 
@@ -199,7 +192,7 @@ async def results():
 async def logger():
     try:
         return app.state.broker.logger
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=500, detail=traceback.format_exc())
 
 
@@ -242,5 +235,5 @@ async def stream(hostname: str, instance_id: str):
 async def clear(request: ClearRequest):
     try:
         await app.state.broker.clear(request)
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=500, detail=traceback.format_exc())

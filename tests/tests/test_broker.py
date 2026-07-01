@@ -1,4 +1,5 @@
 import json
+from socket import timeout
 from time import sleep
 
 import requests
@@ -51,16 +52,17 @@ class TestBrokerCore:
             in response_as_dict["content"]
         )
 
-    def test_clear(self):
-        """
-        Uses the left browser instance from `test_scrape_and_collect` to:
-            - cancel a running request,
-            - clear the browser instance.
-        Lazy loading triggers a wait period during which we can
-        """
+    def test_scrape_multiple_urls(self):
         url = Config.ORIGIN_BROKER + "/scrape"
-        payload = {}
+        payload = {
+            "url": [URLGenerator.next() for _ in range(20)],
+            "tag": "test_scrape_multiple_urls",
+            "flag_lazy_loading": True,
+        }
+        response = requests.post(url, json=payload, timeout=TIMEOUT_REQUESTS)
+        assert response.status_code == 202, response.content
 
+    def test_clear(self):
         url = Config.ORIGIN_BROKER + "/clear"
         payload = {
             "flag_cancel_running_tasks": True,

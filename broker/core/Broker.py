@@ -96,7 +96,7 @@ class Broker:
                     )
                 )
             await DatabaseHandler.executemany(query, data)
-            return ScrapeRequest(uuid=uuids)
+            return ScrapeRequestResponse(uuid=uuids)
 
         if isinstance(request.url, HttpUrl):
             return await scrape_url(request)
@@ -298,18 +298,26 @@ class Broker:
             await self.__load_records(completed)
 
     async def __update(self) -> None:
+        """
+        we want to skip the update loop if the clearing process is running
+        but we also need to make sure that we are not creating a race condition
+        (the lock is free -> the update loop is acquired -> takes time to complete)
+        (-> at the same time clear is called -> browser is deleted before distributing tasks)
+        """
         if self.__lock_hibernate.locked():
             await self.log(
                 "broker is hibernating because of clearing method", level="WARNING"
             )
             return
-        try:
-            await self.__update_available_nodes()
-            await self.__update_nodes()
-            await self.__distribute_task()
-            await self.__retrieve_tasks()
-        except Exception as e:
-            traceback.print_exc()
+        else:
+            async with self.__lock_hibernate:
+                try:
+                    await self.__update_available_nodes()
+                    await self.__update_nodes()
+                    await self.__distribute_task()
+                    await self.__retrieve_tasks()
+                except Exception:
+                    traceback.print_exc()
 
     async def background_update(self) -> NoReturn:
         loop = asyncio.get_running_loop()

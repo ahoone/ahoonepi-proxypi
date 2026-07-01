@@ -14,7 +14,7 @@ def pytest_collection_modifyitems(items):
     items.sort(key=lambda item: module_mapping.get(item.module.__name__, 999))
 
 
-@pytest.fixture(autouse=True)
-def wait_between_tests():
-    yield
-    sleep(TIME_BETWEEN_TESTS)
+# @pytest.fixture(autouse=True)
+# def wait_between_tests():
+#     yield
+#     sleep(TIME_BETWEEN_TESTS)
