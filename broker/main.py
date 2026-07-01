@@ -1,24 +1,26 @@
 import asyncio
-import datetime
 import os
 import sys
 import traceback
 from contextlib import asynccontextmanager
+from typing import List
 
 import httpx
 from Config import Config
 from core.Broker import Broker
-from core.DatabaseHandler import DatabaseHandler
+from core.DatabaseHandler import DatabaseHandler, RecordUnscrapedTarget
 from core.NodeIdentifier import NodeIdentifier
-from core.schemas import CollectRequest, GetRequest, ScrapeRequest
+from core.schemas import (
+    ClearRequest,
+    CollectRequest,
+    CollectRequestResponse,
+    ScrapeRequest,
+    ScrapeRequestResponse,
+)
+from core.ScraperImage import ScraperImageModel
 from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import (
-    FileResponse,
-    HTMLResponse,
-    JSONResponse,
-    StreamingResponse,
-)
+from fastapi.responses import FileResponse, StreamingResponse
 from starlette.background import BackgroundTask
 
 sys.path.insert(0, "/plugins")
@@ -86,105 +88,112 @@ async def css():
     return FileResponse("dashboard.css")
 
 
-@app.post("/get")
-async def get(request: GetRequest):
-    """
-    Gets an available browser from the broker,
-    and shortcuts the request logic.
-    Not designed to resist multiple calls,
-    and maybe initialize multiple browsers at once,
-    making it prone to detection.
+@app.post(
+    "/scrape",
+    description=(
+        "Main method of getting the broker to scrape an url. "
+        "The request will be loaded in the database and the broker will plan it. "
+        "This endpoint should be used with `get.collect`. "
+        "One improvment would be to add an expected time of collect. "
+    ),
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def scrape(request: ScrapeRequest) -> ScrapeRequestResponse:
+    try:
+        return await app.state.broker.scrape(request)
+    except Exception:
+        raise HTTPException(status_code=500, detail=traceback.format_exc())
+
+
+@app.get(
+    "/collect",
+    description=(
+        "Returns the successful html content associated with the url. "
+        "May return different codes depending on the status of the requests. "
+    ),
+)
+async def collect(request: CollectRequest) -> CollectRequestResponse:
+    query = f"""
+        SELECT 1
+        FROM {Config.DB_TABLE_TARGETS}
+        WHERE id = (?)
     """
     try:
-        browser = await app.state.broker.get_available_browser()
-        if not browser:
-            raise ValueError("no browser")
-        else:
-            print(browser.instance_id)
-        return await browser.get(request.url)
-    except Exception as e:
-        line = sys.exc_info()[2].tb_lineno
+        response = await DatabaseHandler.fetchone(query, (str(request.uuid),))
+    except Exception:
+        raise HTTPException(status_code=500, detail=traceback.format_exc())
+    if not response:
         raise HTTPException(
-            status_code=500, detail=f"{type(e).__name__} at line {line}: {str(e)}"
+            status_code=404,
+            detail=f"Given UUID {request.uuid} is not known as a target.",
         )
 
-
-@app.post("/scrape", status_code=status.HTTP_202_ACCEPTED)
-async def scrape(request: ScrapeRequest):
     try:
-        uuid = await app.state.broker.scrape(request)
-        return {"uuid": uuid}
-    except Exception as e:
-        line = sys.exc_info()[2].tb_lineno
+        response = await app.state.broker.get_running_tasks()
+    except Exception:
+        raise HTTPException(status_code=500, detail=traceback.format_exc())
+    if request.uuid in response:
         raise HTTPException(
-            status_code=500, detail=f"{type(e).__name__} at line {line}: {str(e)}"
+            status_code=425,
+            detail="Processing the target.",
         )
 
-
-@app.get("/collect")
-async def collect(request: CollectRequest):
-    """
-    returns just the successful request
-    but should return a more complete object if:
-    - the request is not done yet (anticipated time)
-    - if all tries failed
-    It also should mark the uuid as collected, and delete the entry
+    query = query = f"""
+        SELECT *
+        FROM {Config.DB_TABLE_REQUESTS}
+        WHERE 1=1
+            AND success = TRUE
+            AND {Config.DB_TABLE_TARGETS}_id = '{request.uuid}'
+        ORDER BY id ASC
     """
     try:
-        response = await app.state.broker.collect(request)
-    except Exception as e:
-        line = sys.exc_info()[2].tb_lineno
-        raise HTTPException(
-            status_code=500, detail=f"{type(e).__name__} at line {line}: {str(e)}"
-        )
+        response = await DatabaseHandler.fetchone(query)
+    except Exception:
+        raise HTTPException(status_code=500, detail=traceback.format_exc())
     if not response:
         raise HTTPException(
             status_code=425,
-            detail=f"Still have not processed the target (or the id is wrong)",
+            detail="Target yet to be proceed.",
         )
-    return response
+    return CollectRequestResponse(content=response["content"])
 
 
-@app.get("/nodes")
-async def nodes():
+@app.get(
+    "/nodes",
+    description=(
+        "Displays information about the nodes and their scraper component. "
+        "Endpoint used by the dashboard. "
+    ),
+)
+async def nodes() -> List[ScraperImageModel]:
     try:
         return app.state.broker.to_dict()
-    except Exception as e:
-        print(traceback.format_exc())
+    except Exception:
         raise HTTPException(status_code=500, detail=traceback.format_exc())
 
 
 @app.get("/get_unscraped_targets")
-async def get_unscraped_targets():
+async def get_unscraped_targets() -> List[RecordUnscrapedTarget]:
     try:
-        return await app.state.broker.get_unscraped_targets()
-    except Exception as e:
-        line = sys.exc_info()[2].tb_lineno
-        raise HTTPException(
-            status_code=500, detail=f"{type(e).__name__} at line {line}: {str(e)}"
-        )
+        return await DatabaseHandler.get_unscraped_targets()
+    except Exception:
+        raise HTTPException(status_code=500, detail=traceback.format_exc())
 
 
 @app.get("/results")
 async def results():
     try:
-        return await app.state.broker.get_scraped_targets()
-    except Exception as e:
-        line = sys.exc_info()[2].tb_lineno
-        raise HTTPException(
-            status_code=500, detail=f"{type(e).__name__} at line {line}: {str(e)}"
-        )
+        return await DatabaseHandler.get_scraped_targets()
+    except Exception:
+        raise HTTPException(status_code=500, detail=traceback.format_exc())
 
 
 @app.get("/logger")
 async def logger():
     try:
         return app.state.broker.logger
-    except Exception as e:
-        line = sys.exc_info()[2].tb_lineno
-        raise HTTPException(
-            status_code=500, detail=f"{type(e).__name__} at line {line}: {str(e)}"
-        )
+    except Exception:
+        raise HTTPException(status_code=500, detail=traceback.format_exc())
 
 
 @app.get("/stream/{hostname}/{instance_id}")
@@ -213,3 +222,18 @@ async def stream(hostname: str, instance_id: str):
         headers=dict(response.headers),
         background=BackgroundTask(client.aclose),
     )
+
+
+@app.post(
+    "/clear",
+    description=(
+        "Implements different flags to clear states handled by the broker without restarting the service. "
+        "Makes the broker hibernate (skip its update cycle) until completed. "
+        "An improvement would be to cancel tasks with a specified `tag`. "
+    ),
+)
+async def clear(request: ClearRequest):
+    try:
+        await app.state.broker.clear(request)
+    except Exception:
+        raise HTTPException(status_code=500, detail=traceback.format_exc())

@@ -31,5 +31,4 @@ class Config:
 
     REFRESH_RATE_SCRAPER = 0.1  # seconds
 
-    TRIGGER_LAZY_LOADING_BY_DEFAULT = True
     TIME_LIMIT_LAZY_LOADING = 10  # seconds

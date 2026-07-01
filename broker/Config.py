@@ -1,9 +1,8 @@
-import os
 import ipaddress
+import os
 
 
 class Config:
-
     HTTP_PORT_SCRAPER = os.environ["HTTP_PORT_SCRAPER"]
     NODE_ROLE = os.environ["NODE_ROLE"].split(",")
     SSH_NETWORK_BASE = os.environ["SSH_NETWORK_BASE"]
@@ -27,10 +26,12 @@ class Config:
     BROKER_CLEAR_DB_ON_STARTUP = True
     DB_TABLE_TARGETS = "targets"
     DB_TABLE_REQUESTS = "requests"
+    DB_TABLE_LOGS = "logs"
     BUFFER_LOGGER_SIZE = 10
     LIMIT_SQL_QUERIES = 200
     REFRESH_PERIOD_BROKER = 1  # seconds
     THRESHOLD_SCORE = 300
+    TRIGGER_LAZY_LOADING_BY_DEFAULT = True
 
     SCRAPER_FIRST_NAMES = (
         "Noah",

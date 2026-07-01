@@ -1,12 +1,37 @@
 import asyncio
 import datetime
 from typing import Any, Dict, List, Literal
+from uuid import UUID
 
+import httpx
 from Config import Config
 from core.NodeIdentifier import NodeIdentifier
+from pydantic import BaseModel, HttpUrl
 
 # this timeout is large because it accounts for lazy loading / others
 TIMEOUT_HTTP_SCRAPING = 60  # seconds
+TIMEOUT_HTTP_KILL = 10  # seconds
+
+
+class BrowserImageGet(BaseModel):
+    id: UUID
+    url: HttpUrl
+    flag_lazy_loading: bool
+
+
+class BrowserImageGetResult(BaseModel):
+    request_timestamp: datetime.datetime
+    response_timestamp: datetime.datetime
+    success: bool
+    content: str
+
+
+class BrowserImageModel(BaseModel):
+    created_at: datetime.datetime
+    expires_at: datetime.datetime
+    browsing_history: List[str]
+    status: Literal["idle", "requesting", "spotted", "waiting"]
+    score: float
 
 
 class BrowserImage:
@@ -26,31 +51,58 @@ class BrowserImage:
         )
         self.score: float = scraper_response["score"]
 
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "created_at": self.created_at,
-            "expires_at": self.expires_at,
-            "browsing_history": self.browsing_history,
-            "status": self.status,
-            "score": self.score,
-        }
+    def to_model(self) -> BrowserImageModel:
+        return BrowserImageModel(
+            created_at=self.created_at,
+            expires_at=self.expires_at,
+            browsing_history=self.browsing_history,
+            status=self.status,
+            score=self.score,
+        )
 
-    async def get(self, url: str) -> Dict[str, Any]:
+    async def get(self, payload: BrowserImageGet) -> BrowserImageGetResult:
         """
         should be cancellable
         (therefore response_timestamp is not defined)
         """
         loop = asyncio.get_running_loop()
         request_timestamp = loop.time()
-        response = await self.passport.client.post(
-            f"http://{self.passport.vpn_address}:{Config.HTTP_PORT_SCRAPER}/get",
-            json={"instance_id": self.instance_id, "url": url},
-            timeout=TIMEOUT_HTTP_SCRAPING,
-        )
+        try:
+            response = await self.passport.client.post(
+                f"http://{self.passport.vpn_address}:{Config.HTTP_PORT_SCRAPER}/get",
+                json=payload.model_dump(mode="json")
+                | {"instance_id": self.instance_id},
+                timeout=TIMEOUT_HTTP_SCRAPING,
+            )
+            success = response.status_code == 200  # Should examine the content
+            content = response.json()
+        except httpx.TimeoutException as e:
+            success = False
+            content = str(e)
+            print(
+                f"Request went timeout on {self.passport.vpn_address}:({self.instance_id}) with error: {e}"
+            )
+        except Exception as e:
+            success = False
+            content = str(e)
         response_timestamp = loop.time()
-        return {
-            "request_timestamp": request_timestamp,
-            "response_timestamp": response_timestamp,
-            "success": response.status_code == 200,  # Should examine the content
-            "content": response.json(),
-        }
+        return BrowserImageGetResult(
+            request_timestamp=request_timestamp,
+            response_timestamp=response_timestamp,
+            success=success,
+            content=content,
+        )
+
+    async def kill(self) -> bool:
+        try:
+            response = await self.passport.client.post(
+                f"http://{self.passport.vpn_address}:{Config.HTTP_PORT_SCRAPER}/kill",
+                json={"instance_id": self.instance_id},
+                timeout=TIMEOUT_HTTP_SCRAPING,
+            )
+            return response.status_code == 200
+        except Exception as e:
+            print(
+                f"Request went timeout on {self.passport.vpn_address}:({self.instance_id}) with error: {e}"
+            )
+            return False

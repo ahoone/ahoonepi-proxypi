@@ -27,6 +27,11 @@ TIMEOUT_TERMINATE_STREAM = 6  # seconds
 
 
 class Browser:
+    """
+    maybe a lock should be used to avoid multiple simultaneous call
+    are made to the get method
+    """
+
     display = 100  # First Xvfb (instead of 99)
 
     def __init__(self) -> None:
