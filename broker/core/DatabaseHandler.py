@@ -1,7 +1,19 @@
+import datetime
 from typing import Any, Dict, List, Optional, Tuple
+from uuid import UUID
 
 import aiosqlite
 from Config import Config
+from pydantic import BaseModel, HttpUrl
+
+
+class RecordUnscrapedTarget(BaseModel):
+    id: UUID
+    url: HttpUrl
+    antwortzeit: datetime.datetime
+    created_at: datetime.datetime
+    tag: str
+    flag_lazy_loading: bool
 
 
 class DatabaseHandler:
@@ -122,7 +134,7 @@ class DatabaseHandler:
         """)
 
     @classmethod
-    async def get_unscraped_targets(cls) -> List[Dict[str, Any]]:
+    async def get_unscraped_targets(cls) -> List[RecordUnscrapedTarget]:
         query = f"""
             SELECT *
             FROM {Config.DB_TABLE_TARGETS} l
@@ -138,7 +150,17 @@ class DatabaseHandler:
             ORDER BY antwortzeit ASC
             LIMIT {Config.LIMIT_SQL_QUERIES}
         """
-        return await cls.fetchall(query)
+        return [
+            RecordUnscrapedTarget(
+                id=record["id"],
+                url=record["url"],
+                antwortzeit=record["antwortzeit"],
+                created_at=record["created_at"],
+                tag=record["tag"],
+                flag_lazy_loading=record["flag_lazy_loading"],
+            )
+            for record in await cls.fetchall(query)
+        ]
 
     @classmethod
     async def get_scraped_targets(cls) -> List[Dict[str, Any]]:

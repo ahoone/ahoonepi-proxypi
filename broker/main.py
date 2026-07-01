@@ -8,7 +8,7 @@ from typing import List
 import httpx
 from Config import Config
 from core.Broker import Broker
-from core.DatabaseHandler import DatabaseHandler
+from core.DatabaseHandler import DatabaseHandler, RecordUnscrapedTarget
 from core.NodeIdentifier import NodeIdentifier
 from core.schemas import (
     ClearRequest,
@@ -173,7 +173,7 @@ async def nodes() -> List[ScraperImageModel]:
 
 
 @app.get("/get_unscraped_targets")
-async def get_unscraped_targets():
+async def get_unscraped_targets() -> List[RecordUnscrapedTarget]:
     try:
         return await DatabaseHandler.get_unscraped_targets()
     except Exception:

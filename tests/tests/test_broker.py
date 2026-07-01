@@ -1,5 +1,4 @@
 import json
-from socket import timeout
 from time import sleep
 
 import requests
@@ -72,7 +71,9 @@ class TestBrokerCore:
         response = requests.post(url, json=payload, timeout=TIMEOUT_REQUESTS)
         assert response.status_code == 200, response.content
 
-        # assert
+        url = Config.ORIGIN_BROKER + "/unscraped_targets"
+        response = requests.get(url, timeout=TIMEOUT_REQUESTS)
+        assert response.status_code == 200, response.content
 
 
 # class TestBrokerIntense:
