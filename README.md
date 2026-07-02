@@ -6,9 +6,7 @@ It relies on [zendriver](https://github.com/cdpdriver/zendriver) (following [nod
 
 ## Demo
 
-<video controls width="700">
-  <source src="demo.mp4" type="video/mp4">
-</video>
+![Demo](demo.gif)
 
 ```bash
 git clone https://github.com/ahoone/ahoonepi-proxypi
