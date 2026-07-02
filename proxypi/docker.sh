@@ -35,3 +35,17 @@ docker::restart() {
     fi
     # TODO (ahoone): implementing for the proxies
 }
+
+
+#######################################
+# Starts the test suite
+# Arguments:
+#   None
+# Returns:
+#   0 on success
+#######################################
+docker::tests() {
+    cd "$SCRIPT_DIR"
+    docker compose -f tests/docker-compose.yml --env-file config.env up --build -d
+    echob "-> docker logs tests"
+}

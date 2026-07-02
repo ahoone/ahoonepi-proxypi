@@ -27,7 +27,7 @@ class Config:
     DB_TABLE_TARGETS = "targets"
     DB_TABLE_REQUESTS = "requests"
     DB_TABLE_LOGS = "logs"
-    BUFFER_LOGGER_SIZE = 10
+    BUFFER_LOGGER_SIZE = 20
     LIMIT_SQL_QUERIES = 200
     REFRESH_PERIOD_BROKER = 1  # seconds
     THRESHOLD_SCORE = 300

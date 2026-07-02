@@ -2,8 +2,7 @@ import asyncio
 import datetime
 import random
 import traceback
-from dataclasses import dataclass
-from typing import Any, Dict, List, Literal, NoReturn, Optional, Set, Tuple
+from typing import Dict, List, Literal, NoReturn, Optional, Set, Tuple
 from uuid import UUID, uuid4
 
 from Config import Config
@@ -45,7 +44,7 @@ class Broker:
         self.__lock_hibernate: asyncio.Lock = asyncio.Lock()
         self.__counter_update_loop: int = 0
 
-    def to_dict(self) -> List[ScraperImageModel]:
+    def to_model(self) -> List[ScraperImageModel]:
         return [scraper.to_model() for scraper in self.scrapers.values()]
 
     async def log(
@@ -55,8 +54,9 @@ class Broker:
     ) -> None:
         async with self.__lock_logger:
             event = Event(detail=detail, level=level)
-            self.logger.insert(0, event)
-            self.logger = self.logger[: Config.BUFFER_LOGGER_SIZE]
+            if level != "DEBUG":
+                self.logger.insert(0, event)
+                self.logger = self.logger[: Config.BUFFER_LOGGER_SIZE]
         query = f"INSERT INTO {Config.DB_TABLE_LOGS} (timestamp, detail, level) VALUES (?, ?, ?)"
         await DatabaseHandler.execute(
             query,
