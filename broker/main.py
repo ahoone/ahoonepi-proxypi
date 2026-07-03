@@ -49,6 +49,8 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Broker",
     lifespan=lifespan,
+    docs_url=None,
+    redoc_url="/docs",
 )
 
 add_middleware(app, Config.ALLOWED_NETWORKS)
@@ -167,7 +169,7 @@ async def collect(request: CollectRequest) -> CollectRequestResponse:
 )
 async def nodes() -> List[ScraperImageModel]:
     try:
-        return app.state.broker.to_dict()
+        return app.state.broker.to_model()
     except Exception:
         raise HTTPException(status_code=500, detail=traceback.format_exc())
 

@@ -105,6 +105,9 @@ class ScraperImage:
         response_as_dict = json.loads(response)
         self.hostname = response_as_dict["hostname"]
         self.ipv6 = IPv6Address(response_as_dict["ipv6"])
+        # import random
+
+        # self.ipv6 = IPv6Address(random.getrandbits(128))
         self.__next_refresh_timestamp = asyncio.get_event_loop().time()
 
     async def update(self) -> None:
@@ -123,7 +126,7 @@ class ScraperImage:
                     timeout=TIMEOUT_SCRAPER_HTTP_REQUEST,
                 ),
             )
-        except httpx.ConnectError as e:
+        except httpx.ConnectError:
             print(
                 f"Unable to connect to {self.passport.vpn_address}. Will backoff for {BACKOFF_REFRESH_PERIOD_SCRAPER} seconds. Check for the scraper container running."
             )

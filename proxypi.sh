@@ -32,6 +32,7 @@ declare -A FCT_MAP=(
     [connect]="ssh::connect"
     [container-restart]="docker::restart"
     [container-status]="docker::status"
+    [deployment-tests]="docker::tests"
     [git-pull]="git::pull"
     [info]="ssh::info"
     [ram]="ssh::ram"
@@ -48,6 +49,7 @@ declare -A FCT_DESCR=(
     [connect]="Connects the sheel to the proxy"
     [container-restart]="Restarts the containers broker and scraper depending on the node role"
     [container-status]="Check if the scraper container is running"
+    [deployment-tests]="Starts the tests suite"
     [git-pull]="Upgrades the reference repository"
     [info]="same use as ping -w but properly done (1 is the lighthouse)"
     [ram]="get RAM and usage %"
@@ -76,7 +78,6 @@ declare -A FCT_ARGS=(
     [ram]="node_id"
     [swarm-execute]="timeout command"
 )
-
 
 EXIT_CODE_MISSING_ARGUMENT=1
 EXIT_CODE_UNKNOWN_FUNCTION=2
