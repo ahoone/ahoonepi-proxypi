@@ -1,0 +1,601 @@
+"id","timestamp","detail","level"
+78309,"2026-07-02 21:30:36.255335",Starting update loop: 26100,DEBUG
+78310,"2026-07-02 21:30:36.531055",no target found,INFO
+78311,"2026-07-02 21:30:36.534358",Ending update loop: 26100,DEBUG
+78312,"2026-07-02 21:30:37.255139",Starting update loop: 26101,DEBUG
+78313,"2026-07-02 21:30:37.481554",no target found,INFO
+78314,"2026-07-02 21:30:37.487146",Ending update loop: 26101,DEBUG
+78315,"2026-07-02 21:30:38.254765",Starting update loop: 26102,DEBUG
+78316,"2026-07-02 21:30:38.526709",no target found,INFO
+78317,"2026-07-02 21:30:38.530958",Ending update loop: 26102,DEBUG
+78318,"2026-07-02 21:30:39.254812",Starting update loop: 26103,DEBUG
+78319,"2026-07-02 21:30:39.500121",no target found,INFO
+78320,"2026-07-02 21:30:39.504367",Ending update loop: 26103,DEBUG
+78321,"2026-07-02 21:30:40.254541",Starting update loop: 26104,DEBUG
+78322,"2026-07-02 21:30:40.564256",no target found,INFO
+78323,"2026-07-02 21:30:40.568717",Ending update loop: 26104,DEBUG
+78324,"2026-07-02 21:30:41.254225",Starting update loop: 26105,DEBUG
+78325,"2026-07-02 21:30:41.488743",no target found,INFO
+78326,"2026-07-02 21:30:41.496766",Ending update loop: 26105,DEBUG
+78327,"2026-07-02 21:30:42.255381",Starting update loop: 26106,DEBUG
+78328,"2026-07-02 21:30:42.530100",no target found,INFO
+78329,"2026-07-02 21:30:42.535266",Ending update loop: 26106,DEBUG
+78330,"2026-07-02 21:30:43.256719",Starting update loop: 26107,DEBUG
+78331,"2026-07-02 21:30:43.493173",no target found,INFO
+78332,"2026-07-02 21:30:43.498960",Ending update loop: 26107,DEBUG
+78333,"2026-07-02 21:30:44.255076",Starting update loop: 26108,DEBUG
+78334,"2026-07-02 21:30:44.529312",no target found,INFO
+78335,"2026-07-02 21:30:44.533394",Ending update loop: 26108,DEBUG
+78336,"2026-07-02 21:30:45.256325",Starting update loop: 26109,DEBUG
+78337,"2026-07-02 21:30:45.483866",no target found,INFO
+78338,"2026-07-02 21:30:45.487712",Ending update loop: 26109,DEBUG
+78339,"2026-07-02 21:30:46.254812",Starting update loop: 26110,DEBUG
+78340,"2026-07-02 21:30:46.534837",no target found,INFO
+78341,"2026-07-02 21:30:46.540237",Ending update loop: 26110,DEBUG
+78342,"2026-07-02 21:30:47.254473",Starting update loop: 26111,DEBUG
+78343,"2026-07-02 21:30:47.492879",no target found,INFO
+78344,"2026-07-02 21:30:47.497941",Ending update loop: 26111,DEBUG
+78345,"2026-07-02 21:30:48.254889",Starting update loop: 26112,DEBUG
+78346,"2026-07-02 21:30:48.511332",no target found,INFO
+78347,"2026-07-02 21:30:48.515070",Ending update loop: 26112,DEBUG
+78348,"2026-07-02 21:30:49.254522",Starting update loop: 26113,DEBUG
+78349,"2026-07-02 21:30:49.484328",no target found,INFO
+78350,"2026-07-02 21:30:49.495437",Ending update loop: 26113,DEBUG
+78351,"2026-07-02 21:30:50.254509",Starting update loop: 26114,DEBUG
+78352,"2026-07-02 21:30:50.515910",no target found,INFO
+78353,"2026-07-02 21:30:50.519894",Ending update loop: 26114,DEBUG
+78354,"2026-07-02 21:30:51.254416",Starting update loop: 26115,DEBUG
+78355,"2026-07-02 21:30:51.485053",no target found,INFO
+78356,"2026-07-02 21:30:51.494540",Ending update loop: 26115,DEBUG
+78357,"2026-07-02 21:30:52.254645",Starting update loop: 26116,DEBUG
+78358,"2026-07-02 21:30:52.496985",no target found,INFO
+78359,"2026-07-02 21:30:52.499608",Ending update loop: 26116,DEBUG
+78360,"2026-07-02 21:30:53.254112",Starting update loop: 26117,DEBUG
+78361,"2026-07-02 21:30:53.485781",no target found,INFO
+78362,"2026-07-02 21:30:53.491076",Ending update loop: 26117,DEBUG
+78363,"2026-07-02 21:30:54.254553",Starting update loop: 26118,DEBUG
+78364,"2026-07-02 21:30:54.500946",no target found,INFO
+78365,"2026-07-02 21:30:54.504483",Ending update loop: 26118,DEBUG
+78366,"2026-07-02 21:30:55.254533",Starting update loop: 26119,DEBUG
+78367,"2026-07-02 21:30:55.486725",no target found,INFO
+78368,"2026-07-02 21:30:55.491092",Ending update loop: 26119,DEBUG
+78369,"2026-07-02 21:30:56.255114",Starting update loop: 26120,DEBUG
+78370,"2026-07-02 21:30:56.498115",no target found,INFO
+78371,"2026-07-02 21:30:56.502444",Ending update loop: 26120,DEBUG
+78372,"2026-07-02 21:30:57.254468",Starting update loop: 26121,DEBUG
+78373,"2026-07-02 21:30:57.485999",no target found,INFO
+78374,"2026-07-02 21:30:57.491019",Ending update loop: 26121,DEBUG
+78375,"2026-07-02 21:30:58.254200",Starting update loop: 26122,DEBUG
+78376,"2026-07-02 21:30:58.496864",no target found,INFO
+78377,"2026-07-02 21:30:58.500134",Ending update loop: 26122,DEBUG
+78378,"2026-07-02 21:30:59.254950",Starting update loop: 26123,DEBUG
+78379,"2026-07-02 21:30:59.478854",no target found,INFO
+78380,"2026-07-02 21:30:59.486122",Ending update loop: 26123,DEBUG
+78381,"2026-07-02 21:31:00.255899",Starting update loop: 26124,DEBUG
+78382,"2026-07-02 21:31:00.497181",no target found,INFO
+78383,"2026-07-02 21:31:00.500430",Ending update loop: 26124,DEBUG
+78384,"2026-07-02 21:31:01.254373",Starting update loop: 26125,DEBUG
+78385,"2026-07-02 21:31:01.476660",no target found,INFO
+78386,"2026-07-02 21:31:01.495058",Ending update loop: 26125,DEBUG
+78387,"2026-07-02 21:31:02.254404",Starting update loop: 26126,DEBUG
+78388,"2026-07-02 21:31:02.559445",no target found,INFO
+78389,"2026-07-02 21:31:02.564527",Ending update loop: 26126,DEBUG
+78390,"2026-07-02 21:31:03.258976",Starting update loop: 26127,DEBUG
+78391,"2026-07-02 21:31:03.506972",no target found,INFO
+78392,"2026-07-02 21:31:03.516932",Ending update loop: 26127,DEBUG
+78393,"2026-07-02 21:31:04.254907",Starting update loop: 26128,DEBUG
+78394,"2026-07-02 21:31:04.517079",selected target https://www.play-in.com/en/extension/1323/teenage-mutant-ninja-turtles/cartes/?_rsc=thdsj,INFO
+78395,"2026-07-02 21:31:06.174817",created browser Boisterous Simon,INFO
+78396,"2026-07-02 21:31:06.183464",no browser available for 33cc528e-2c74-4da0-9d15-f3464fd353e8,WARNING
+78397,"2026-07-02 21:31:06.187940",Ending update loop: 26128,DEBUG
+78398,"2026-07-02 21:31:06.191310",Starting update loop: 26129,DEBUG
+78399,"2026-07-02 21:31:06.464730",selected target https://www.play-in.com/en/extension/1323/teenage-mutant-ninja-turtles/cartes/?_rsc=thdsj,INFO
+78400,"2026-07-02 21:31:06.471745",browser Boisterous Simon selected for 33cc528e-2c74-4da0-9d15-f3464fd353e8,INFO
+78401,"2026-07-02 21:31:06.478729",Ending update loop: 26129,DEBUG
+78402,"2026-07-02 21:31:06.486612",Starting update loop: 26130,DEBUG
+78403,"2026-07-02 21:31:06.723485",no target found,INFO
+78404,"2026-07-02 21:31:06.729873",Ending update loop: 26130,DEBUG
+78405,"2026-07-02 21:31:07.254318",Starting update loop: 26131,DEBUG
+78406,"2026-07-02 21:31:07.554920",no target found,INFO
+78407,"2026-07-02 21:31:07.561329",Ending update loop: 26131,DEBUG
+78408,"2026-07-02 21:31:08.255799",Starting update loop: 26132,DEBUG
+78409,"2026-07-02 21:31:08.504840",no target found,INFO
+78410,"2026-07-02 21:31:08.508827",Ending update loop: 26132,DEBUG
+78411,"2026-07-02 21:31:09.254992",Starting update loop: 26133,DEBUG
+78412,"2026-07-02 21:31:09.571254",no target found,INFO
+78413,"2026-07-02 21:31:09.577420",Ending update loop: 26133,DEBUG
+78414,"2026-07-02 21:31:10.255336",Starting update loop: 26134,DEBUG
+78415,"2026-07-02 21:31:10.502975",no target found,INFO
+78416,"2026-07-02 21:31:10.507332",Ending update loop: 26134,DEBUG
+78417,"2026-07-02 21:31:11.255369",Starting update loop: 26135,DEBUG
+78418,"2026-07-02 21:31:11.597140",no target found,INFO
+78419,"2026-07-02 21:31:11.601752",Ending update loop: 26135,DEBUG
+78420,"2026-07-02 21:31:12.255001",Starting update loop: 26136,DEBUG
+78421,"2026-07-02 21:31:12.486761",no target found,INFO
+78422,"2026-07-02 21:31:12.491403",Ending update loop: 26136,DEBUG
+78423,"2026-07-02 21:31:13.254477",Starting update loop: 26137,DEBUG
+78424,"2026-07-02 21:31:13.578077",no target found,INFO
+78425,"2026-07-02 21:31:13.610473",Ending update loop: 26137,DEBUG
+78426,"2026-07-02 21:31:14.254183",Starting update loop: 26138,DEBUG
+78427,"2026-07-02 21:31:14.485066",no target found,INFO
+78428,"2026-07-02 21:31:14.489575",Ending update loop: 26138,DEBUG
+78429,"2026-07-02 21:31:15.254540",Starting update loop: 26139,DEBUG
+78430,"2026-07-02 21:31:15.556546",no target found,INFO
+78431,"2026-07-02 21:31:15.566134",Ending update loop: 26139,DEBUG
+78432,"2026-07-02 21:31:16.254411",Starting update loop: 26140,DEBUG
+78433,"2026-07-02 21:31:16.499854",no target found,INFO
+78434,"2026-07-02 21:31:16.503174",Ending update loop: 26140,DEBUG
+78435,"2026-07-02 21:31:17.254711",Starting update loop: 26141,DEBUG
+78436,"2026-07-02 21:31:17.583577",selected target https://www.play-in.com/en/extension/1320/lorwyn-eclipse/cartes/?_rsc=thdsj,INFO
+78437,"2026-07-02 21:31:20.012163",created browser Thunderous Alex,INFO
+78438,"2026-07-02 21:31:20.015451",no browser available for f4fd4b4c-a7fc-4e87-b66e-b994045adde7,WARNING
+78439,"2026-07-02 21:31:20.018665",Ending update loop: 26141,DEBUG
+78440,"2026-07-02 21:31:20.021900",Starting update loop: 26142,DEBUG
+78441,"2026-07-02 21:31:20.308249",selected target https://www.play-in.com/en/extension/1320/lorwyn-eclipse/cartes/?_rsc=thdsj,INFO
+78442,"2026-07-02 21:31:20.314415",browser Thunderous Alex selected for f4fd4b4c-a7fc-4e87-b66e-b994045adde7,INFO
+78443,"2026-07-02 21:31:20.322557",Ending update loop: 26142,DEBUG
+78444,"2026-07-02 21:31:20.325748",Starting update loop: 26143,DEBUG
+78445,"2026-07-02 21:31:20.555830",no target found,INFO
+78446,"2026-07-02 21:31:20.561519",Ending update loop: 26143,DEBUG
+78447,"2026-07-02 21:31:20.566533",Starting update loop: 26144,DEBUG
+78448,"2026-07-02 21:31:20.798858",no target found,INFO
+78449,"2026-07-02 21:31:20.805037",Ending update loop: 26144,DEBUG
+78450,"2026-07-02 21:31:21.255094",Starting update loop: 26145,DEBUG
+78451,"2026-07-02 21:31:21.591345",no target found,INFO
+78452,"2026-07-02 21:31:21.597814",Ending update loop: 26145,DEBUG
+78453,"2026-07-02 21:31:22.254746",Starting update loop: 26146,DEBUG
+78454,"2026-07-02 21:31:22.512662",no target found,INFO
+78455,"2026-07-02 21:31:22.538769",Ending update loop: 26146,DEBUG
+78456,"2026-07-02 21:31:23.255046",Starting update loop: 26147,DEBUG
+78457,"2026-07-02 21:31:23.609766",no target found,INFO
+78458,"2026-07-02 21:31:23.618279",Ending update loop: 26147,DEBUG
+78459,"2026-07-02 21:31:24.254915",Starting update loop: 26148,DEBUG
+78460,"2026-07-02 21:31:24.504697",no target found,INFO
+78461,"2026-07-02 21:31:24.510467",task f18c9a26-544c-44ea-a72b-097c28445603 failed: ,WARNING
+78462,"2026-07-02 21:31:24.519211",Ending update loop: 26148,DEBUG
+78463,"2026-07-02 21:31:25.254768",Starting update loop: 26149,DEBUG
+78464,"2026-07-02 21:31:25.562805",selected target https://www.play-in.com/en/extension/1401/magic-the-gathering-le-hobbit/cartes/?_rsc=thdsj,INFO
+78465,"2026-07-02 21:31:25.568134",unable to create a new instance,WARNING
+78466,"2026-07-02 21:31:25.573167",no browser available for f18c9a26-544c-44ea-a72b-097c28445603,WARNING
+78467,"2026-07-02 21:31:25.576478",Ending update loop: 26149,DEBUG
+78468,"2026-07-02 21:31:26.254808",Starting update loop: 26150,DEBUG
+78469,"2026-07-02 21:31:26.497933",selected target https://www.play-in.com/en/extension/1401/magic-the-gathering-le-hobbit/cartes/?_rsc=thdsj,INFO
+78470,"2026-07-02 21:31:26.502865",unable to create a new instance,WARNING
+78471,"2026-07-02 21:31:26.506847",no browser available for f18c9a26-544c-44ea-a72b-097c28445603,WARNING
+78472,"2026-07-02 21:31:26.510452",Ending update loop: 26150,DEBUG
+78473,"2026-07-02 21:31:27.254201",Starting update loop: 26151,DEBUG
+78474,"2026-07-02 21:31:27.925164",selected target https://www.play-in.com/en/extension/1401/magic-the-gathering-le-hobbit/cartes/?_rsc=thdsj,INFO
+78475,"2026-07-02 21:31:27.936025",unable to create a new instance,WARNING
+78476,"2026-07-02 21:31:27.940893",no browser available for f18c9a26-544c-44ea-a72b-097c28445603,WARNING
+78477,"2026-07-02 21:31:27.943717",task 8133d8d1-56e0-4147-acf2-9aac9866207c failed: ,WARNING
+78478,"2026-07-02 21:31:27.949362",Ending update loop: 26151,DEBUG
+78479,"2026-07-02 21:31:28.254609",Starting update loop: 26152,DEBUG
+78480,"2026-07-02 21:31:28.487506",selected target https://www.play-in.com/en/extension/1401/magic-the-gathering-le-hobbit/cartes/?_rsc=thdsj,INFO
+78481,"2026-07-02 21:31:28.491697",unable to create a new instance,WARNING
+78482,"2026-07-02 21:31:28.495403",no browser available for f18c9a26-544c-44ea-a72b-097c28445603,WARNING
+78483,"2026-07-02 21:31:28.499740",Ending update loop: 26152,DEBUG
+78484,"2026-07-02 21:31:29.254930",Starting update loop: 26153,DEBUG
+78485,"2026-07-02 21:31:29.675919",selected target https://www.play-in.com/en/extension/1401/magic-the-gathering-le-hobbit/cartes/?_rsc=thdsj,INFO
+78486,"2026-07-02 21:31:29.681330",unable to create a new instance,WARNING
+78487,"2026-07-02 21:31:29.684130",no browser available for f18c9a26-544c-44ea-a72b-097c28445603,WARNING
+78488,"2026-07-02 21:31:29.688507",Ending update loop: 26153,DEBUG
+78489,"2026-07-02 21:31:30.254324",Starting update loop: 26154,DEBUG
+78490,"2026-07-02 21:31:30.495731",selected target https://www.play-in.com/en/extension/1401/magic-the-gathering-le-hobbit/cartes/?_rsc=thdsj,INFO
+78491,"2026-07-02 21:31:30.500718",unable to create a new instance,WARNING
+78492,"2026-07-02 21:31:30.503373",no browser available for f18c9a26-544c-44ea-a72b-097c28445603,WARNING
+78493,"2026-07-02 21:31:30.506474",Ending update loop: 26154,DEBUG
+78494,"2026-07-02 21:31:31.256095",Starting update loop: 26155,DEBUG
+78495,"2026-07-02 21:31:31.641411",selected target https://www.play-in.com/en/extension/1401/magic-the-gathering-le-hobbit/cartes/?_rsc=thdsj,INFO
+78496,"2026-07-02 21:31:31.646634",unable to create a new instance,WARNING
+78497,"2026-07-02 21:31:31.650552",no browser available for f18c9a26-544c-44ea-a72b-097c28445603,WARNING
+78498,"2026-07-02 21:31:31.654455",Ending update loop: 26155,DEBUG
+78499,"2026-07-02 21:31:32.254724",Starting update loop: 26156,DEBUG
+78500,"2026-07-02 21:31:32.500437",selected target https://www.play-in.com/en/extension/1401/magic-the-gathering-le-hobbit/cartes/?_rsc=thdsj,INFO
+78501,"2026-07-02 21:31:32.503769",unable to create a new instance,WARNING
+78502,"2026-07-02 21:31:32.508298",no browser available for f18c9a26-544c-44ea-a72b-097c28445603,WARNING
+78503,"2026-07-02 21:31:32.513487",Ending update loop: 26156,DEBUG
+78504,"2026-07-02 21:31:33.254716",Starting update loop: 26157,DEBUG
+78505,"2026-07-02 21:31:33.574133",selected target https://www.play-in.com/en/extension/1401/magic-the-gathering-le-hobbit/cartes/?_rsc=thdsj,INFO
+78506,"2026-07-02 21:31:33.579924",unable to create a new instance,WARNING
+78507,"2026-07-02 21:31:33.583985",no browser available for f18c9a26-544c-44ea-a72b-097c28445603,WARNING
+78508,"2026-07-02 21:31:33.587520",Ending update loop: 26157,DEBUG
+78509,"2026-07-02 21:31:34.258708",Starting update loop: 26158,DEBUG
+78510,"2026-07-02 21:31:34.509858",selected target https://www.play-in.com/en/extension/1401/magic-the-gathering-le-hobbit/cartes/?_rsc=thdsj,INFO
+78511,"2026-07-02 21:31:34.515678",unable to create a new instance,WARNING
+78512,"2026-07-02 21:31:34.521282",no browser available for f18c9a26-544c-44ea-a72b-097c28445603,WARNING
+78513,"2026-07-02 21:31:34.524565",Ending update loop: 26158,DEBUG
+78514,"2026-07-02 21:31:35.255226",Starting update loop: 26159,DEBUG
+78515,"2026-07-02 21:31:35.611498",selected target https://www.play-in.com/en/extension/1401/magic-the-gathering-le-hobbit/cartes/?_rsc=thdsj,INFO
+78516,"2026-07-02 21:31:35.616170",unable to create a new instance,WARNING
+78517,"2026-07-02 21:31:35.619489",no browser available for f18c9a26-544c-44ea-a72b-097c28445603,WARNING
+78518,"2026-07-02 21:31:35.623907",Ending update loop: 26159,DEBUG
+78519,"2026-07-02 21:31:36.255018",Starting update loop: 26160,DEBUG
+78520,"2026-07-02 21:31:36.516491",selected target https://www.play-in.com/en/extension/1401/magic-the-gathering-le-hobbit/cartes/?_rsc=thdsj,INFO
+78521,"2026-07-02 21:31:36.520640",unable to create a new instance,WARNING
+78522,"2026-07-02 21:31:36.524503",no browser available for f18c9a26-544c-44ea-a72b-097c28445603,WARNING
+78523,"2026-07-02 21:31:36.528018",Ending update loop: 26160,DEBUG
+78524,"2026-07-02 21:31:37.255041",Starting update loop: 26161,DEBUG
+78525,"2026-07-02 21:31:37.649681",selected target https://www.play-in.com/en/extension/1401/magic-the-gathering-le-hobbit/cartes/?_rsc=thdsj,INFO
+78526,"2026-07-02 21:31:37.653396",unable to create a new instance,WARNING
+78527,"2026-07-02 21:31:37.743123",no browser available for f18c9a26-544c-44ea-a72b-097c28445603,WARNING
+78528,"2026-07-02 21:31:37.746515",Ending update loop: 26161,DEBUG
+78529,"2026-07-02 21:31:38.254316",Starting update loop: 26162,DEBUG
+78530,"2026-07-02 21:31:38.492980",selected target https://www.play-in.com/en/extension/1401/magic-the-gathering-le-hobbit/cartes/?_rsc=thdsj,INFO
+78531,"2026-07-02 21:31:38.498487",unable to create a new instance,WARNING
+78532,"2026-07-02 21:31:38.501052",no browser available for f18c9a26-544c-44ea-a72b-097c28445603,WARNING
+78533,"2026-07-02 21:31:38.504461",Ending update loop: 26162,DEBUG
+78534,"2026-07-02 21:31:39.255066",Starting update loop: 26163,DEBUG
+78535,"2026-07-02 21:31:39.620441",selected target https://www.play-in.com/en/extension/1401/magic-the-gathering-le-hobbit/cartes/?_rsc=thdsj,INFO
+78536,"2026-07-02 21:31:39.625863",unable to create a new instance,WARNING
+78537,"2026-07-02 21:31:39.628268",no browser available for f18c9a26-544c-44ea-a72b-097c28445603,WARNING
+78538,"2026-07-02 21:31:39.630916",Ending update loop: 26163,DEBUG
+78539,"2026-07-02 21:31:40.254621",Starting update loop: 26164,DEBUG
+78540,"2026-07-02 21:31:40.496101",selected target https://www.play-in.com/en/extension/1401/magic-the-gathering-le-hobbit/cartes/?_rsc=thdsj,INFO
+78541,"2026-07-02 21:31:40.501414",unable to create a new instance,WARNING
+78542,"2026-07-02 21:31:40.504245",no browser available for f18c9a26-544c-44ea-a72b-097c28445603,WARNING
+78543,"2026-07-02 21:31:40.507403",Ending update loop: 26164,DEBUG
+78544,"2026-07-02 21:31:41.255449",Starting update loop: 26165,DEBUG
+78545,"2026-07-02 21:31:42.265460",selected target https://www.play-in.com/en/extension/1401/magic-the-gathering-le-hobbit/cartes/?_rsc=thdsj,INFO
+78546,"2026-07-02 21:31:42.269727",unable to create a new instance,WARNING
+78547,"2026-07-02 21:31:42.273977",no browser available for f18c9a26-544c-44ea-a72b-097c28445603,WARNING
+78548,"2026-07-02 21:31:42.277209",Ending update loop: 26165,DEBUG
+78549,"2026-07-02 21:31:42.280436",Starting update loop: 26166,DEBUG
+78550,"2026-07-02 21:31:42.512418",selected target https://www.play-in.com/en/extension/1401/magic-the-gathering-le-hobbit/cartes/?_rsc=thdsj,INFO
+78551,"2026-07-02 21:31:42.516678",unable to create a new instance,WARNING
+78552,"2026-07-02 21:31:42.525595",no browser available for f18c9a26-544c-44ea-a72b-097c28445603,WARNING
+78553,"2026-07-02 21:31:42.541884",Ending update loop: 26166,DEBUG
+78554,"2026-07-02 21:31:43.254649",Starting update loop: 26167,DEBUG
+78555,"2026-07-02 21:31:43.688636",selected target https://www.play-in.com/en/extension/1401/magic-the-gathering-le-hobbit/cartes/?_rsc=thdsj,INFO
+78556,"2026-07-02 21:31:43.713615",browser Tiny Aria selected for f18c9a26-544c-44ea-a72b-097c28445603,INFO
+78557,"2026-07-02 21:31:43.717989",Ending update loop: 26167,DEBUG
+78558,"2026-07-02 21:31:44.255041",Starting update loop: 26168,DEBUG
+78559,"2026-07-02 21:31:44.510801",selected target https://www.play-in.com/en/extension/1342/les-secrets-de-strixhaven/cartes/?_rsc=thdsj,INFO
+78560,"2026-07-02 21:31:44.515919",browser Tiny Aria selected for 8133d8d1-56e0-4147-acf2-9aac9866207c,INFO
+78561,"2026-07-02 21:31:44.536363",Ending update loop: 26168,DEBUG
+78562,"2026-07-02 21:31:45.254317",Starting update loop: 26169,DEBUG
+78563,"2026-07-02 21:31:45.624021",no target found,INFO
+78564,"2026-07-02 21:31:45.630863",Ending update loop: 26169,DEBUG
+78565,"2026-07-02 21:31:46.254780",Starting update loop: 26170,DEBUG
+78566,"2026-07-02 21:31:46.500777",no target found,INFO
+78567,"2026-07-02 21:31:46.506516",Ending update loop: 26170,DEBUG
+78568,"2026-07-02 21:31:47.254514",Starting update loop: 26171,DEBUG
+78569,"2026-07-02 21:31:47.583177",no target found,INFO
+78570,"2026-07-02 21:31:47.587854",Ending update loop: 26171,DEBUG
+78571,"2026-07-02 21:31:48.255159",Starting update loop: 26172,DEBUG
+78572,"2026-07-02 21:31:48.496463",no target found,INFO
+78573,"2026-07-02 21:31:48.500674",Ending update loop: 26172,DEBUG
+78574,"2026-07-02 21:31:49.254543",Starting update loop: 26173,DEBUG
+78575,"2026-07-02 21:31:49.597960",no target found,INFO
+78576,"2026-07-02 21:31:49.604293",Ending update loop: 26173,DEBUG
+78577,"2026-07-02 21:31:50.255372",Starting update loop: 26174,DEBUG
+78578,"2026-07-02 21:31:50.507070",no target found,INFO
+78579,"2026-07-02 21:31:50.512800",Ending update loop: 26174,DEBUG
+78580,"2026-07-02 21:31:51.254851",Starting update loop: 26175,DEBUG
+78581,"2026-07-02 21:31:51.602935",no target found,INFO
+78582,"2026-07-02 21:31:51.608476",Ending update loop: 26175,DEBUG
+78583,"2026-07-02 21:31:52.254837",Starting update loop: 26176,DEBUG
+78584,"2026-07-02 21:31:52.489639",no target found,INFO
+78585,"2026-07-02 21:31:52.494369",Ending update loop: 26176,DEBUG
+78586,"2026-07-02 21:31:53.254477",Starting update loop: 26177,DEBUG
+78587,"2026-07-02 21:31:53.994570",no target found,INFO
+78588,"2026-07-02 21:31:53.999024",Ending update loop: 26177,DEBUG
+78589,"2026-07-02 21:31:54.254846",Starting update loop: 26178,DEBUG
+78590,"2026-07-02 21:31:54.491161",no target found,INFO
+78591,"2026-07-02 21:31:54.498998",Ending update loop: 26178,DEBUG
+78592,"2026-07-02 21:31:55.254446",Starting update loop: 26179,DEBUG
+78593,"2026-07-02 21:31:55.619369",no target found,INFO
+78594,"2026-07-02 21:31:55.624217",Ending update loop: 26179,DEBUG
+78595,"2026-07-02 21:31:56.254510",Starting update loop: 26180,DEBUG
+78596,"2026-07-02 21:31:56.501017",no target found,INFO
+78597,"2026-07-02 21:31:56.506428",Ending update loop: 26180,DEBUG
+78598,"2026-07-02 21:31:57.255766",Starting update loop: 26181,DEBUG
+78599,"2026-07-02 21:31:57.628534",no target found,INFO
+78600,"2026-07-02 21:31:57.633802",Ending update loop: 26181,DEBUG
+78601,"2026-07-02 21:31:58.255094",Starting update loop: 26182,DEBUG
+78602,"2026-07-02 21:31:58.481828",no target found,INFO
+78603,"2026-07-02 21:31:58.491092",Ending update loop: 26182,DEBUG
+78604,"2026-07-02 21:31:59.254598",Starting update loop: 26183,DEBUG
+78605,"2026-07-02 21:31:59.654245",no target found,INFO
+78606,"2026-07-02 21:31:59.662645",Ending update loop: 26183,DEBUG
+78607,"2026-07-02 21:32:00.254837",Starting update loop: 26184,DEBUG
+78608,"2026-07-02 21:32:00.502246",no target found,INFO
+78609,"2026-07-02 21:32:00.506282",Ending update loop: 26184,DEBUG
+78610,"2026-07-02 21:32:01.255017",Starting update loop: 26185,DEBUG
+78611,"2026-07-02 21:32:01.625290",no target found,INFO
+78612,"2026-07-02 21:32:01.628921",Ending update loop: 26185,DEBUG
+78613,"2026-07-02 21:32:02.255823",Starting update loop: 26186,DEBUG
+78614,"2026-07-02 21:32:02.484922",no target found,INFO
+78615,"2026-07-02 21:32:02.489089",Ending update loop: 26186,DEBUG
+78616,"2026-07-02 21:32:03.257850",Starting update loop: 26187,DEBUG
+78617,"2026-07-02 21:32:03.637717",no target found,INFO
+78618,"2026-07-02 21:32:03.642242",Ending update loop: 26187,DEBUG
+78619,"2026-07-02 21:32:04.256778",Starting update loop: 26188,DEBUG
+78620,"2026-07-02 21:32:04.534940",no target found,INFO
+78621,"2026-07-02 21:32:04.540588",Ending update loop: 26188,DEBUG
+78622,"2026-07-02 21:32:05.254338",Starting update loop: 26189,DEBUG
+78623,"2026-07-02 21:32:05.565857",no target found,INFO
+78624,"2026-07-02 21:32:05.570144",Ending update loop: 26189,DEBUG
+78625,"2026-07-02 21:32:06.254211",Starting update loop: 26190,DEBUG
+78626,"2026-07-02 21:32:06.485090",no target found,INFO
+78627,"2026-07-02 21:32:06.489071",task 33cc528e-2c74-4da0-9d15-f3464fd353e8 failed: ,WARNING
+78628,"2026-07-02 21:32:06.508739",Ending update loop: 26190,DEBUG
+78629,"2026-07-02 21:32:07.256208",Starting update loop: 26191,DEBUG
+78630,"2026-07-02 21:32:07.603539",selected target https://www.play-in.com/en/extension/1323/teenage-mutant-ninja-turtles/cartes/?_rsc=thdsj,INFO
+78631,"2026-07-02 21:32:07.609585",unable to create a new instance,WARNING
+78632,"2026-07-02 21:32:07.612334",no browser available for 33cc528e-2c74-4da0-9d15-f3464fd353e8,WARNING
+78633,"2026-07-02 21:32:07.615034",Ending update loop: 26191,DEBUG
+78634,"2026-07-02 21:32:08.254644",Starting update loop: 26192,DEBUG
+78635,"2026-07-02 21:32:08.504368",selected target https://www.play-in.com/en/extension/1323/teenage-mutant-ninja-turtles/cartes/?_rsc=thdsj,INFO
+78636,"2026-07-02 21:32:08.508875",unable to create a new instance,WARNING
+78637,"2026-07-02 21:32:08.511563",no browser available for 33cc528e-2c74-4da0-9d15-f3464fd353e8,WARNING
+78638,"2026-07-02 21:32:08.514427",Ending update loop: 26192,DEBUG
+78639,"2026-07-02 21:32:09.254267",Starting update loop: 26193,DEBUG
+78640,"2026-07-02 21:32:09.585699",selected target https://www.play-in.com/en/extension/1323/teenage-mutant-ninja-turtles/cartes/?_rsc=thdsj,INFO
+78641,"2026-07-02 21:32:09.589776",unable to create a new instance,WARNING
+78642,"2026-07-02 21:32:09.592412",no browser available for 33cc528e-2c74-4da0-9d15-f3464fd353e8,WARNING
+78643,"2026-07-02 21:32:09.595299",Ending update loop: 26193,DEBUG
+78644,"2026-07-02 21:32:10.254786",Starting update loop: 26194,DEBUG
+78645,"2026-07-02 21:32:10.504571",selected target https://www.play-in.com/en/extension/1323/teenage-mutant-ninja-turtles/cartes/?_rsc=thdsj,INFO
+78646,"2026-07-02 21:32:10.508740",unable to create a new instance,WARNING
+78647,"2026-07-02 21:32:10.511628",no browser available for 33cc528e-2c74-4da0-9d15-f3464fd353e8,WARNING
+78648,"2026-07-02 21:32:10.514616",Ending update loop: 26194,DEBUG
+78649,"2026-07-02 21:32:11.255115",Starting update loop: 26195,DEBUG
+78650,"2026-07-02 21:32:11.576653",selected target https://www.play-in.com/en/extension/1323/teenage-mutant-ninja-turtles/cartes/?_rsc=thdsj,INFO
+78651,"2026-07-02 21:32:11.580305",browser Boisterous Simon selected for 33cc528e-2c74-4da0-9d15-f3464fd353e8,INFO
+78652,"2026-07-02 21:32:11.584610",Ending update loop: 26195,DEBUG
+78653,"2026-07-02 21:32:12.254910",Starting update loop: 26196,DEBUG
+78654,"2026-07-02 21:32:12.502841",no target found,INFO
+78655,"2026-07-02 21:32:12.507670",Ending update loop: 26196,DEBUG
+78656,"2026-07-02 21:32:13.255544",Starting update loop: 26197,DEBUG
+78657,"2026-07-02 21:32:13.605990",no target found,INFO
+78658,"2026-07-02 21:32:13.620360",Ending update loop: 26197,DEBUG
+78659,"2026-07-02 21:32:14.254708",Starting update loop: 26198,DEBUG
+78660,"2026-07-02 21:32:14.487510",no target found,INFO
+78661,"2026-07-02 21:32:14.509686",Ending update loop: 26198,DEBUG
+78662,"2026-07-02 21:32:15.255370",Starting update loop: 26199,DEBUG
+78663,"2026-07-02 21:32:15.619819",no target found,INFO
+78664,"2026-07-02 21:32:15.624107",Ending update loop: 26199,DEBUG
+78665,"2026-07-02 21:32:16.255611",Starting update loop: 26200,DEBUG
+78666,"2026-07-02 21:32:16.509249",no target found,INFO
+78667,"2026-07-02 21:32:16.514185",Ending update loop: 26200,DEBUG
+78668,"2026-07-02 21:32:17.254840",Starting update loop: 26201,DEBUG
+78669,"2026-07-02 21:32:17.509602",no target found,INFO
+78670,"2026-07-02 21:32:17.514500",Ending update loop: 26201,DEBUG
+78671,"2026-07-02 21:32:18.255074",Starting update loop: 26202,DEBUG
+78672,"2026-07-02 21:32:18.766767",no target found,INFO
+78673,"2026-07-02 21:32:18.772188",Ending update loop: 26202,DEBUG
+78674,"2026-07-02 21:32:19.255001",Starting update loop: 26203,DEBUG
+78675,"2026-07-02 21:32:19.507330",no target found,INFO
+78676,"2026-07-02 21:32:19.511469",Ending update loop: 26203,DEBUG
+78677,"2026-07-02 21:32:20.254523",Starting update loop: 26204,DEBUG
+78678,"2026-07-02 21:32:20.566792",no target found,INFO
+78679,"2026-07-02 21:32:20.571123",task f4fd4b4c-a7fc-4e87-b66e-b994045adde7 failed: ,WARNING
+78680,"2026-07-02 21:32:20.576317",Ending update loop: 26204,DEBUG
+78681,"2026-07-02 21:32:21.254513",Starting update loop: 26205,DEBUG
+78682,"2026-07-02 21:32:21.487804",selected target https://www.play-in.com/en/extension/1320/lorwyn-eclipse/cartes/?_rsc=thdsj,INFO
+78683,"2026-07-02 21:32:21.494965",unable to create a new instance,WARNING
+78684,"2026-07-02 21:32:21.497809",no browser available for f4fd4b4c-a7fc-4e87-b66e-b994045adde7,WARNING
+78685,"2026-07-02 21:32:21.500794",Ending update loop: 26205,DEBUG
+78686,"2026-07-02 21:32:22.255012",Starting update loop: 26206,DEBUG
+78687,"2026-07-02 21:32:22.599508",selected target https://www.play-in.com/en/extension/1320/lorwyn-eclipse/cartes/?_rsc=thdsj,INFO
+78688,"2026-07-02 21:32:22.605872",unable to create a new instance,WARNING
+78689,"2026-07-02 21:32:22.608866",no browser available for f4fd4b4c-a7fc-4e87-b66e-b994045adde7,WARNING
+78690,"2026-07-02 21:32:22.611650",Ending update loop: 26206,DEBUG
+78691,"2026-07-02 21:32:23.254640",Starting update loop: 26207,DEBUG
+78692,"2026-07-02 21:32:23.488741",selected target https://www.play-in.com/en/extension/1320/lorwyn-eclipse/cartes/?_rsc=thdsj,INFO
+78693,"2026-07-02 21:32:23.492496",unable to create a new instance,WARNING
+78694,"2026-07-02 21:32:23.495311",no browser available for f4fd4b4c-a7fc-4e87-b66e-b994045adde7,WARNING
+78695,"2026-07-02 21:32:23.498458",Ending update loop: 26207,DEBUG
+78696,"2026-07-02 21:32:24.254507",Starting update loop: 26208,DEBUG
+78697,"2026-07-02 21:32:24.555751",selected target https://www.play-in.com/en/extension/1320/lorwyn-eclipse/cartes/?_rsc=thdsj,INFO
+78698,"2026-07-02 21:32:24.559645",unable to create a new instance,WARNING
+78699,"2026-07-02 21:32:24.562854",no browser available for f4fd4b4c-a7fc-4e87-b66e-b994045adde7,WARNING
+78700,"2026-07-02 21:32:24.565811",Ending update loop: 26208,DEBUG
+78701,"2026-07-02 21:32:25.254533",Starting update loop: 26209,DEBUG
+78702,"2026-07-02 21:32:25.521892",selected target https://www.play-in.com/en/extension/1320/lorwyn-eclipse/cartes/?_rsc=thdsj,INFO
+78703,"2026-07-02 21:32:25.525998",unable to create a new instance,WARNING
+78704,"2026-07-02 21:32:25.528840",no browser available for f4fd4b4c-a7fc-4e87-b66e-b994045adde7,WARNING
+78705,"2026-07-02 21:32:25.533060",Ending update loop: 26209,DEBUG
+78706,"2026-07-02 21:32:26.254478",Starting update loop: 26210,DEBUG
+78707,"2026-07-02 21:32:26.592473",selected target https://www.play-in.com/en/extension/1320/lorwyn-eclipse/cartes/?_rsc=thdsj,INFO
+78708,"2026-07-02 21:32:26.597144",unable to create a new instance,WARNING
+78709,"2026-07-02 21:32:26.603140",no browser available for f4fd4b4c-a7fc-4e87-b66e-b994045adde7,WARNING
+78710,"2026-07-02 21:32:26.606338",Ending update loop: 26210,DEBUG
+78711,"2026-07-02 21:32:27.254960",Starting update loop: 26211,DEBUG
+78712,"2026-07-02 21:32:27.485444",selected target https://www.play-in.com/en/extension/1320/lorwyn-eclipse/cartes/?_rsc=thdsj,INFO
+78713,"2026-07-02 21:32:27.489789",unable to create a new instance,WARNING
+78714,"2026-07-02 21:32:27.493212",no browser available for f4fd4b4c-a7fc-4e87-b66e-b994045adde7,WARNING
+78715,"2026-07-02 21:32:27.496369",Ending update loop: 26211,DEBUG
+78716,"2026-07-02 21:32:28.255447",Starting update loop: 26212,DEBUG
+78717,"2026-07-02 21:32:29.238454",selected target https://www.play-in.com/en/extension/1320/lorwyn-eclipse/cartes/?_rsc=thdsj,INFO
+78718,"2026-07-02 21:32:29.243480",unable to create a new instance,WARNING
+78719,"2026-07-02 21:32:29.247859",no browser available for f4fd4b4c-a7fc-4e87-b66e-b994045adde7,WARNING
+78720,"2026-07-02 21:32:29.251328",Ending update loop: 26212,DEBUG
+78721,"2026-07-02 21:32:29.255935",Starting update loop: 26213,DEBUG
+78722,"2026-07-02 21:32:29.499995",selected target https://www.play-in.com/en/extension/1320/lorwyn-eclipse/cartes/?_rsc=thdsj,INFO
+78723,"2026-07-02 21:32:29.504478",unable to create a new instance,WARNING
+78724,"2026-07-02 21:32:29.509397",no browser available for f4fd4b4c-a7fc-4e87-b66e-b994045adde7,WARNING
+78725,"2026-07-02 21:32:29.515287",Ending update loop: 26213,DEBUG
+78726,"2026-07-02 21:32:30.254618",Starting update loop: 26214,DEBUG
+78727,"2026-07-02 21:32:30.606912",selected target https://www.play-in.com/en/extension/1320/lorwyn-eclipse/cartes/?_rsc=thdsj,INFO
+78728,"2026-07-02 21:32:30.611485",unable to create a new instance,WARNING
+78729,"2026-07-02 21:32:30.617199",no browser available for f4fd4b4c-a7fc-4e87-b66e-b994045adde7,WARNING
+78730,"2026-07-02 21:32:30.620895",Ending update loop: 26214,DEBUG
+78731,"2026-07-02 21:32:31.254227",Starting update loop: 26215,DEBUG
+78732,"2026-07-02 21:32:31.496873",selected target https://www.play-in.com/en/extension/1320/lorwyn-eclipse/cartes/?_rsc=thdsj,INFO
+78733,"2026-07-02 21:32:31.501083",unable to create a new instance,WARNING
+78734,"2026-07-02 21:32:31.503816",no browser available for f4fd4b4c-a7fc-4e87-b66e-b994045adde7,WARNING
+78735,"2026-07-02 21:32:31.506642",Ending update loop: 26215,DEBUG
+78736,"2026-07-02 21:32:32.254996",Starting update loop: 26216,DEBUG
+78737,"2026-07-02 21:32:32.615119",selected target https://www.play-in.com/en/extension/1320/lorwyn-eclipse/cartes/?_rsc=thdsj,INFO
+78738,"2026-07-02 21:32:32.620526",unable to create a new instance,WARNING
+78739,"2026-07-02 21:32:32.623802",no browser available for f4fd4b4c-a7fc-4e87-b66e-b994045adde7,WARNING
+78740,"2026-07-02 21:32:32.628559",Ending update loop: 26216,DEBUG
+78741,"2026-07-02 21:32:33.254566",Starting update loop: 26217,DEBUG
+78742,"2026-07-02 21:32:33.483597",selected target https://www.play-in.com/en/extension/1320/lorwyn-eclipse/cartes/?_rsc=thdsj,INFO
+78743,"2026-07-02 21:32:33.488226",unable to create a new instance,WARNING
+78744,"2026-07-02 21:32:33.492535",no browser available for f4fd4b4c-a7fc-4e87-b66e-b994045adde7,WARNING
+78745,"2026-07-02 21:32:33.495333",Ending update loop: 26217,DEBUG
+78746,"2026-07-02 21:32:34.254587",Starting update loop: 26218,DEBUG
+78747,"2026-07-02 21:32:37.163301",selected target https://www.play-in.com/en/extension/1320/lorwyn-eclipse/cartes/?_rsc=thdsj,INFO
+78748,"2026-07-02 21:32:37.167748",unable to create a new instance,WARNING
+78749,"2026-07-02 21:32:37.170842",no browser available for f4fd4b4c-a7fc-4e87-b66e-b994045adde7,WARNING
+78750,"2026-07-02 21:32:37.173913",Ending update loop: 26218,DEBUG
+78751,"2026-07-02 21:32:37.176933",Starting update loop: 26219,DEBUG
+78752,"2026-07-02 21:32:37.410675",selected target https://www.play-in.com/en/extension/1320/lorwyn-eclipse/cartes/?_rsc=thdsj,INFO
+78753,"2026-07-02 21:32:37.415160",unable to create a new instance,WARNING
+78754,"2026-07-02 21:32:37.418401",no browser available for f4fd4b4c-a7fc-4e87-b66e-b994045adde7,WARNING
+78755,"2026-07-02 21:32:37.424526",Ending update loop: 26219,DEBUG
+78756,"2026-07-02 21:32:37.427509",Starting update loop: 26220,DEBUG
+78757,"2026-07-02 21:32:37.656228",selected target https://www.play-in.com/en/extension/1320/lorwyn-eclipse/cartes/?_rsc=thdsj,INFO
+78758,"2026-07-02 21:32:37.661563",unable to create a new instance,WARNING
+78759,"2026-07-02 21:32:37.664670",no browser available for f4fd4b4c-a7fc-4e87-b66e-b994045adde7,WARNING
+78760,"2026-07-02 21:32:37.669141",Ending update loop: 26220,DEBUG
+78761,"2026-07-02 21:32:37.672990",Starting update loop: 26221,DEBUG
+78762,"2026-07-02 21:32:37.908568",selected target https://www.play-in.com/en/extension/1320/lorwyn-eclipse/cartes/?_rsc=thdsj,INFO
+78763,"2026-07-02 21:32:37.922317",unable to create a new instance,WARNING
+78764,"2026-07-02 21:32:37.931443",no browser available for f4fd4b4c-a7fc-4e87-b66e-b994045adde7,WARNING
+78765,"2026-07-02 21:32:37.935997",Ending update loop: 26221,DEBUG
+78766,"2026-07-02 21:32:38.255220",Starting update loop: 26222,DEBUG
+78767,"2026-07-02 21:32:39.030995",selected target https://www.play-in.com/en/extension/1320/lorwyn-eclipse/cartes/?_rsc=thdsj,INFO
+78768,"2026-07-02 21:32:39.045069",browser Clever Lucy selected for f4fd4b4c-a7fc-4e87-b66e-b994045adde7,INFO
+78769,"2026-07-02 21:32:39.052353",Ending update loop: 26222,DEBUG
+78770,"2026-07-02 21:32:39.254470",Starting update loop: 26223,DEBUG
+78771,"2026-07-02 21:32:39.508822",no target found,INFO
+78772,"2026-07-02 21:32:39.517123",Ending update loop: 26223,DEBUG
+78773,"2026-07-02 21:32:40.255109",Starting update loop: 26224,DEBUG
+78774,"2026-07-02 21:32:40.681478",no target found,INFO
+78775,"2026-07-02 21:32:40.685776",Ending update loop: 26224,DEBUG
+78776,"2026-07-02 21:32:41.256035",Starting update loop: 26225,DEBUG
+78777,"2026-07-02 21:32:41.487541",no target found,INFO
+78778,"2026-07-02 21:32:41.492132",Ending update loop: 26225,DEBUG
+78779,"2026-07-02 21:32:42.254398",Starting update loop: 26226,DEBUG
+78780,"2026-07-02 21:32:42.628172",no target found,INFO
+78781,"2026-07-02 21:32:42.632908",Ending update loop: 26226,DEBUG
+78782,"2026-07-02 21:32:43.254720",Starting update loop: 26227,DEBUG
+78783,"2026-07-02 21:32:43.504965",no target found,INFO
+78784,"2026-07-02 21:32:43.509979",Ending update loop: 26227,DEBUG
+78785,"2026-07-02 21:32:44.254450",Starting update loop: 26228,DEBUG
+78786,"2026-07-02 21:32:44.566242",no target found,INFO
+78787,"2026-07-02 21:32:44.570701",task f18c9a26-544c-44ea-a72b-097c28445603 failed: ,WARNING
+78788,"2026-07-02 21:32:44.570787",task 8133d8d1-56e0-4147-acf2-9aac9866207c failed: ,WARNING
+78789,"2026-07-02 21:32:44.579356",Ending update loop: 26228,DEBUG
+78790,"2026-07-02 21:32:45.254538",Starting update loop: 26229,DEBUG
+78791,"2026-07-02 21:32:45.756840",selected target https://www.play-in.com/en/extension/1401/magic-the-gathering-le-hobbit/cartes/?_rsc=thdsj,INFO
+78792,"2026-07-02 21:32:45.761970",unable to create a new instance,WARNING
+78793,"2026-07-02 21:32:45.764805",no browser available for f18c9a26-544c-44ea-a72b-097c28445603,WARNING
+78794,"2026-07-02 21:32:45.769305",Ending update loop: 26229,DEBUG
+78795,"2026-07-02 21:32:46.254665",Starting update loop: 26230,DEBUG
+78796,"2026-07-02 21:32:46.493367",selected target https://www.play-in.com/en/extension/1401/magic-the-gathering-le-hobbit/cartes/?_rsc=thdsj,INFO
+78797,"2026-07-02 21:32:46.497553",unable to create a new instance,WARNING
+78798,"2026-07-02 21:32:46.500206",no browser available for f18c9a26-544c-44ea-a72b-097c28445603,WARNING
+78799,"2026-07-02 21:32:46.503722",Ending update loop: 26230,DEBUG
+78800,"2026-07-02 21:32:47.254447",Starting update loop: 26231,DEBUG
+78801,"2026-07-02 21:32:47.593095",selected target https://www.play-in.com/en/extension/1401/magic-the-gathering-le-hobbit/cartes/?_rsc=thdsj,INFO
+78802,"2026-07-02 21:32:47.599564",unable to create a new instance,WARNING
+78803,"2026-07-02 21:32:47.604208",no browser available for f18c9a26-544c-44ea-a72b-097c28445603,WARNING
+78804,"2026-07-02 21:32:47.607600",Ending update loop: 26231,DEBUG
+78805,"2026-07-02 21:32:48.254908",Starting update loop: 26232,DEBUG
+78806,"2026-07-02 21:32:48.491610",selected target https://www.play-in.com/en/extension/1401/magic-the-gathering-le-hobbit/cartes/?_rsc=thdsj,INFO
+78807,"2026-07-02 21:32:48.497271",unable to create a new instance,WARNING
+78808,"2026-07-02 21:32:48.500285",no browser available for f18c9a26-544c-44ea-a72b-097c28445603,WARNING
+78809,"2026-07-02 21:32:48.503166",Ending update loop: 26232,DEBUG
+78810,"2026-07-02 21:32:49.254258",Starting update loop: 26233,DEBUG
+78811,"2026-07-02 21:32:49.545082",selected target https://www.play-in.com/en/extension/1401/magic-the-gathering-le-hobbit/cartes/?_rsc=thdsj,INFO
+78812,"2026-07-02 21:32:49.590613",unable to create a new instance,WARNING
+78813,"2026-07-02 21:32:49.598666",no browser available for f18c9a26-544c-44ea-a72b-097c28445603,WARNING
+78814,"2026-07-02 21:32:49.613915",Ending update loop: 26233,DEBUG
+78815,"2026-07-02 21:32:50.254930",Starting update loop: 26234,DEBUG
+78816,"2026-07-02 21:32:50.500308",selected target https://www.play-in.com/en/extension/1401/magic-the-gathering-le-hobbit/cartes/?_rsc=thdsj,INFO
+78817,"2026-07-02 21:32:50.503443",unable to create a new instance,WARNING
+78818,"2026-07-02 21:32:50.506630",no browser available for f18c9a26-544c-44ea-a72b-097c28445603,WARNING
+78819,"2026-07-02 21:32:50.509638",Ending update loop: 26234,DEBUG
+78820,"2026-07-02 21:32:51.254818",Starting update loop: 26235,DEBUG
+78821,"2026-07-02 21:32:51.677341",selected target https://www.play-in.com/en/extension/1401/magic-the-gathering-le-hobbit/cartes/?_rsc=thdsj,INFO
+78822,"2026-07-02 21:32:51.686866",unable to create a new instance,WARNING
+78823,"2026-07-02 21:32:51.689913",no browser available for f18c9a26-544c-44ea-a72b-097c28445603,WARNING
+78824,"2026-07-02 21:32:51.693218",Ending update loop: 26235,DEBUG
+78825,"2026-07-02 21:32:52.254628",Starting update loop: 26236,DEBUG
+78826,"2026-07-02 21:32:52.495988",selected target https://www.play-in.com/en/extension/1401/magic-the-gathering-le-hobbit/cartes/?_rsc=thdsj,INFO
+78827,"2026-07-02 21:32:52.500997",unable to create a new instance,WARNING
+78828,"2026-07-02 21:32:52.504561",no browser available for f18c9a26-544c-44ea-a72b-097c28445603,WARNING
+78829,"2026-07-02 21:32:52.508983",Ending update loop: 26236,DEBUG
+78830,"2026-07-02 21:32:53.258854",Starting update loop: 26237,DEBUG
+78831,"2026-07-02 21:32:54.092160",selected target https://www.play-in.com/en/extension/1401/magic-the-gathering-le-hobbit/cartes/?_rsc=thdsj,INFO
+78832,"2026-07-02 21:32:54.096773",unable to create a new instance,WARNING
+78833,"2026-07-02 21:32:54.099395",no browser available for f18c9a26-544c-44ea-a72b-097c28445603,WARNING
+78834,"2026-07-02 21:32:54.102134",Ending update loop: 26237,DEBUG
+78835,"2026-07-02 21:32:54.254191",Starting update loop: 26238,DEBUG
+78836,"2026-07-02 21:32:54.500415",selected target https://www.play-in.com/en/extension/1401/magic-the-gathering-le-hobbit/cartes/?_rsc=thdsj,INFO
+78837,"2026-07-02 21:32:54.507672",unable to create a new instance,WARNING
+78838,"2026-07-02 21:32:54.510784",no browser available for f18c9a26-544c-44ea-a72b-097c28445603,WARNING
+78839,"2026-07-02 21:32:54.515312",Ending update loop: 26238,DEBUG
+78840,"2026-07-02 21:32:55.255124",Starting update loop: 26239,DEBUG
+78841,"2026-07-02 21:32:55.571941",selected target https://www.play-in.com/en/extension/1401/magic-the-gathering-le-hobbit/cartes/?_rsc=thdsj,INFO
+78842,"2026-07-02 21:32:55.577019",unable to create a new instance,WARNING
+78843,"2026-07-02 21:32:55.580639",no browser available for f18c9a26-544c-44ea-a72b-097c28445603,WARNING
+78844,"2026-07-02 21:32:55.584393",Ending update loop: 26239,DEBUG
+78845,"2026-07-02 21:32:56.254844",Starting update loop: 26240,DEBUG
+78846,"2026-07-02 21:32:56.516781",selected target https://www.play-in.com/en/extension/1401/magic-the-gathering-le-hobbit/cartes/?_rsc=thdsj,INFO
+78847,"2026-07-02 21:32:56.521280",unable to create a new instance,WARNING
+78848,"2026-07-02 21:32:56.525678",no browser available for f18c9a26-544c-44ea-a72b-097c28445603,WARNING
+78849,"2026-07-02 21:32:56.529167",Ending update loop: 26240,DEBUG
+78850,"2026-07-02 21:32:57.254511",Starting update loop: 26241,DEBUG
+78851,"2026-07-02 21:32:57.679358",selected target https://www.play-in.com/en/extension/1401/magic-the-gathering-le-hobbit/cartes/?_rsc=thdsj,INFO
+78852,"2026-07-02 21:32:57.684342",unable to create a new instance,WARNING
+78853,"2026-07-02 21:32:57.689912",no browser available for f18c9a26-544c-44ea-a72b-097c28445603,WARNING
+78854,"2026-07-02 21:32:57.694765",Ending update loop: 26241,DEBUG
+78855,"2026-07-02 21:32:58.254592",Starting update loop: 26242,DEBUG
+78856,"2026-07-02 21:32:58.489619",selected target https://www.play-in.com/en/extension/1401/magic-the-gathering-le-hobbit/cartes/?_rsc=thdsj,INFO
+78857,"2026-07-02 21:32:58.493900",unable to create a new instance,WARNING
+78858,"2026-07-02 21:32:58.496755",no browser available for f18c9a26-544c-44ea-a72b-097c28445603,WARNING
+78859,"2026-07-02 21:32:58.499674",Ending update loop: 26242,DEBUG
+78860,"2026-07-02 21:32:59.254594",Starting update loop: 26243,DEBUG
+78861,"2026-07-02 21:32:59.559574",selected target https://www.play-in.com/en/extension/1401/magic-the-gathering-le-hobbit/cartes/?_rsc=thdsj,INFO
+78862,"2026-07-02 21:32:59.564610",unable to create a new instance,WARNING
+78863,"2026-07-02 21:32:59.568089",no browser available for f18c9a26-544c-44ea-a72b-097c28445603,WARNING
+78864,"2026-07-02 21:32:59.572184",Ending update loop: 26243,DEBUG
+78865,"2026-07-02 21:33:00.254805",Starting update loop: 26244,DEBUG
+78866,"2026-07-02 21:33:00.503757",selected target https://www.play-in.com/en/extension/1401/magic-the-gathering-le-hobbit/cartes/?_rsc=thdsj,INFO
+78867,"2026-07-02 21:33:00.507460",unable to create a new instance,WARNING
+78868,"2026-07-02 21:33:00.511827",no browser available for f18c9a26-544c-44ea-a72b-097c28445603,WARNING
+78869,"2026-07-02 21:33:00.516489",Ending update loop: 26244,DEBUG
+78870,"2026-07-02 21:33:01.254985",Starting update loop: 26245,DEBUG
+78871,"2026-07-02 21:33:01.552358",selected target https://www.play-in.com/en/extension/1401/magic-the-gathering-le-hobbit/cartes/?_rsc=thdsj,INFO
+78872,"2026-07-02 21:33:01.556692",unable to create a new instance,WARNING
+78873,"2026-07-02 21:33:01.561395",no browser available for f18c9a26-544c-44ea-a72b-097c28445603,WARNING
+78874,"2026-07-02 21:33:01.564373",Ending update loop: 26245,DEBUG
+78875,"2026-07-02 21:33:02.254767",Starting update loop: 26246,DEBUG
+78876,"2026-07-02 21:33:02.486395",selected target https://www.play-in.com/en/extension/1401/magic-the-gathering-le-hobbit/cartes/?_rsc=thdsj,INFO
+78877,"2026-07-02 21:33:02.491296",unable to create a new instance,WARNING
+78878,"2026-07-02 21:33:02.495999",no browser available for f18c9a26-544c-44ea-a72b-097c28445603,WARNING
+78879,"2026-07-02 21:33:02.500363",Ending update loop: 26246,DEBUG
+78880,"2026-07-02 21:33:03.254549",Starting update loop: 26247,DEBUG
+78881,"2026-07-02 21:33:07.346067",selected target https://www.play-in.com/en/extension/1401/magic-the-gathering-le-hobbit/cartes/?_rsc=thdsj,INFO
+78882,"2026-07-02 21:33:07.361029",unable to create a new instance,WARNING
+78883,"2026-07-02 21:33:07.364173",no browser available for f18c9a26-544c-44ea-a72b-097c28445603,WARNING
+78884,"2026-07-02 21:33:07.367363",Ending update loop: 26247,DEBUG
+78885,"2026-07-02 21:33:07.370233",Starting update loop: 26248,DEBUG
+78886,"2026-07-02 21:33:07.601634",selected target https://www.play-in.com/en/extension/1401/magic-the-gathering-le-hobbit/cartes/?_rsc=thdsj,INFO
+78887,"2026-07-02 21:33:07.605893",unable to create a new instance,WARNING
+78888,"2026-07-02 21:33:07.612271",no browser available for f18c9a26-544c-44ea-a72b-097c28445603,WARNING
+78889,"2026-07-02 21:33:07.615971",Ending update loop: 26248,DEBUG
+78890,"2026-07-02 21:33:07.619228",Starting update loop: 26249,DEBUG
+78891,"2026-07-02 21:33:07.862174",selected target https://www.play-in.com/en/extension/1401/magic-the-gathering-le-hobbit/cartes/?_rsc=thdsj,INFO
+78892,"2026-07-02 21:33:07.866719",unable to create a new instance,WARNING
+78893,"2026-07-02 21:33:07.869580",no browser available for f18c9a26-544c-44ea-a72b-097c28445603,WARNING
+78894,"2026-07-02 21:33:07.873262",Ending update loop: 26249,DEBUG
+78895,"2026-07-02 21:33:07.876350",Starting update loop: 26250,DEBUG
+78896,"2026-07-02 21:33:08.118443",selected target https://www.play-in.com/en/extension/1401/magic-the-gathering-le-hobbit/cartes/?_rsc=thdsj,INFO
+78897,"2026-07-02 21:33:08.122451",unable to create a new instance,WARNING
+78898,"2026-07-02 21:33:08.125103",no browser available for f18c9a26-544c-44ea-a72b-097c28445603,WARNING
+78899,"2026-07-02 21:33:08.129780",Ending update loop: 26250,DEBUG
+78900,"2026-07-02 21:33:08.133962",Starting update loop: 26251,DEBUG
+78901,"2026-07-02 21:33:08.530417",selected target https://www.play-in.com/en/extension/1401/magic-the-gathering-le-hobbit/cartes/?_rsc=thdsj,INFO
+78902,"2026-07-02 21:33:08.534870",unable to create a new instance,WARNING
+78903,"2026-07-02 21:33:08.539053",no browser available for f18c9a26-544c-44ea-a72b-097c28445603,WARNING
+78904,"2026-07-02 21:33:08.544259",Ending update loop: 26251,DEBUG
+78905,"2026-07-02 21:33:08.547206",Starting update loop: 26252,DEBUG
+78906,"2026-07-02 21:33:08.804394",selected target https://www.play-in.com/en/extension/1401/magic-the-gathering-le-hobbit/cartes/?_rsc=thdsj,INFO
+78907,"2026-07-02 21:33:08.810552",unable to create a new instance,WARNING
+78908,"2026-07-02 21:33:08.814441",no browser available for f18c9a26-544c-44ea-a72b-097c28445603,WARNING
