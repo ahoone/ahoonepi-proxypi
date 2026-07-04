@@ -6,6 +6,10 @@ from Config import Config
 from pydantic import BaseModel, Field, HttpUrl
 
 
+class ErrorResponse(BaseModel):
+    detail: str
+
+
 class CollectRequest(BaseModel):
     uuid: UUID
     # flag to delete when retrieve ?

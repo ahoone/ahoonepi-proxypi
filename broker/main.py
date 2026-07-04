@@ -14,11 +14,12 @@ from core.schemas import (
     ClearRequest,
     CollectRequest,
     CollectRequestResponse,
+    ErrorResponse,
     ScrapeRequest,
     ScrapeRequestResponse,
 )
 from core.ScraperImage import ScraperImageModel
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, HTTPException, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from starlette.background import BackgroundTask
@@ -99,6 +100,7 @@ async def css():
         "One improvment would be to add an expected time of collect. "
     ),
     status_code=status.HTTP_202_ACCEPTED,
+    responses={500: {"model": ErrorResponse, "description": "Internal server error"}},
 )
 async def scrape(request: ScrapeRequest) -> ScrapeRequestResponse:
     try:
@@ -113,6 +115,17 @@ async def scrape(request: ScrapeRequest) -> ScrapeRequestResponse:
         "Returns the successful html content associated with the url. "
         "May return different codes depending on the status of the requests. "
     ),
+    responses={
+        404: {
+            "model": ErrorResponse,
+            "description": "Given UUID is not known as a target",
+        },
+        425: {
+            "model": ErrorResponse,
+            "description": "The target is being processed or has yet to be processed",
+        },
+        500: {"model": ErrorResponse, "description": "Internal server error"},
+    },
 )
 async def collect(request: CollectRequest) -> CollectRequestResponse:
     query = f"""
@@ -228,14 +241,20 @@ async def stream(hostname: str, instance_id: str):
 
 @app.post(
     "/clear",
+    status_code=status.HTTP_204_NO_CONTENT,
     description=(
         "Implements different flags to clear states handled by the broker without restarting the service. "
         "Makes the broker hibernate (skip its update cycle) until completed. "
         "An improvement would be to cancel tasks with a specified `tag`. "
     ),
+    responses={
+        204: {"description": "Broker successfully cleared"},
+        500: {"model": ErrorResponse, "description": "Internal server error"},
+    },
 )
-async def clear(request: ClearRequest):
+async def clear(request: ClearRequest) -> Response:
     try:
         await app.state.broker.clear(request)
+        return Response(status_code=204)
     except Exception:
         raise HTTPException(status_code=500, detail=traceback.format_exc())
