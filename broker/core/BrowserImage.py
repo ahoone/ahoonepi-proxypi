@@ -5,33 +5,16 @@ from uuid import UUID
 
 import httpx
 from Config import Config
+from core.models.BrowserImage import (
+    BrowserImageGet,
+    BrowserImageGetResult,
+    BrowserImageModel,
+)
 from core.NodeIdentifier import NodeIdentifier
-from pydantic import BaseModel, HttpUrl
 
 # this timeout is large because it accounts for lazy loading / others
 TIMEOUT_HTTP_SCRAPING = 60  # seconds
 TIMEOUT_HTTP_KILL = 10  # seconds
-
-
-class BrowserImageGet(BaseModel):
-    id: UUID
-    url: HttpUrl
-    flag_lazy_loading: bool
-
-
-class BrowserImageGetResult(BaseModel):
-    request_timestamp: datetime.datetime
-    response_timestamp: datetime.datetime
-    success: bool
-    content: str
-
-
-class BrowserImageModel(BaseModel):
-    created_at: datetime.datetime
-    expires_at: datetime.datetime
-    browsing_history: List[str]
-    status: Literal["idle", "requesting", "spotted", "waiting"]
-    score: float
 
 
 class BrowserImage:

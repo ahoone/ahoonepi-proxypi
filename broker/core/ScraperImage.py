@@ -3,13 +3,13 @@ import json
 import sys
 from ipaddress import IPv6Address
 from string import Template
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 import httpx
 from Config import Config
-from core.BrowserImage import BrowserImage, BrowserImageModel
-from core.NodeIdentifier import NodeIdentifier, NodeIdentifierModel
-from pydantic import BaseModel
+from core.BrowserImage import BrowserImage
+from core.models.ScraperImage import ScraperImageModel
+from core.NodeIdentifier import NodeIdentifier
 
 sys.path.insert(0, "/plugins")
 import proxypi
@@ -19,17 +19,6 @@ TIMEOUT_SCRAPER_HTTP_REQUEST = 4  # seconds
 TIMEOUT_SCRAPER_HTTP_REQUEST_NEW_INSTANCE = 10  # seconds
 REFRESH_PERIOD_SCRAPER = 1  # seconds
 BACKOFF_REFRESH_PERIOD_SCRAPER = 180  # seconds
-
-
-class ScraperImageModel(BaseModel):
-    online: bool
-    hostname: str
-    node_id: int
-    passport: NodeIdentifierModel
-    ram_specs: Optional[str]
-    ram_usage: Optional[str]
-    ipv6: IPv6Address
-    browsers: Dict[str, BrowserImageModel]
 
 
 class ScraperImage:
@@ -75,7 +64,7 @@ class ScraperImage:
             online=self.online,
             hostname=self.hostname,
             node_id=self.passport.node_id,
-            passport=self.passport.to_dict(),
+            passport=self.passport.to_model(),
             ram_specs=self.ram_specs,
             ram_usage=self.ram_usage,
             ipv6=self.ipv6,

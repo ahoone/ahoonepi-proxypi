@@ -5,32 +5,17 @@ import traceback
 from typing import Dict, List, Literal, NoReturn, Optional, Set, Tuple
 from uuid import UUID, uuid4
 
+from api.schemas.clear import ClearRequest
+from api.schemas.scrape import ScrapeRequest, ScrapeRequestResponse
 from Config import Config
-from core.BrowserImage import BrowserImage, BrowserImageGet, BrowserImageGetResult
+from core.BrowserImage import BrowserImage
 from core.DatabaseHandler import DatabaseHandler
+from core.models.Broker import Event, RecordRequest
+from core.models.BrowserImage import BrowserImageGet, BrowserImageGetResult
+from core.models.ScraperImage import ScraperImageModel
 from core.NodeIdentifier import NodeIdentifier
-from core.schemas import ClearRequest, ScrapeRequest, ScrapeRequestResponse
-from core.ScraperImage import ScraperImage, ScraperImageModel
-from pydantic import BaseModel, Field, HttpUrl
-
-
-class RecordRequest(BaseModel):
-    """
-    similar to core.BrowserImage.BrowserImageGetResult
-    but enhanced with the target_uuid
-    """
-
-    target_uuid: UUID
-    request_timestamp: datetime.datetime
-    response_timestamp: datetime.datetime
-    success: bool
-    content: str
-
-
-class Event(BaseModel):
-    timestamp: datetime.datetime = Field(default_factory=datetime.datetime.now)
-    detail: str
-    level: Literal["DEBUG", "INFO", "WARNING"]
+from core.ScraperImage import ScraperImage
+from pydantic import HttpUrl
 
 
 class Broker:
@@ -183,13 +168,6 @@ class Broker:
                 WHERE 1=1
                     {current_tasks_ids_placeholder}
                     AND l.enabled = 1
-                    AND NOT EXISTS (
-                        SELECT 1
-                        FROM {Config.DB_TABLE_REQUESTS} r
-                        WHERE 1=1
-                            AND r.{Config.DB_TABLE_TARGETS}_id = l.id
-                            AND r.success = TRUE
-                    )
                 ORDER BY l.antwortzeit ASC
             """
             response = await DatabaseHandler.fetchone(query)
@@ -225,6 +203,10 @@ class Broker:
         implements a flag to cancel a task if it is not done
         (useful to clean the environment)
         Returns a RecordRequest if the task is done or if the flag_cancel_if_not_done is set to true.
+
+        it would be nice to have the retry number of the task in the logs
+        but we would need to query the database
+        kinda useless
         """
         if task.done():
             # Here we do not examine for task.exception()
@@ -236,7 +218,6 @@ class Broker:
             # because we do not want to swallow the error
             result: BrowserImageGetResult = task.result()
             if not result.success:
-                # print(traceback.format_exc())
                 await self.log(
                     f"task {target_uuid} failed: {result.content}",
                     level="WARNING",
@@ -295,11 +276,11 @@ class Broker:
                     for target_uuid, task in self.__current_tasks.items()
                 ]
             )
-            completed: List[RecordRequest] = [_ for _ in completed if _]
-            for record in completed:
+            completed_without_none: List[RecordRequest] = [_ for _ in completed if _]
+            for record in completed_without_none:
                 del self.__current_tasks[record.target_uuid]
-        if len(completed) > 0:
-            await self.__load_records(completed)
+        if len(completed_without_none) > 0:
+            await self.__load_records(completed_without_none)
 
     async def __update(self) -> None:
         """
@@ -325,6 +306,8 @@ class Broker:
                     await self.__update_nodes()
                     await self.__distribute_task()
                     await self.__retrieve_tasks()
+                    await DatabaseHandler.disable_successfull_targets()
+                    await DatabaseHandler.disable_unsuccesfull_targets()
                 except Exception:
                     traceback.print_exc()
                 finally:
@@ -398,4 +381,4 @@ class Broker:
             if request.flag_kill_browsers:
                 await self.kill_browsers()
             if request.flag_clear_unassigned_targets:
-                await DatabaseHandler.clear_unassigned_targets()
+                await DatabaseHandler.disable_unassigned_targets()

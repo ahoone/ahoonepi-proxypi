@@ -32,6 +32,7 @@ class Config:
     REFRESH_PERIOD_BROKER = 1  # seconds
     THRESHOLD_SCORE = 300
     TRIGGER_LAZY_LOADING_BY_DEFAULT = True
+    RETRIES = 3
 
     SCRAPER_FIRST_NAMES = (
         "Noah",

@@ -1,19 +1,8 @@
-import datetime
 from typing import Any, Dict, List, Optional, Tuple
-from uuid import UUID
 
 import aiosqlite
 from Config import Config
-from pydantic import BaseModel, HttpUrl
-
-
-class RecordUnscrapedTarget(BaseModel):
-    id: UUID
-    url: HttpUrl
-    antwortzeit: datetime.datetime
-    created_at: datetime.datetime
-    tag: str
-    flag_lazy_loading: bool
+from core.models.DatabaseHandler import RecordUnscrapedTarget
 
 
 class DatabaseHandler:
@@ -122,7 +111,43 @@ class DatabaseHandler:
         await cls.__connection.commit()
 
     @classmethod
-    async def clear_unassigned_targets(cls):
+    async def disable_successfull_targets(cls) -> None:
+        query = f"""
+            UPDATE {Config.DB_TABLE_TARGETS} AS l
+            SET enabled = FALSE
+            WHERE 1=1
+                AND l.enabled = 1
+                AND EXISTS (
+                    SELECT 1
+                    FROM {Config.DB_TABLE_REQUESTS} r
+                    WHERE 1=1
+                        AND r.{Config.DB_TABLE_TARGETS}_id = l.id
+                        AND r.success = TRUE
+                );
+        """
+        await cls.__connection.execute(query)
+        await cls.__connection.commit()
+
+    @classmethod
+    async def disable_unsuccesfull_targets(cls) -> None:
+        query = f"""
+            UPDATE {Config.DB_TABLE_TARGETS} AS l
+            SET enabled = FALSE
+            WHERE 1=1
+                AND l.enabled = 1
+                AND (
+                    SELECT COUNT(*)
+                    FROM {Config.DB_TABLE_REQUESTS} r
+                    WHERE 1=1
+                        AND r.{Config.DB_TABLE_TARGETS}_id = l.id
+                        AND r.success = FALSE
+                ) >= {Config.RETRIES};
+        """
+        await cls.__connection.execute(query)
+        await cls.__connection.commit()
+
+    @classmethod
+    async def disable_unassigned_targets(cls) -> None:
         """
         clear unassigned targets that have no reference in requests
         we cannot drop the rows as if a try has been make, there is a request record
@@ -130,8 +155,9 @@ class DatabaseHandler:
         """
         await cls.__connection.execute(f"""
             UPDATE {Config.DB_TABLE_TARGETS} AS l
-            SET enabled = 0;
+            SET enabled = FALSE;
         """)
+        await cls.__connection.commit()
 
     @classmethod
     async def get_unscraped_targets(cls) -> List[RecordUnscrapedTarget]:
@@ -139,7 +165,7 @@ class DatabaseHandler:
             SELECT *
             FROM {Config.DB_TABLE_TARGETS} l
             WHERE 1=1
-                AND enabled = 1
+                AND enabled = TRUE
                 AND NOT EXISTS (
                     SELECT 1
                     FROM {Config.DB_TABLE_REQUESTS} r
