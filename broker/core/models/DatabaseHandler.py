@@ -4,7 +4,7 @@ from uuid import UUID
 from pydantic import BaseModel, HttpUrl
 
 
-class RecordUnscrapedTarget(BaseModel):
+class RecordTarget(BaseModel):
     id: UUID
     url: HttpUrl
     antwortzeit: datetime.datetime

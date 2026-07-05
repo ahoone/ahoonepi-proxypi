@@ -1,8 +1,9 @@
 from typing import Any, Dict, List, Optional, Tuple
+from uuid import UUID
 
 import aiosqlite
 from Config import Config
-from core.models.DatabaseHandler import RecordUnscrapedTarget
+from core.models.DatabaseHandler import RecordTarget
 
 
 class DatabaseHandler:
@@ -160,7 +161,7 @@ class DatabaseHandler:
         await cls.__connection.commit()
 
     @classmethod
-    async def get_unscraped_targets(cls) -> List[RecordUnscrapedTarget]:
+    async def get_unscraped_targets(cls) -> List[RecordTarget]:
         query = f"""
             SELECT *
             FROM {Config.DB_TABLE_TARGETS} l
@@ -177,7 +178,7 @@ class DatabaseHandler:
             LIMIT {Config.LIMIT_SQL_QUERIES}
         """
         return [
-            RecordUnscrapedTarget(
+            RecordTarget(
                 id=record["id"],
                 url=record["url"],
                 antwortzeit=record["antwortzeit"],
@@ -198,3 +199,25 @@ class DatabaseHandler:
             LIMIT {Config.LIMIT_SQL_QUERIES}
         """
         return await cls.fetchall(query)
+
+    @classmethod
+    async def get_targets_from_uuids(cls, uuids: List[UUID]) -> List[RecordTarget]:
+        placeholder = ",".join("?" for _ in uuids)
+        query = f"""
+            SELECT *
+            FROM {Config.DB_TABLE_TARGETS}
+            WHERE id in ({placeholder});
+        """
+        return [
+            RecordTarget(
+                id=record["id"],
+                url=record["url"],
+                antwortzeit=record["antwortzeit"],
+                created_at=record["created_at"],
+                tag=record["tag"],
+                flag_lazy_loading=record["flag_lazy_loading"],
+            )
+            for record in await cls.fetchall(
+                query, params=tuple(str(uuid) for uuid in uuids)
+            )
+        ]
