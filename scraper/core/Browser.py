@@ -6,8 +6,10 @@ import threading
 from typing import Any, AsyncGenerator, BinaryIO, Dict, List, Literal, Set, Tuple
 
 import zendriver as uc
+from common.schemas.get import ScraperGetRequest
+from common.schemas.get_scraper_state import BrowserModel
 from Config import Config
-from core.schemas import BotSpottedError, GetRequest
+from core.schemas import BotSpottedError
 from engine.detection import herobrine_is_here
 from engine.erholungszeit import erholungszeit
 from engine.score import score
@@ -78,6 +80,18 @@ class Browser:
         )
         self.__create_unpacking_frames_process()
         self.erholungszeit = datetime.datetime.now()
+
+    def to_model(self) -> BrowserModel:
+        return BrowserModel(
+            window_size=self.window_size,
+            display=self.display,
+            created_at=self.created_at,
+            expires_at=self.expires_at,
+            remaining_lifespan=self.remaining_lifespan(),
+            status=self.status(),
+            score=self.score(),
+            browsing_history=self.browsing_history,
+        )
 
     def __create_display(self) -> None:
         self.display = f":{Browser.display}"
@@ -237,7 +251,7 @@ class Browser:
         current_state = await page.evaluate("document.readyState")
         return current_state
 
-    async def get_or_abort(self, request: GetRequest) -> str:
+    async def get_or_abort(self, request: ScraperGetRequest) -> str:
         try:
             async with self.__get_lock:
                 return await self.get(request)
@@ -276,7 +290,7 @@ class Browser:
 
         return False
 
-    async def get(self, request: GetRequest) -> str:
+    async def get(self, request: ScraperGetRequest) -> str:
         """
         Moves the current page and captures its html content.
 

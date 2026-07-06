@@ -3,7 +3,6 @@ import os
 
 
 class Config:
-    MAX_INSTANCES_PER_SCRAPER = int(os.getenv("MAX_INSTANCES_PER_SCRAPER"))
     NODE_ROLE = os.getenv("NODE_ROLE").split(",")
     if "SCRAPER" not in NODE_ROLE:
         raise ValueError("the node should be a scraper to launch this image")
@@ -20,10 +19,6 @@ class Config:
         ),  # Docker compose networks (for the proxypi socket)
         ipaddress.ip_network("::1/128"),  # IPv6 localhost
     ]
-
-    BROWSER_DEFAULT_ID = "default"
-    BROWSER_DEFAULT_LIFESPAN = 3600  # 1 hour in seconds
-    BROWSER_DEFAULT_WINDOW = [1920, 1080]
 
     ERHOLUNGSZEIT_MINIMUM = 2000  # milliseconds
     ERHOLUNGSZEIT_MEAN = 5000  # milliseconds

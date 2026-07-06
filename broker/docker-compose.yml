@@ -13,6 +13,7 @@ services:
       - ./data:/data
       # - sqlite_data:/data
       - ../plugins:/plugins:ro
+      - ../common:/common:ro
       - /tmp/proxypi.sock:/tmp/proxypi.sock
     environment:
       NODE_ROLE: ${NODE_ROLE}

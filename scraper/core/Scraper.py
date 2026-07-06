@@ -1,16 +1,25 @@
 import asyncio
 from typing import Dict, NoReturn, Optional, Set
 
+from common.schemas.get import ScraperGetRequest
+from common.schemas.get_scraper_state import ScraperModel
+from common.schemas.new_instance import NewInstanceRequest
 from Config import Config
 from core.Browser import Browser
-from core.schemas import GetRequest, NewInstanceRequest
 
 
 class Scraper:
-
     def __init__(self) -> None:
         self.browsers: Dict[str, Browser] = {}
         self.__browser_active_tasks: Dict[str, Set[asyncio.Task]] = {}
+
+    def to_model(self) -> ScraperModel:
+        return ScraperModel(
+            browsers={
+                instance_id: browser.to_model()
+                for instance_id, browser in self.browsers.items()
+            }
+        )
 
     def browser_exists(self, instance_id: str) -> bool:
         return instance_id in self.browsers.keys()
@@ -21,7 +30,7 @@ class Scraper:
         )
         self.__browser_active_tasks[request.instance_id] = set()
 
-    async def get(self, request: GetRequest) -> str:
+    async def get(self, request: ScraperGetRequest) -> str:
         task = asyncio.create_task(
             self.browsers[request.instance_id].get_or_abort(request)
         )

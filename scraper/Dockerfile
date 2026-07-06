@@ -2,12 +2,16 @@ FROM python:3.10-slim
 
 USER root
 
-COPY aptfile /app/
+WORKDIR /app
+COPY . /app
 
 RUN apt-get update && \
-    xargs -a /app/aptfile apt-get install -y --no-install-recommends && \
+    xargs -a scraper/aptfile apt-get install -y --no-install-recommends && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
+
+RUN pip install --no-cache-dir -r scraper/requirements.txt
+RUN pip install -e common
 
 RUN ARCH=$(dpkg --print-architecture) && \
     if [ "$ARCH" = "amd64" ]; then \
@@ -35,14 +39,8 @@ RUN ARCH=$(dpkg --print-architecture) && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-WORKDIR /app
-
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-COPY . /app/
-
-RUN chmod +x start.sh
+RUN groupadd -r chrome && useradd -r -g chrome -m chrome
+RUN chown -R chrome:chrome /app
 
 #######################################
 # Changing container running user,
@@ -52,8 +50,6 @@ RUN chmod +x start.sh
 # not seem to solve the issue as indicated.
 #######################################
 
-RUN groupadd -r chrome && useradd -r -g chrome -m chrome
-COPY --chown=chrome:chrome . /app
 USER chrome
 
-CMD ["/app/start.sh"]
+ENTRYPOINT exec uvicorn scraper.main:app --host 0.0.0.0 --port 8000 --reload
