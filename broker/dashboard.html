@@ -121,8 +121,7 @@
         <script>
             const NODES_SOCKET = "/nodes";
             const NODES_REFRESH_PERIOD = 1_000;
-            const BROKER_SOCKET_RUNNING_REQUESTS = "/get_running_requests";
-            const BROKER_SOCKET_UNSCRAPED_TARGETS = "/get_unscraped_targets";
+            const BROKER_SOCKET = "/get_unscraped_targets";
             const BROKER_REFRESH_PERIOD = 1_000;
             const LOGGER_SOCKET = "/logger";
             const LOGGER_REFRESH_PERIOD = 1_000;
@@ -252,33 +251,29 @@
                 },
             ];
 
-            function boldIfRunning(r, value) {
-                return r.running ? "<strong>" + value + "</strong>" : value;
-            }
-
             const BROKER_COLUMNS = [
                 {
                     label: "URL",
                     render: function (r) {
-                        return boldIfRunning(r, r.url || "—");
+                        return r.url || "—";
                     },
                 },
                 {
                     label: "Antwortzeit",
                     render: function (r) {
-                        return boldIfRunning(r, r.antwortzeit || "—");
+                        return r.antwortzeit || "—";
                     },
                 },
                 {
                     label: "Timestamp",
                     render: function (r) {
-                        return boldIfRunning(r, r.created_at || "—");
+                        return r.created_at || "—";
                     },
                 },
                 {
                     label: "Tag",
                     render: function (r) {
-                        return boldIfRunning(r, r.tag || "—");
+                        return r.tag || "—";
                     },
                 },
             ];
@@ -401,36 +396,12 @@
 
             async function fetchBroker() {
                 try {
-                    const [runningRes, unscrapedRes] = await Promise.all([
-                        fetch(BROKER_SOCKET_RUNNING_REQUESTS),
-                        fetch(BROKER_SOCKET_UNSCRAPED_TARGETS),
-                    ]);
-
-                    if (!runningRes.ok) {
-                        throw new Error("HTTP " + runningRes.status);
-                    }
-                    if (!unscrapedRes.ok) {
-                        throw new Error("HTTP " + unscrapedRes.status);
-                    }
-
-                    const [runningJson, unscrapedJson] = await Promise.all([
-                        runningRes.json(),
-                        unscrapedRes.json(),
-                    ]);
-
-                    const runningRows = (
-                        Array.isArray(runningJson)
-                            ? runningJson
-                            : runningJson.output || []
-                    ).map((r) => ({ ...r, running: true }));
-
-                    const unscrapedRows = (
-                        Array.isArray(unscrapedJson)
-                            ? unscrapedJson
-                            : unscrapedJson.output || []
-                    ).map((r) => ({ ...r, running: false }));
-
-                    renderBroker([...runningRows, ...unscrapedRows]);
+                    const res = await fetch(BROKER_SOCKET);
+                    if (!res.ok) throw new Error("HTTP " + res.status);
+                    const json = await res.json();
+                    renderBroker(
+                        Array.isArray(json) ? json : json.output || [],
+                    );
                 } catch (e) {
                     console.error("Failed to fetch broker:", e);
                 }

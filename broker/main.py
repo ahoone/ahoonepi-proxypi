@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 
 from api.routes.clear import router as clear_router
 from api.routes.collect import router as collect_router
+from api.routes.get_broker_state import router as get_broker_state_router
 from api.routes.get_running_requests import router as get_running_requests_router
 from api.routes.get_unscraped_targets import router as get_unscraped_targets_router
 from api.routes.health import router as health_router
@@ -61,6 +62,7 @@ app.add_middleware(
 
 app.include_router(clear_router)
 app.include_router(collect_router)
+app.include_router(get_broker_state_router)
 app.include_router(get_running_requests_router)
 app.include_router(get_unscraped_targets_router)
 app.include_router(health_router)

@@ -1,4 +1,5 @@
 import traceback
+from typing import Optional
 
 from api.common import get_broker
 from api.schemas.clear import ClearRequest
@@ -23,7 +24,7 @@ router = APIRouter()
     },
 )
 async def clear(
-    request: ClearRequest, broker: Broker = Depends(get_broker)
+    request: Optional[ClearRequest], broker: Broker = Depends(get_broker)
 ) -> Response:
     try:
         await broker.clear(request)
