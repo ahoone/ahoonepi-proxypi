@@ -9,8 +9,8 @@ services:
     ports:
       - "${HTTP_PORT_SCRAPER}:8000"
     volumes:
-      - ../scraper:/app/scraper:ro
-      - ../common:/app/common:ro
+      - ../scraper:/app/scraper
+      - ../common:/app/common
       # Can not do a COPY inside the Dockerfile, as we are outside the component context
       # and that other services like NPM have limited permissions
       # And we mount outside of app as Docker tries to create an empty `plugins` folder inside of app

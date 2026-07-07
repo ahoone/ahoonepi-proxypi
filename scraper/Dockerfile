@@ -39,6 +39,7 @@ RUN ARCH=$(dpkg --print-architecture) && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
+RUN chmod +x /app/scraper/start.sh
 RUN groupadd -r chrome && useradd -r -g chrome -m chrome
 RUN chown -R chrome:chrome /app
 
@@ -52,4 +53,4 @@ RUN chown -R chrome:chrome /app
 
 USER chrome
 
-ENTRYPOINT exec uvicorn scraper.main:app --host 0.0.0.0 --port 8000 --reload
+CMD ["/app/scraper/start.sh"]
