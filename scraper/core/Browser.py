@@ -3,7 +3,8 @@ import datetime
 import os
 import subprocess
 import threading
-from typing import Any, AsyncGenerator, BinaryIO, Dict, List, Literal, Set, Tuple
+from typing import Any, AsyncGenerator, BinaryIO, Dict, List, Literal, Tuple
+from uuid import UUID, uuid4
 
 import zendriver as uc
 from common.schemas.get import ScraperGetRequest
@@ -37,6 +38,8 @@ class Browser:
     display = 100  # First Xvfb (instead of 99)
 
     def __init__(self) -> None:
+        self.chrome_profile_uuid: UUID
+        self.instance_id: str
         self.window_size: Tuple[int, int] = None
         self.display: str = None
         self.__display_process = None
@@ -56,11 +59,13 @@ class Browser:
     @classmethod
     async def create(
         cls,
+        instance_id: str,
         lifespan_in_seconds: int,
         window_size: Tuple[int, int],
     ) -> "Browser":
         instance = cls()
         await instance.__initialize(
+            instance_id,
             lifespan_in_seconds,
             window_size,
         )
@@ -68,9 +73,12 @@ class Browser:
 
     async def __initialize(
         self,
+        instance_id: str,
         lifespan_in_seconds: int,
         window_size: Tuple[int, int],
     ) -> None:
+        self.chrome_profile_uuid = uuid4()  # not used beyond the tmp profile
+        self.instance_id = instance_id
         self.window_size = window_size
         self.__create_display()
         self.__driver = await self.__create_driver()
@@ -118,6 +126,7 @@ class Browser:
             browser_args=[
                 "--no-sandbox",
                 "--disable-setuid-sandbox",
+                f"--user-data-dir=/tmp/chrome-profile-{self.chrome_profile_uuid}",
                 "--disable-blink-features=AutomationControlled",
                 "--disable-features=IsolateOrigins,site-per-process",
                 f"--window-size={self.window_size[0]},{self.window_size[1]}",

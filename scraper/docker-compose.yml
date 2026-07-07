@@ -3,6 +3,9 @@ services:
     build:
       context: ..
       dockerfile: scraper/Dockerfile
+      args:
+        CHROMIUM_VERSION: ${CHROMIUM_VERSION}
+        CHROMIUM_SNAPSHOT_DATE: ${CHROMIUM_SNAPSHOT_DATE}
     env_file:
       - path: ../config.env
         required: true
@@ -20,11 +23,6 @@ services:
     environment:
       NODE_ROLE: ${NODE_ROLE}
       PYTHONPATH: /app/scraper
-      # not sure if those are useful (those arguments are also set in main.py)
-      # (which initiates the browser including those)
-      CHROME_EXTRA_ARGS: >-
-        --no-sandbox
-        --disable-setuid-sandbox
     # Your kernel does not support memory limit capabilities or the cgroup is not mounted. Limitation discarded.
     # deploy:
     #   resources:

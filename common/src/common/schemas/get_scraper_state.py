@@ -12,7 +12,7 @@ class BrowserModel(BaseModel):
     remaining_lifespan: datetime.timedelta
     status: Literal["idle", "requesting", "spotted", "waiting"]
     score: float
-    browser_history: List[Any]
+    browsing_history: List[Any]
 
 
 class ScraperModel(BaseModel):

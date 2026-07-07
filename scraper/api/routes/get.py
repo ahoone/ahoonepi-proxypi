@@ -57,6 +57,7 @@ async def get(
     #     )
 
     try:
-        return await ScraperGetResponse(html_content=scraper.get(request))
+        html_content = await scraper.get(request)
+        return ScraperGetResponse(html_content=html_content)
     except Exception:
         raise HTTPException(status_code=500, detail=traceback.format_exc())

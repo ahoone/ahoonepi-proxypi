@@ -16,6 +16,9 @@ class TestBrokerCore:
         response = requests.get(url, timeout=TIMEOUT_REQUESTS)
         assert response.status_code == 200, response.content
 
+    def test_broker_creates_browser(self):
+        pass
+
     def test_scrape_and_collect(self):
         """
         Gives a target to the broker.

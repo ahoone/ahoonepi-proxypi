@@ -35,9 +35,9 @@ class Scraper:
     def browser_exists(self, instance_id: str) -> bool:
         return instance_id in self.browsers.keys()
 
-    async def new_instance(self, request: Optional[NewInstanceRequest]) -> None:
+    async def new_instance(self, request: NewInstanceRequest) -> None:
         self.browsers[request.instance_id] = await Browser.create(
-            request.lifespan_in_seconds, request.window_size
+            request.instance_id, request.lifespan_in_seconds, request.window_size
         )
         self.__browser_active_tasks[request.instance_id] = set()
 

@@ -2,6 +2,7 @@ ca-certificates
 curl
 ffmpeg
 fonts-liberation
+gdb
 gnupg
 jq
 libasound2

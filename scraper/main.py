@@ -5,7 +5,6 @@ from contextlib import asynccontextmanager
 from api.routes.available import router as available_router
 from api.routes.get import router as get_router
 from api.routes.get_scraper_state import router as get_scraper_state_router
-from api.routes.health import router as health_router
 from api.routes.kill import router as kill_router
 from api.routes.new_instance import router as new_instance_router
 from api.routes.stream import router as stream_router
@@ -56,7 +55,6 @@ app.add_middleware(
 app.include_router(available_router)
 app.include_router(get_router)
 app.include_router(get_scraper_state_router)
-app.include_router(health_router)
 app.include_router(kill_router)
 app.include_router(new_instance_router)
 app.include_router(stream_router)
