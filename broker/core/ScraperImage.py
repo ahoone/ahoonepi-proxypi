@@ -6,6 +6,7 @@ from string import Template
 from typing import Dict, List, Optional, Tuple, Union
 
 import httpx
+from common.schemas.get_scraper_state import ScraperModel
 from Config import Config
 from core.BrowserImage import BrowserImage
 from core.models.ScraperImage import ScraperImageModel
@@ -103,18 +104,22 @@ class ScraperImage:
         loop = asyncio.get_event_loop()
         if loop.time() < self.__next_refresh_timestamp:
             return
-
         try:
-            health_response, scraper_response = await asyncio.gather(
-                self.passport.client.get(
-                    f"http://{self.passport.vpn_address}:{Config.HTTP_PORT_SCRAPER}/health",
-                    timeout=TIMEOUT_SCRAPER_HTTP_REQUEST,
-                ),
-                self.passport.client.get(
-                    f"http://{self.passport.vpn_address}:{Config.HTTP_PORT_SCRAPER}/browsers",
-                    timeout=TIMEOUT_SCRAPER_HTTP_REQUEST,
-                ),
+            scraper_response = await self.passport.client.get(
+                f"http://{self.passport.vpn_address}:{Config.HTTP_PORT_SCRAPER}/get_scraper_state",
+                timeout=TIMEOUT_SCRAPER_HTTP_REQUEST,
             )
+            scraper_response.raise_for_status()
+            scraper_model: ScraperModel = ScraperModel.model_validate(
+                scraper_response.json()
+            )
+            self.available = scraper_model.can_create_browser
+            self.ram_specs = scraper_model.ram_specs
+            self.ram_usage = scraper_model.ram_usage
+            self.browsers = {
+                instance_id: BrowserImage(instance_id, self.passport, browser_model)
+                for instance_id, browser_model in scraper_model.browsers
+            }
         except httpx.ConnectError:
             print(
                 f"Unable to connect to {self.passport.vpn_address}. Will backoff for {BACKOFF_REFRESH_PERIOD_SCRAPER} seconds. Check for the scraper container running."
@@ -124,22 +129,6 @@ class ScraperImage:
         except Exception as e:
             print(f"[{self.passport.vpn_address}:{Config.HTTP_PORT_SCRAPER}] {e}")
             return
-
-        if health_response.status_code == 200:
-            health_response_as_dict = json.loads(health_response.text)
-            self.available = health_response_as_dict["can_create_browser"]
-            self.ram_specs = health_response_as_dict["ram_specs"]
-            self.ram_usage = health_response_as_dict["ram_usage"]
-
-        if scraper_response.status_code == 200:
-            self.browsers = {}
-            for instance_id, browser_as_dict in json.loads(
-                scraper_response.text
-            ).items():
-                self.browsers[instance_id] = BrowserImage(
-                    instance_id, self.passport, browser_as_dict
-                )
-
         self.__next_refresh_timestamp = loop.time() + REFRESH_PERIOD_SCRAPER
 
     async def new_instance(

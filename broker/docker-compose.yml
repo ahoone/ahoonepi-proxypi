@@ -1,22 +1,23 @@
 services:
   fastapi:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: broker/Dockerfile
     env_file:
       - path: ../config.env
         required: true
     ports:
       - "${HTTP_PORT_BROKER}:8000"
     volumes:
-      - ./:/app
+      - ../broker:/app/broker:ro
+      - ../common:/app/common:ro
       - ./data:/data
       # - sqlite_data:/data
       - ../plugins:/plugins:ro
-      - ../common:/common:ro
       - /tmp/proxypi.sock:/tmp/proxypi.sock
     environment:
       NODE_ROLE: ${NODE_ROLE}
+      PYTHONPATH: /app/broker
     restart: unless-stopped
     networks:
       - default

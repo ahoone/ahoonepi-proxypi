@@ -2,7 +2,7 @@ import datetime
 import traceback
 
 from api.common import get_scraper
-from api.schemas.common import ErrorResponse
+from common.schemas.common import ErrorResponse
 from common.schemas.get import ScraperGetRequest, ScraperGetResponse
 from core.Scraper import Scraper
 from fastapi import APIRouter, Depends, HTTPException

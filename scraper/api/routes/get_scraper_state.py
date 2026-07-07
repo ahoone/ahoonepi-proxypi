@@ -9,7 +9,7 @@ router = APIRouter()
 
 
 @router.get(
-    "/browsers",
+    "/get_scraper_state",
     description=(
         "Returns all the info you need for the broker. "
         "Be sure to check what is contained inside of `browsers.browsing_history`. "

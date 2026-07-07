@@ -1,8 +1,8 @@
 import traceback
 
 from api.common import get_broker
-from api.schemas.common import ErrorResponse
 from api.schemas.scrape import ScrapeRequest, ScrapeRequestResponse
+from common.schemas.common import ErrorResponse
 from core.Broker import Broker
 from fastapi import APIRouter, Depends, HTTPException, status
 

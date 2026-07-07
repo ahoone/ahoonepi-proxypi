@@ -1,9 +1,9 @@
 import asyncio
 import datetime
-from typing import Any, Dict, List, Literal
-from uuid import UUID
+from typing import List, Literal
 
 import httpx
+from common.schemas.get_scraper_state import BrowserModel
 from Config import Config
 from core.models.BrowserImage import (
     BrowserImageGet,
@@ -22,17 +22,17 @@ class BrowserImage:
         self,
         instance_id: str,
         passport: NodeIdentifier,
-        scraper_response: Dict[str, Any],
+        browser_model: BrowserModel,
     ) -> None:
         self.instance_id: str = instance_id
         self.passport: NodeIdentifier = passport
-        self.created_at: datetime.datetime = scraper_response["created_at"]
-        self.expires_at: datetime.datetime = scraper_response["expires_at"]
+        self.created_at: datetime.datetime = browser_model.created_at
+        self.expires_at: datetime.datetime = browser_model.expires_at
         self.browsing_history: List[str] = []
         self.status: Literal["idle", "requesting", "spotted", "waiting"] = (
-            scraper_response["status"]
+            browser_model.status
         )
-        self.score: float = scraper_response["score"]
+        self.score: float = browser_model.score
 
     def to_model(self) -> BrowserImageModel:
         return BrowserImageModel(

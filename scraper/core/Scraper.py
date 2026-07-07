@@ -1,6 +1,8 @@
 import asyncio
+import os
 from typing import Dict, NoReturn, Optional, Set
 
+from common.Config import Config as ContractConfig
 from common.schemas.get import ScraperGetRequest
 from common.schemas.get_scraper_state import ScraperModel
 from common.schemas.new_instance import NewInstanceRequest
@@ -14,11 +16,20 @@ class Scraper:
         self.__browser_active_tasks: Dict[str, Set[asyncio.Task]] = {}
 
     def to_model(self) -> ScraperModel:
+        ram_total, ram_used, ram_free = map(
+            int, os.popen("free -b").readlines()[1].split()[1:4]
+        )
+
         return ScraperModel(
+            is_running_as_root=os.getuid() == 0,
+            can_create_browser=len(self.browsers)
+            < ContractConfig.MAX_INSTANCES_PER_SCRAPER,
+            ram_specs=f"{ram_total // 1024**3}GiB",
+            ram_usage=f"{(100 * ram_used) // ram_total}%",
             browsers={
                 instance_id: browser.to_model()
                 for instance_id, browser in self.browsers.items()
-            }
+            },
         )
 
     def browser_exists(self, instance_id: str) -> bool:

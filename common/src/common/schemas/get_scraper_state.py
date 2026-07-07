@@ -1,12 +1,12 @@
 import datetime
-from typing import Annotated, Any, Dict, List, Literal, Tuple
+from typing import Any, Dict, List, Literal, Tuple
 
-from pydantic import BaseModel, Field, StringConstraints
+from pydantic import BaseModel, Field
 
 
 class BrowserModel(BaseModel):
     window_size: Tuple[int, int]
-    display: Annotated[str, StringConstraints(pattern=r"^:\d{3}$")]
+    display: str
     created_at: datetime.datetime
     expires_at: datetime.datetime
     remaining_lifespan: datetime.timedelta
@@ -16,6 +16,10 @@ class BrowserModel(BaseModel):
 
 
 class ScraperModel(BaseModel):
+    is_running_as_root: bool
+    can_create_browser: bool
+    ram_specs: str
+    ram_usage: str
     browsers: Dict[str, BrowserModel] = Field(
         description=(
             "The key to the object is the `instance_id`: `str` of the browser. "

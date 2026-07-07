@@ -79,9 +79,9 @@ app.include_router(stream_router)
 
 @app.get("/", include_in_schema=False)
 async def home():
-    return FileResponse("dashboard.html")
+    return FileResponse("/app/broker/dashboard.html")
 
 
 @app.get("/dashboard.css", include_in_schema=False)
 async def css():
-    return FileResponse("dashboard.css")
+    return FileResponse("/app/broker/dashboard.css")
