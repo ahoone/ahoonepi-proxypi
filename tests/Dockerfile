@@ -4,8 +4,10 @@ USER root
 
 WORKDIR /app
 
-COPY requirements.txt /app/requirements.txt
+COPY tests/requirements.txt /app/tests/requirements.txt
+RUN pip install --no-cache-dir -r /app/tests/requirements.txt
 
-RUN pip install --no-cache-dir -r /app/requirements.txt
+COPY common /app/common
+RUN pip install -e common
 
 COPY . /app/

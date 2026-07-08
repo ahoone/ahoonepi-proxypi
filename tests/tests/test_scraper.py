@@ -2,6 +2,7 @@ import json
 from time import sleep
 
 import requests
+from common.schemas.architecture import ScraperModel
 from Config import Config
 from URLGenerator import URLGenerator
 
@@ -9,6 +10,23 @@ TIMEOUT_REQUESTS = 60  # in seconds, may take some time as we are waiting for ei
 EXPLICIT_NEW_INSTANCE_ID = "explicit"
 EXPLICIT_NEW_INSTANCE_LIFESPAN = 10  # in seconds
 EXPLICIT_NEW_INSTANCE_WINDOW_SIZE = [1280, 720]
+
+
+class TestScraperPrep:
+    def test_endpoint_terminate(self):
+        """
+        Test the endpoint and clear the browsers for the following tests.
+        """
+        url = Config.ORIGIN_SCRAPER + "/terminate"
+        response = requests.post(url, timeout=TIMEOUT_REQUESTS)
+        assert response.status_code == 204, response
+
+    def test_no_instance_running(self):
+        url = Config.ORIGIN_SCRAPER + "/get_scraper_state"
+        response = requests.get(url, timeout=TIMEOUT_REQUESTS)
+        assert response.status_code == 200, response
+        scraper_model = ScraperModel(response.json())
+        assert not scraper_model.browsers, scraper_model
 
 
 class TestScraperCore:
@@ -24,6 +42,10 @@ class TestScraperCore:
 
     def test_explicit_new_instance(self):
         """
+        Found: it is because the browser returns an empty string if the getting task fails
+        And the error code is swallowed
+        It is also the source of the broker getting empty responses without an error code
+
         BUG ! This function does not fail despite no explicit instance existing
         ============================= test session starts ==============================
         platform linux -- Python 3.10.20, pytest-9.0.3, pluggy-1.6.0 -- /usr/local/bin/python3.10

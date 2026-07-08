@@ -1,12 +1,13 @@
 import asyncio
 import json
 import sys
+import traceback
 from ipaddress import IPv6Address
 from string import Template
 from typing import Dict, List, Optional, Tuple, Union
 
 import httpx
-from common.schemas.get_scraper_state import ScraperModel
+from common.schemas.architecture import ScraperModel
 from Config import Config
 from core.BrowserImage import BrowserImage
 from core.models.ScraperImage import ScraperImageModel
@@ -118,7 +119,7 @@ class ScraperImage:
             self.ram_usage = scraper_model.ram_usage
             self.browsers = {
                 instance_id: BrowserImage(instance_id, self.passport, browser_model)
-                for instance_id, browser_model in scraper_model.browsers
+                for instance_id, browser_model in scraper_model.browsers.items()
             }
         except httpx.ConnectError:
             print(
@@ -128,6 +129,7 @@ class ScraperImage:
             return
         except Exception as e:
             print(f"[{self.passport.vpn_address}:{Config.HTTP_PORT_SCRAPER}] {e}")
+            print(traceback.format_exc())
             return
         self.__next_refresh_timestamp = loop.time() + REFRESH_PERIOD_SCRAPER
 

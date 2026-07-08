@@ -2,6 +2,7 @@ import traceback
 
 from api.common import get_scraper
 from common.Config import Config
+from common.schemas.common import ErrorResponse
 from common.schemas.new_instance import NewInstanceRequest
 from core.Scraper import Scraper
 from fastapi import APIRouter, Body, Depends, HTTPException
@@ -9,16 +10,32 @@ from fastapi import APIRouter, Body, Depends, HTTPException
 router = APIRouter()
 
 
-@router.post("/new-instance", status_code=201)
+@router.post(
+    "/new-instance",
+    status_code=201,
+    description=(
+        "Creates a new instances performing checks on its id and on the number of running instances. "
+        "This request spawns processes and therefore can take time to complete. "
+    ),
+    responses={
+        423: {
+            "model": ErrorResponse,
+            "description": "The scraper is busy (likely terminating)",
+        },
+        500: {"model": ErrorResponse, "description": "Internal server error"},
+    },
+)
 async def new_instance(
     request: NewInstanceRequest = Body(default_factory=NewInstanceRequest),
     scraper: Scraper = Depends(get_scraper),
 ) -> None:
-    """
-    Creates a new instances performing checks on its id
-    and on the number of running instances.
-    """
-    if scraper.browser_exists(request.instance_id):
+    if scraper.busy:
+        raise HTTPException(
+            status_code=423,
+            detail="The scraper is busy",
+        )
+
+    if await scraper.browser_exists(request.instance_id):
         raise HTTPException(
             status_code=409,
             detail=f"Browser instance with id {request.instance_id} already exists",

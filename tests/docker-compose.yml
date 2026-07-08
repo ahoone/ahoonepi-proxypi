@@ -1,8 +1,8 @@
 services:
   test:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: tests/Dockerfile
     container_name: tests
     environment:
       HTTP_PORT_BROKER: ${HTTP_PORT_BROKER}

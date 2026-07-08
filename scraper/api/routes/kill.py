@@ -1,6 +1,7 @@
 import traceback
 
 from api.common import get_scraper
+from common.schemas.common import ErrorResponse
 from common.schemas.kill import KillRequest
 from core.Scraper import Scraper
 from fastapi import APIRouter, Depends, HTTPException
@@ -14,10 +15,22 @@ router = APIRouter()
         "Kill the target instance correctly cleaning its tasks and processes. "
         "Does not return if the killing was successfull, as ending the chromedriver process may take some time. "
     ),
+    responses={
+        423: {
+            "model": ErrorResponse,
+            "description": "The scraper is busy (likely terminating)",
+        },
+        500: {"model": ErrorResponse, "description": "Internal server error"},
+    },
 )
 async def kill(request: KillRequest, scraper: Scraper = Depends(get_scraper)):
-    """ """
-    if not scraper.browser_exists(request.instance_id):
+    if scraper.busy:
+        raise HTTPException(
+            status_code=423,
+            detail="The scraper is busy",
+        )
+
+    if not await scraper.browser_exists(request.instance_id):
         raise HTTPException(
             status_code=409,
             detail=f"No browser instance with id {request.instance_id}",

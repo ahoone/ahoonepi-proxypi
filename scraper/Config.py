@@ -24,6 +24,6 @@ class Config:
     ERHOLUNGSZEIT_MEAN = 5000  # milliseconds
     ERHOLUNGSZEIT_SPREAD = 0.5  # variance
 
-    REFRESH_RATE_SCRAPER = 0.1  # seconds
+    REFRESH_RATE_SCRAPER = 0.01  # seconds
 
     TIME_LIMIT_LAZY_LOADING = 10  # seconds

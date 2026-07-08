@@ -1,7 +1,6 @@
 import traceback
 
 from api.common import get_scraper
-from common.schemas.architecture import ScraperModel
 from common.schemas.common import ErrorResponse
 from core.Scraper import Scraper
 from fastapi import APIRouter, Depends, HTTPException
@@ -9,15 +8,15 @@ from fastapi import APIRouter, Depends, HTTPException
 router = APIRouter()
 
 
-@router.get(
-    "/get_scraper_state",
+@router.post(
+    "/terminate",
+    status_code=204,
     description=(
-        "Returns all the info you need for the broker. "
-        "Be sure to check what is contained inside of `browsers.browsing_history`. "
-        "The models should be updated so the `ScraperModel` is just a list if `BrowserModel`. "
-        "(ie moving the `instance_id` from key to field)"
+        "Kill all the instances. "
+        "Does not return if the killing was successfull, as ending the chromedriver process may take some time. "
     ),
     responses={
+        204: {"description": "The terminate method was initiated"},
         423: {
             "model": ErrorResponse,
             "description": "The scraper is busy (likely terminating)",
@@ -25,7 +24,7 @@ router = APIRouter()
         500: {"model": ErrorResponse, "description": "Internal server error"},
     },
 )
-async def get_scraper_state(scraper: Scraper = Depends(get_scraper)) -> ScraperModel:
+async def terminate(scraper: Scraper = Depends(get_scraper)):
     if scraper.busy:
         raise HTTPException(
             status_code=423,
@@ -33,6 +32,6 @@ async def get_scraper_state(scraper: Scraper = Depends(get_scraper)) -> ScraperM
         )
 
     try:
-        return await scraper.to_model()
+        await scraper.terminate()
     except Exception:
         raise HTTPException(status_code=500, detail=traceback.format_exc())

@@ -1,3 +1,4 @@
+import asyncio
 import datetime
 import traceback
 
@@ -6,6 +7,8 @@ from common.schemas.common import ErrorResponse
 from common.schemas.get import ScraperGetRequest, ScraperGetResponse
 from core.Scraper import Scraper
 from fastapi import APIRouter, Depends, HTTPException
+
+from scraper.core.schemas import BotSpottedError
 
 LIFESPAN_BUFFER_GET_REQUEST = 5  # seconds
 
@@ -27,13 +30,27 @@ router = APIRouter()
             "model": ErrorResponse,
             "description": "The target browser instance does not have sufficient lifespan",
         },
+        423: {
+            "model": ErrorResponse,
+            "description": "The scraper is busy (likely terminating)",
+        },
         500: {"model": ErrorResponse, "description": "Internal server error"},
+        503: {
+            "model": ErrorResponse,
+            "description": "The browser instance failed to retrieve the content successfully",
+        },
     },
 )
 async def get(
     request: ScraperGetRequest, scraper: Scraper = Depends(get_scraper)
 ) -> ScraperGetResponse:
-    if not scraper.browser_exists(request.instance_id):
+    if scraper.busy:
+        raise HTTPException(
+            status_code=423,
+            detail="The scraper is busy",
+        )
+
+    if not await scraper.browser_exists(request.instance_id):
         raise HTTPException(
             status_code=409,
             detail=f"No browser instance with id {request.instance_id}",
@@ -59,5 +76,11 @@ async def get(
     try:
         html_content = await scraper.get(request)
         return ScraperGetResponse(html_content=html_content)
+    except asyncio.CancelledError:
+        raise HTTPException(
+            status_code=503, detail="The task was cancelled by the scraper."
+        )
+    except BotSpottedError as e:
+        raise HTTPException(status_code=503, detail=e.detail)
     except Exception:
         raise HTTPException(status_code=500, detail=traceback.format_exc())

@@ -1,32 +1,25 @@
 import asyncio
 import datetime
-import os
-import subprocess
-import threading
-from typing import Any, AsyncGenerator, BinaryIO, Dict, List, Literal, Tuple
-from uuid import UUID, uuid4
+from typing import List, Literal, Tuple
 
 import zendriver as uc
+from common.schemas.architecture import BrowserModel, BrowsingRecord
 from common.schemas.get import ScraperGetRequest
-from common.schemas.get_scraper_state import BrowserModel
+from common.schemas.new_instance import NewInstanceRequest
 from Config import Config
+from core.Display import Display
+from core.Driver import Driver
+from core.FrameUnpacker import FrameUnpacker
 from core.schemas import BotSpottedError
+from core.Streamer import Streamer
 from engine.detection import herobrine_is_here
 from engine.erholungszeit import erholungszeit
 from engine.score import score
 
-DISPLAY_DEPTH = 24
-JPEG_MARKER_START = b"\xff\xd8\xff"
-JPEG_MARKER_END = b"\xff\xd9"
 MAXIMUM_SIZE_ERROR_MESSAGE = 256
 SETTLING_WAIT_TIME_COMPLETE = 1  # seconds
 SETTLING_WAIT_TIME_INTERACTIVE = 3  # seconds
-STREAM_CHUNK_SIZE = 2**14  # 16,384 bits
-STREAM_FPS = 12
-STREAM_QUALITY = 15  # 2=best 31=worst
-TIMEOUT_TERMINATE_DISPLAY = 6  # seconds
-TIMEOUT_TERMINATE_UNPACKING = 6  # seconds
-TIMEOUT_TERMINATE_STREAM = 6  # seconds
+GET_QUEUE_MAXSIZE = 6
 
 
 class Browser:
@@ -35,64 +28,53 @@ class Browser:
     are made to the get method
     """
 
-    display = 100  # First Xvfb (instead of 99)
+    __display: Display
+    __driver: Driver
+    __streamer: Streamer
+    __frame_unpacker: FrameUnpacker
 
-    def __init__(self) -> None:
-        self.chrome_profile_uuid: UUID
-        self.instance_id: str
-        self.window_size: Tuple[int, int] = None
-        self.display: str = None
-        self.__display_process = None
-        self.__driver = None
-        self.__streaming_process = None
-        self.__unpacking_frames_process = None
-        self.__latest_frame: bytes = b""
-        self.__new_frame_available: asyncio.Event = asyncio.Event()
-        self.__killing_event = asyncio.Event()
-        self.created_at: datetime.datetime = None
-        self.expires_at: datetime.datetime = None
-        self.browsing_history: List[Dict] = []
-        self.__get_lock: asyncio.Lock = asyncio.Lock()
-        self.spotted: bool = False
-        self.erholungszeit: datetime.datetime = None  # recovery period after a request
+    __killing_event: asyncio.Event
+    # __get_queue: asyncio.Queue
+    __get_lock: asyncio.Lock
+
+    instance_id: str
+    window_size: Tuple[int, int]
+    created_at: datetime.datetime
+    expires_at: datetime.datetime
+    browsing_history: List[BrowsingRecord]
+    spotted: bool
+    erholungszeit: datetime.datetime  # recovery period after a request
 
     @classmethod
-    async def create(
-        cls,
-        instance_id: str,
-        lifespan_in_seconds: int,
-        window_size: Tuple[int, int],
-    ) -> "Browser":
+    async def create(cls, request: NewInstanceRequest) -> "Browser":
         instance = cls()
-        await instance.__initialize(
-            instance_id,
-            lifespan_in_seconds,
-            window_size,
-        )
+        await instance.__initialize(request)
         return instance
 
-    async def __initialize(
-        self,
-        instance_id: str,
-        lifespan_in_seconds: int,
-        window_size: Tuple[int, int],
-    ) -> None:
-        self.chrome_profile_uuid = uuid4()  # not used beyond the tmp profile
-        self.instance_id = instance_id
-        self.window_size = window_size
-        self.__create_display()
-        self.__driver = await self.__create_driver()
+    async def __initialize(self, request: NewInstanceRequest) -> None:
+        self.__display = await Display.create(window_size=request.window_size)
+        self.__driver = await Driver.create(display=self.__display)
+        self.__streamer = Streamer(display=self.__display)
+        self.__frame_unpacker = FrameUnpacker(streamer=self.__streamer)
+
+        self.__killing_event = asyncio.Event()
+        # self.__get_queue = asyncio.Queue(maxsize=GET_QUEUE_MAXSIZE)
+        self.__get_lock = asyncio.Lock()
+
+        self.instance_id = request.instance_id
+        self.window_size = request.window_size
         self.created_at = datetime.datetime.now()
         self.expires_at = self.created_at + datetime.timedelta(
-            seconds=lifespan_in_seconds
+            seconds=request.lifespan_in_seconds
         )
-        self.__create_unpacking_frames_process()
+        self.browsing_history = []
+        self.spotted = False
         self.erholungszeit = datetime.datetime.now()
 
     def to_model(self) -> BrowserModel:
         return BrowserModel(
             window_size=self.window_size,
-            display=self.display,
+            display=self.__display.display,
             created_at=self.created_at,
             expires_at=self.expires_at,
             remaining_lifespan=self.remaining_lifespan(),
@@ -100,108 +82,6 @@ class Browser:
             score=self.score(),
             browsing_history=self.browsing_history,
         )
-
-    def __create_display(self) -> None:
-        self.display = f":{Browser.display}"
-        Browser.display += 1
-
-        command = [
-            "Xvfb",
-            self.display,
-            "-screen",
-            "0",
-            f"{self.window_size[0]}x{self.window_size[1]}x{DISPLAY_DEPTH}",
-        ]
-
-        self.__display_process = subprocess.Popen(
-            command,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-        )
-
-    async def __create_driver(self) -> None:
-        os.environ["DISPLAY"] = self.display
-        return await uc.start(
-            headless=False,  # If headerless, Cloudflare spots us.
-            browser_args=[
-                "--no-sandbox",
-                "--disable-setuid-sandbox",
-                f"--user-data-dir=/tmp/chrome-profile-{self.chrome_profile_uuid}",
-                "--disable-blink-features=AutomationControlled",
-                "--disable-features=IsolateOrigins,site-per-process",
-                f"--window-size={self.window_size[0]},{self.window_size[1]}",
-                "--window-position=0,0",
-            ],  # If images are blocked, Cloudflare spots us.
-            sandbox=False,
-            env={**os.environ},
-        )
-
-    def __create_streaming_process(self) -> None:
-        if self.__streaming_process:
-            return
-
-        command = [
-            "ffmpeg",
-            "-loglevel",
-            "quiet",
-            "-f",
-            "x11grab",
-            "-framerate",
-            str(STREAM_FPS),
-            "-video_size",
-            f"{self.window_size[0]}x{self.window_size[1]}",
-            "-i",
-            self.display,
-            "-f",
-            "mjpeg",
-            "-q:v",
-            str(STREAM_QUALITY),
-            "-flush_packets",
-            "1",
-            "pipe:1",
-        ]
-
-        self.__streaming_process = subprocess.Popen(
-            command,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            env={**os.environ, "DISPLAY": self.display},
-        )
-
-    @staticmethod
-    def __unpack_frames(stream: BinaryIO) -> bytes:
-        buffer = bytearray()
-        while chunk := stream.read(STREAM_CHUNK_SIZE):
-            buffer.extend(chunk)
-            while True:
-                start = buffer.find(JPEG_MARKER_START)
-                if start == -1:
-                    buffer.clear()
-                    break
-                end = buffer.find(JPEG_MARKER_END, start)
-                if end == -1:
-                    if start > 0:
-                        del buffer[:start]
-                    break
-                end += len(JPEG_MARKER_END)
-                frame = bytes(buffer[start:end])
-                yield frame
-                del buffer[:end]
-
-    def __create_unpacking_frames_process(self) -> None:
-        if not self.__streaming_process:
-            self.__create_streaming_process()
-
-        def __unpack_through_thread() -> None:
-            for frame in self.__unpack_frames(self.__streaming_process.stdout):
-                self.__latest_frame = frame
-                self.__new_frame_available.set()
-
-        self.__unpacking_frames_process = threading.Thread(
-            target=__unpack_through_thread,
-            daemon=True,
-        )
-        self.__unpacking_frames_process.start()
 
     def status(self) -> Literal["idle", "requesting", "spotted", "waiting"]:
         if self.spotted:
@@ -224,16 +104,6 @@ class Browser:
         true if EXPIRED and false if alive
         """
         return self.expires_at < datetime.datetime.now()
-
-    async def stream(self) -> AsyncGenerator[bytes, Any]:
-        while True:
-            await self.__new_frame_available.wait()
-            if self.__latest_frame:
-                self.__new_frame_available.clear()
-                yield (
-                    b"--frame\r\n"
-                    b"Content-Type: image/jpeg\r\n\r\n" + self.__latest_frame + b"\r\n"
-                )
 
     @staticmethod
     async def smart_wait(page) -> Literal["complete", "interactive", "loading"]:
@@ -264,15 +134,15 @@ class Browser:
         try:
             async with self.__get_lock:
                 return await self.get(request)
-        except asyncio.CancelledError:
+        except asyncio.CancelledError as e:
             self.browsing_history.append(
-                {
-                    "url": request.url,
-                    "status": "aborted",
-                    "timestamp": datetime.datetime.now().isoformat(),
-                }
+                BrowsingRecord(
+                    url=request.url,
+                    status="aborted",
+                    timestamp=datetime.datetime.now().isoformat(),
+                )
             )
-            return ""
+            raise ValueError(e)
 
     async def trigger_lazy_loading(self, page: uc.Tab) -> bool:
         """
@@ -313,15 +183,17 @@ class Browser:
             BotSpottedError: .
         """
 
-        access_record = {}
+        browsing_record = BrowsingRecord(url=request.url)
 
         delta = (self.erholungszeit - datetime.datetime.now()).total_seconds()
         if delta > 0.0:
             await asyncio.sleep(delta)
 
         try:
-            page = await self.__driver.get(request.url, new_tab=False, new_window=False)
-            access_record["page_state"] = await self.smart_wait(page)
+            page = await self.__driver.driver.get(
+                str(request.url), new_tab=False, new_window=False
+            )
+            browsing_record.page_state = await self.smart_wait(page)
             self.erholungszeit = datetime.datetime.now() + datetime.timedelta(
                 milliseconds=erholungszeit()
             )
@@ -333,80 +205,32 @@ class Browser:
                 # should also raise a html error to the broker
 
             if request.flag_lazy_loading:
-                access_record["success_lazy_loading"] = await self.trigger_lazy_loading(
+                browsing_record.success_lazy_loading = await self.trigger_lazy_loading(
                     page
                 )
                 html = await page.get_content()
 
         except BotSpottedError as e:
-            access_record.update(
-                {
-                    "url": request.url,
-                    "status": "blocked",
-                    "html": e.html,
-                    "timestamp": datetime.datetime.now().isoformat(),
-                }
-            )
-            self.browsing_history.append(access_record)
-            return ""
+            browsing_record.status = "blocked"
+            browsing_record.html = e.html
+            browsing_record.timestamp = (datetime.datetime.now().isoformat(),)
+            self.browsing_history.append(browsing_record)
+            raise ValueError(e)
 
         except Exception as e:
-            access_record.update(
-                {
-                    "url": request.url,
-                    "status": "failed",
-                    "error": str(e)[:MAXIMUM_SIZE_ERROR_MESSAGE],
-                    "timestamp": datetime.datetime.now().isoformat(),
-                }
-            )
-            self.browsing_history.append(access_record)
-            return ""
+            browsing_record.status = "failed"
+            browsing_record.error = str(e)
+            browsing_record.timestampe = (datetime.datetime.now().isoformat(),)
+            self.browsing_history.append(browsing_record)
+            raise ValueError(e)
 
-        access_record.update(
-            {
-                "url": request.url,
-                "status": "success",
-                "content_length": len(html),
-                "timestamp": datetime.datetime.now().isoformat(),
-            }
-        )
-        self.browsing_history.append(access_record)
+        browsing_record.status = "success"
+        browsing_record.timestampe = datetime.datetime.now().isoformat()
+        self.browsing_history.append(browsing_record)
         return html
 
-    def __kill_streaming_process(self) -> None:
-        if not self.__streaming_process:
-            return
-        self.__streaming_process.terminate()
-        try:
-            self.__streaming_process.wait(timeout=TIMEOUT_TERMINATE_STREAM)
-        except subprocess.TimeoutExpired:
-            self.__streaming_process.kill()
-            self.__streaming_process.wait()
-        self.__streaming_process = None
-
-    def __kill_unpacking_frames_process(self) -> None:
-        if not self.__unpacking_frames_process:
-            return
-        self.__unpacking_frames_process.join(timeout=TIMEOUT_TERMINATE_UNPACKING)
-
-    def __close_display(self) -> None:
-        """
-        This version does not account for Xvfb creating its own child processes
-        """
-        if not self.__display_process:
-            return
-        self.__display_process.terminate()
-        try:
-            self.__display_process.wait(timeout=TIMEOUT_TERMINATE_DISPLAY)
-        except subprocess.TimeoutExpired:
-            self.__display_process.kill()
-            self.__display_process.wait()
-        self.__display_process = None
-
     async def kill(self) -> None:
-        self.__kill_streaming_process()
-        self.__kill_unpacking_frames_process()
-        self.__close_display()
-        asyncio.create_task(self.__driver.stop())  # probably never stopping
-        # creates a zombie process
-        # 999      4088371  0.0  0.0      0     0 ?        Z    Apr20   0:00 [chrome_crashpad] <defunct>
+        self.__frame_unpacker.kill()
+        self.__streamer.kill()
+        await self.__driver.kill()
+        self.__display.kill()

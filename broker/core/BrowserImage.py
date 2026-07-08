@@ -3,7 +3,7 @@ import datetime
 from typing import List, Literal
 
 import httpx
-from common.schemas.get_scraper_state import BrowserModel
+from common.schemas.architecture import BrowserModel
 from Config import Config
 from core.models.BrowserImage import (
     BrowserImageGet,
