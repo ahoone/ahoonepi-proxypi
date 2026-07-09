@@ -1,7 +1,7 @@
 import traceback
 
 from api.common import get_scraper
-from common.schemas.common import ErrorResponse
+from contract.schemas.common import ErrorResponse
 from core.Scraper import Scraper
 from fastapi import APIRouter, Depends, HTTPException
 

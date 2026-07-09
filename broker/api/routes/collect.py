@@ -2,7 +2,7 @@ import traceback
 
 from api.common import get_broker
 from api.schemas.collect import CollectRequest, CollectRequestResponse
-from common.schemas.common import ErrorResponse
+from contract.schemas.common import ErrorResponse
 from Config import Config
 from core.Broker import Broker
 from core.DatabaseHandler import DatabaseHandler

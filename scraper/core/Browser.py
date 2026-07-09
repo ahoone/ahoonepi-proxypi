@@ -1,11 +1,11 @@
 import asyncio
 import datetime
-from typing import List, Literal, Tuple
+from typing import Literal
 
 import zendriver as uc
-from common.schemas.architecture import BrowserModel, BrowsingRecord
-from common.schemas.get import ScraperGetRequest
-from common.schemas.new_instance import NewInstanceRequest
+from contract.schemas.architecture import BrowserModel, BrowsingRecord
+from contract.schemas.get import ScraperGetRequest
+from contract.schemas.new_instance import NewInstanceRequest
 from Config import Config
 from core.Display import Display
 from core.Driver import Driver
@@ -13,7 +13,7 @@ from core.FrameUnpacker import FrameUnpacker
 from core.schemas import BotSpottedError
 from core.Streamer import Streamer
 from engine.detection import herobrine_is_here
-from engine.erholungszeit import erholungszeit
+from engine.recovery_period import recovery_period
 from engine.score import score
 
 MAXIMUM_SIZE_ERROR_MESSAGE = 256
@@ -34,16 +34,15 @@ class Browser:
     __frame_unpacker: FrameUnpacker
 
     __killing_event: asyncio.Event
-    # __get_queue: asyncio.Queue
     __get_lock: asyncio.Lock
 
     instance_id: str
-    window_size: Tuple[int, int]
+    window_size: tuple[int, int]
     created_at: datetime.datetime
     expires_at: datetime.datetime
-    browsing_history: List[BrowsingRecord]
+    browsing_history: list[BrowsingRecord]
     spotted: bool
-    erholungszeit: datetime.datetime  # recovery period after a request
+    recovery_period: datetime.datetime
 
     @classmethod
     async def create(cls, request: NewInstanceRequest) -> "Browser":
@@ -58,7 +57,6 @@ class Browser:
         self.__frame_unpacker = FrameUnpacker(streamer=self.__streamer)
 
         self.__killing_event = asyncio.Event()
-        # self.__get_queue = asyncio.Queue(maxsize=GET_QUEUE_MAXSIZE)
         self.__get_lock = asyncio.Lock()
 
         self.instance_id = request.instance_id
@@ -69,7 +67,7 @@ class Browser:
         )
         self.browsing_history = []
         self.spotted = False
-        self.erholungszeit = datetime.datetime.now()
+        self.recovery_period = datetime.datetime.now()
 
     def to_model(self) -> BrowserModel:
         return BrowserModel(
@@ -88,7 +86,7 @@ class Browser:
             return "spotted"
         elif self.__get_lock.locked():
             return "requesting"
-        elif self.erholungszeit > datetime.datetime.now():
+        elif self.recovery_period > datetime.datetime.now():
             return "waiting"
         else:
             return "idle"
@@ -185,7 +183,7 @@ class Browser:
 
         browsing_record = BrowsingRecord(url=request.url)
 
-        delta = (self.erholungszeit - datetime.datetime.now()).total_seconds()
+        delta = (self.recovery_period - datetime.datetime.now()).total_seconds()
         if delta > 0.0:
             await asyncio.sleep(delta)
 
@@ -194,8 +192,8 @@ class Browser:
                 str(request.url), new_tab=False, new_window=False
             )
             browsing_record.page_state = await self.smart_wait(page)
-            self.erholungszeit = datetime.datetime.now() + datetime.timedelta(
-                milliseconds=erholungszeit()
+            self.recovery_period = datetime.datetime.now() + datetime.timedelta(
+                milliseconds=recovery_period()
             )
             html = await page.get_content()
 
@@ -220,17 +218,19 @@ class Browser:
         except Exception as e:
             browsing_record.status = "failed"
             browsing_record.error = str(e)
-            browsing_record.timestampe = (datetime.datetime.now().isoformat(),)
+            browsing_record.timestamp = (datetime.datetime.now().isoformat(),)
             self.browsing_history.append(browsing_record)
             raise ValueError(e)
 
         browsing_record.status = "success"
-        browsing_record.timestampe = datetime.datetime.now().isoformat()
+        browsing_record.timestamp = datetime.datetime.now().isoformat()
         self.browsing_history.append(browsing_record)
         return html
 
     async def kill(self) -> None:
-        self.__frame_unpacker.kill()
-        self.__streamer.kill()
+        await asyncio.gather(
+            asyncio.to_thread(self.__frame_unpacker.kill),
+            asyncio.to_thread(self.__streamer.kill),
+            asyncio.to_thread(self.__display.kill),
+        )
         await self.__driver.kill()
-        self.__display.kill()

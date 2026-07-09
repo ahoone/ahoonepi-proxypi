@@ -46,4 +46,4 @@ class Streamer:
             self.process.wait(timeout=TIMEOUT_KILL)
         except subprocess.TimeoutExpired:
             self.process.kill()
-            self.process.wait()
+            self.process.wait(timeout=TIMEOUT_KILL)

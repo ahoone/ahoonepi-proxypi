@@ -55,4 +55,4 @@ class Display:
             self.__display_process.wait(timeout=TIMEOUT_KILL)
         except subprocess.TimeoutExpired:
             self.__display_process.kill()
-            self.__display_process.wait()
+            self.__display_process.wait(timeout=TIMEOUT_KILL)

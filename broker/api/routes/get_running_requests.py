@@ -3,7 +3,7 @@ from typing import List
 from uuid import UUID
 
 from api.common import get_broker
-from common.schemas.common import ErrorResponse
+from contract.schemas.common import ErrorResponse
 from core.Broker import Broker
 from core.DatabaseHandler import DatabaseHandler
 from core.models.DatabaseHandler import RecordTarget

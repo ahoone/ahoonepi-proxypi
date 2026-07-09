@@ -1,41 +1,55 @@
 import asyncio
+from typing import NoReturn
 import os
-from typing import Dict, NoReturn, Set
 
-from common.Config import Config as ContractConfig
-from common.schemas.architecture import ScraperModel
-from common.schemas.get import ScraperGetRequest
-from common.schemas.new_instance import NewInstanceRequest
+from contract.Config import Config as ContractConfig
+from contract.schemas.architecture import ScraperModel
+from contract.schemas.get import ScraperGetRequest
+from contract.schemas.new_instance import NewInstanceRequest
 from Config import Config
 from core.Browser import Browser
 
+TIMEOUT_KILL_CANCELLED_TASKS = 2  # seconds (short, just accounts for the get_or_abort method)
 
 class Scraper:
     def __init__(self) -> None:
-        self.browsers: Dict[str, Browser] = {}
+        self.browsers: dict[str, Browser] = {}
         self.busy: bool = False
-        self.__browser_active_tasks: Dict[str, Set[asyncio.Task]] = {}
+        self.__browser_active_tasks: dict[str, set[asyncio.Task]] = {}
         self.__lock: asyncio.Lock = asyncio.Lock()
         self.__lock_terminate: asyncio.Lock = asyncio.Lock()
         self.__lock_pending_kills: asyncio.Lock = asyncio.Lock()
-        self.__pending_kills: Set[asyncio.Task] = set()
+        self.__pending_kills: set[asyncio.Task] = set()
+
+    @staticmethod
+    def __read_memory_info() -> tuple[int, int, int]:
+        with open("/proc/meminfo") as f:
+            memory_info = {}
+            for line in f:
+                key, value = line.split(":", 1)
+                memory_info[key] = int(value.strip().split()[0]) * 1024  # kB -> bytes
+        total = memory_info["MemTotal"]
+        free = memory_info["MemFree"]
+        available = memory_info.get("MemAvailable", free)
+        used = total - available
+        return total, used, free
 
     async def to_model(self) -> ScraperModel:
-        ram_total, ram_used, ram_free = map(
-            int, os.popen("free -b").readlines()[1].split()[1:4]
-        )
         async with self.__lock:
-            return ScraperModel(
-                is_running_as_root=os.getuid() == 0,
-                can_create_browser=len(self.browsers)
-                < ContractConfig.MAX_INSTANCES_PER_SCRAPER,
-                ram_specs=f"{ram_total // 1024**3}GiB",
-                ram_usage=f"{(100 * ram_used) // ram_total}%",
-                browsers={
-                    instance_id: browser.to_model()
-                    for instance_id, browser in self.browsers.items()
-                },
-            )
+            snapshot_browsers = list(self.browsers.items())
+
+        ram_total, ram_used, ram_free = self.__read_memory_info()
+        return ScraperModel(
+            is_running_as_root=os.getuid() == 0,
+            can_create_browser=len(self.browsers)
+            < ContractConfig.MAX_INSTANCES_PER_SCRAPER,
+            ram_specs=f"{ram_total // 1024**3}GiB",
+            ram_usage=f"{(100 * ram_used) // ram_total}%",
+            browsers={
+                instance_id: browser.to_model()
+                for instance_id, browser in snapshot_browsers
+            },
+        )
 
     async def browser_exists(self, instance_id: str) -> bool:
         async with self.__lock:
@@ -62,11 +76,17 @@ class Scraper:
     async def kill(self, instance_id: str) -> None:
 
         async with self.__lock:
-            tasks = self.__browser_active_tasks[instance_id]
+            snapshot_tasks = set(self.__browser_active_tasks[instance_id])
 
-        for task in tasks:
+        for task in snapshot_tasks:
             task.cancel()
-        await asyncio.gather(*tasks, return_exceptions=True)
+        try:
+            await asyncio.wait_for(
+                asyncio.gather(*snapshot_tasks, return_exceptions=True),
+                timeout=TIMEOUT_KILL_CANCELLED_TASKS,
+            )
+        except asyncio.TimeoutError:
+            pass
 
         pending_kill_task = asyncio.create_task(
             self.browsers[instance_id].kill()

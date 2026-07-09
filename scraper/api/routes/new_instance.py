@@ -1,9 +1,9 @@
 import traceback
 
 from api.common import get_scraper
-from common.Config import Config
-from common.schemas.common import ErrorResponse
-from common.schemas.new_instance import NewInstanceRequest
+from contract.Config import Config
+from contract.schemas.common import ErrorResponse
+from contract.schemas.new_instance import NewInstanceRequest
 from core.Scraper import Scraper
 from fastapi import APIRouter, Body, Depends, HTTPException
 

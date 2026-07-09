@@ -7,7 +7,7 @@ from string import Template
 from typing import Dict, List, Optional, Tuple, Union
 
 import httpx
-from common.schemas.architecture import ScraperModel
+from contract.schemas.architecture import ScraperModel
 from Config import Config
 from core.BrowserImage import BrowserImage
 from core.models.ScraperImage import ScraperImageModel

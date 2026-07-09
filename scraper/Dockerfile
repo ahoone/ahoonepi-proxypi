@@ -3,12 +3,15 @@ FROM python:3.10-slim
 USER root
 
 WORKDIR /app
-COPY . /app
 
+COPY scraper/aptfile /app/scraper/aptfile
 RUN apt-get update && \
     xargs -a scraper/aptfile apt-get install -y --no-install-recommends
 
+COPY scraper/requirements.txt /app/scraper/requirements.txt
 RUN pip install --no-cache-dir -r scraper/requirements.txt
+
+COPY common /app/common
 RUN pip install -e common
 
 ARG CHROMIUM_VERSION
@@ -28,7 +31,10 @@ RUN ARCH=$(dpkg --print-architecture) && \
 RUN apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-RUN chmod +x /app/scraper/start.sh
+COPY scraper/start.sh /app/scraper/start.sh
+RUN chmod +x scraper/start.sh
+
+COPY . /app
 RUN groupadd -r chrome && useradd -r -g chrome -m chrome
 RUN chown -R chrome:chrome /app
 

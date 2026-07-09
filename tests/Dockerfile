@@ -5,7 +5,7 @@ USER root
 WORKDIR /app
 
 COPY tests/requirements.txt /app/tests/requirements.txt
-RUN pip install --no-cache-dir -r /app/tests/requirements.txt
+RUN pip install --no-cache-dir -r tests/requirements.txt
 
 COPY common /app/common
 RUN pip install -e common

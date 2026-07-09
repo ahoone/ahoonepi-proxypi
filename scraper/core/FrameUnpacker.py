@@ -39,6 +39,8 @@ class FrameUnpacker:
         """
         Starts the unpacking thread.
         """
+        self.__new_frame_available = asyncio.Event()
+
         stdout = streamer.process.stdout
         if not stdout:
             raise ValueError("streamer.process.stdout is None")

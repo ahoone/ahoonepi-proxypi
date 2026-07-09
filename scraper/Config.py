@@ -20,9 +20,9 @@ class Config:
         ipaddress.ip_network("::1/128"),  # IPv6 localhost
     ]
 
-    ERHOLUNGSZEIT_MINIMUM = 2000  # milliseconds
-    ERHOLUNGSZEIT_MEAN = 5000  # milliseconds
-    ERHOLUNGSZEIT_SPREAD = 0.5  # variance
+    RECOVERY_PERIOD_MINIMUM = 2000  # milliseconds
+    RECOVERY_PERIOD_MEAN = 5000  # milliseconds
+    RECOVERY_PERIOD_SPREAD = 0.5  # variance
 
     REFRESH_RATE_SCRAPER = 0.01  # seconds
 
