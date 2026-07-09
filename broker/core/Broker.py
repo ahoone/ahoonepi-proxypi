@@ -2,7 +2,7 @@ import asyncio
 import datetime
 import random
 import traceback
-from typing import Dict, List, Literal, NoReturn, Optional, Set, Tuple
+from typing import Literal, NoReturn, Optional
 from uuid import UUID, uuid4
 
 from api.schemas.clear import ClearRequest
@@ -20,16 +20,16 @@ from pydantic import HttpUrl
 
 class Broker:
     def __init__(self) -> None:
-        self.scrapers: Dict[int, ScraperImage] = {}  # node_id -> scraper
-        self.logger: List[Event] = []
+        self.scrapers: dict[int, ScraperImage] = {}  # node_id -> scraper
+        self.logger: list[Event] = []
         self.__lock_logger: asyncio.Lock = asyncio.Lock()
-        self.effective_refresh_period: float = None
-        self.__current_tasks: Dict[UUID, asyncio.Task] = {}
+        self.effective_refresh_period: float | None = None
+        self.__current_tasks: dict[UUID, asyncio.Task] = {}
         self.__lock_current_tasks: asyncio.Lock = asyncio.Lock()
         self.__lock_hibernate: asyncio.Lock = asyncio.Lock()
         self.__counter_update_loop: int = 0
 
-    def to_model(self) -> List[ScraperImageModel]:
+    def to_model(self) -> list[ScraperImageModel]:
         return [scraper.to_model() for scraper in self.scrapers.values()]
 
     async def log(
@@ -57,7 +57,7 @@ class Broker:
 
         async def scrape_url(request: ScrapeRequest) -> ScrapeRequestResponse:
             uuid: UUID = uuid4()
-            data: List[Tuple[str, str, datetime.datetime, str, bool]] = [
+            data: list[tuple[str, str, datetime.datetime, str, bool]] = [
                 (
                     str(uuid),
                     str(request.url),
@@ -70,8 +70,8 @@ class Broker:
             return ScrapeRequestResponse(uuid=uuid)
 
         async def scrape_urls(request: ScrapeRequest) -> ScrapeRequestResponse:
-            uuids: List[UUID] = []
-            data: List[Tuple[str, str, datetime.datetime, str, bool]] = []
+            uuids: list[UUID] = []
+            data: list[tuple[str, str, datetime.datetime, str, bool]] = []
             for url in request.url:
                 uuid = uuid4()
                 uuids.append(uuid)
@@ -96,7 +96,7 @@ class Broker:
 
     async def __update_available_nodes(self) -> None:
         await NodeIdentifier.update_reachable_nodes()
-        reachable_node_ids: Set[int] = NodeIdentifier.reachable_nodes
+        reachable_node_ids: set[int] = NodeIdentifier.reachable_nodes
 
         for node_id in reachable_node_ids:
             if node_id not in self.scrapers.keys():
@@ -244,7 +244,7 @@ class Broker:
             )
         return None
 
-    async def __load_records(self, records: List[RecordRequest]) -> None:
+    async def __load_records(self, records: list[RecordRequest]) -> None:
         query = f"""
             INSERT INTO {Config.DB_TABLE_REQUESTS} ({Config.DB_TABLE_TARGETS}_id, request_timestamp, response_timestamp, success, content)
             VALUES (?, ?, ?, ?, ?)
@@ -270,13 +270,13 @@ class Broker:
         load the records in the database
         """
         async with self.__lock_current_tasks:
-            completed: List[Optional[RecordRequest]] = await asyncio.gather(
+            completed: list[Optional[RecordRequest]] = await asyncio.gather(
                 *[
                     self.__unwrap_task(target_uuid, task)
                     for target_uuid, task in self.__current_tasks.items()
                 ]
             )
-            completed_without_none: List[RecordRequest] = [_ for _ in completed if _]
+            completed_without_none: list[RecordRequest] = [_ for _ in completed if _]
             for record in completed_without_none:
                 del self.__current_tasks[record.target_uuid]
         if len(completed_without_none) > 0:
@@ -338,7 +338,7 @@ class Broker:
                 return scraper
         return None
 
-    async def get_running_tasks(self) -> List[UUID]:
+    async def get_running_tasks(self) -> list[UUID]:
         async with self.__lock_current_tasks:
             return [_ for _ in self.__current_tasks]
 
@@ -355,7 +355,7 @@ class Broker:
         """
         async with self.__lock_current_tasks:
             # in here no record is None due to the flag
-            completed: List[RecordRequest] = await asyncio.gather(
+            completed: list[RecordRequest] = await asyncio.gather(
                 *[
                     self.__unwrap_task(target_uuid, task, flag_cancel_if_not_done=True)
                     for target_uuid, task in self.__current_tasks.items()

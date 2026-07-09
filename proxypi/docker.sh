@@ -27,8 +27,8 @@ docker::restart() {
         cd "$SCRIPT_DIR"
         docker compose -f scraper/docker-compose.yml down
         docker compose -f scraper/docker-compose.yml --env-file .env --env-file config.env up --build -d
-        # docker compose -f broker/docker-compose.yml down
-        # docker compose -f broker/docker-compose.yml --env-file .env --env-file config.env up --build -d
+        docker compose -f broker/docker-compose.yml down
+        docker compose -f broker/docker-compose.yml --env-file .env --env-file config.env up --build -d
     else
         echob "NOT IMPLEMENTED FOR OTHER THAN NODE_ID=1"
         return $EXIT_CODE_NOT_IMPLEMENTED

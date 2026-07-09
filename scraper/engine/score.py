@@ -12,6 +12,8 @@ def score(browsing_history: list[BrowsingRecord]) -> float:
         density function of the exponential law
         too unexponential
         """
+        if not access_record.timestamp:
+            return .0
         time_elapsed = (
             datetime.datetime.now()
             - datetime.datetime.fromisoformat(access_record.timestamp)
