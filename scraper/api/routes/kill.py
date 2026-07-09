@@ -11,6 +11,7 @@ router = APIRouter()
 
 @router.post(
     "/kill",
+    status_code=204,
     description=(
         "Kill the target instance correctly cleaning its tasks and processes. "
         "Does not return if the killing was successfull, as ending the chromedriver process may take some time. "
