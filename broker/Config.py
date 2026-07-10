@@ -8,9 +8,6 @@ class Config:
     SSH_NETWORK_BASE = os.environ["SSH_NETWORK_BASE"]
     WIREGUARD_NETWORK_PREFIX = os.environ["WIREGUARD_NETWORK_PREFIX"]
 
-    if "LIGHTHOUSE" not in NODE_ROLE:
-        raise ValueError("the node should be a lighthouse to launch this image")
-
     ALLOWED_NETWORKS = [
         ipaddress.ip_network("127.0.0.0/8"),  # localhost
         # ipaddress.ip_network("10.0.0.0/24"),      # VPN network

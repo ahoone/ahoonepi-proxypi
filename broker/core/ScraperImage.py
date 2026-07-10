@@ -100,6 +100,7 @@ class ScraperImage:
         # for demo
         # import random
         # self.ipv6 = IPv6Address(random.getrandbits(128))
+        self.browsers = {}
         self.__next_refresh_timestamp = asyncio.get_event_loop().time()
 
     async def update(self) -> None:

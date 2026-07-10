@@ -17,6 +17,38 @@ TIMEOUT_GET = 60 # in seconds (long, as we are waiting for either "complete" or 
 TIMEOUT_REQUESTS = 4  # seconds (small genetic)
 TIMEOUT_TERMINATE = 8  # seconds (medium)
 
+"""
+To investigate:
+
+INFO:     172.22.0.1:37020 - "POST /get HTTP/1.1" 200 OK
+INFO:     172.22.0.1:37032 - "POST /get HTTP/1.1" 200 OK
+INFO:     172.22.0.1:53606 - "GET /get_scraper_state HTTP/1.1" 200 OK
+INFO:     172.22.0.1:53606 - "GET /get_scraper_state HTTP/1.1" 200 OK
+INFO:     172.22.0.1:53606 - "GET /get_scraper_state HTTP/1.1" 200 OK
+INFO:     172.22.0.1:53606 - "GET /get_scraper_state HTTP/1.1" 200 OK
+INFO:     172.22.0.1:53606 - "GET /get_scraper_state HTTP/1.1" 200 OK
+Could not send the close command when stopping the browser. Likely the browser is already gone. Closing the connection.
+INFO:     172.22.0.1:56210 - "GET /get_scraper_state HTTP/1.1" 200 OK
+INFO:     172.22.0.1:56222 - "POST /kill HTTP/1.1" 204 No Content
+INFO:     172.22.0.1:56226 - "GET /get_scraper_state HTTP/1.1" 200 OK
+INFO:     172.22.0.1:53606 - "GET /get_scraper_state HTTP/1.1" 200 OK
+Could not send the close command when stopping the browser. Likely the browser is already gone. Closing the connection.
+INFO:     172.22.0.1:56228 - "POST /new-instance HTTP/1.1" 201 Created
+INFO:     172.22.0.1:56236 - "GET /get_scraper_state HTTP/1.1" 200 OK
+INFO:     172.22.0.1:56334 - "POST /get HTTP/1.1" 500 Internal Server Error
+INFO:     172.22.0.1:56278 - "POST /get HTTP/1.1" 500 Internal Server Error
+INFO:     172.22.0.1:56250 - "POST /get HTTP/1.1" 500 Internal Server Error
+INFO:     172.22.0.1:56306 - "POST /get HTTP/1.1" 500 Internal Server Error
+INFO:     172.22.0.1:56294 - "POST /get HTTP/1.1" 500 Internal Server Error
+INFO:     172.22.0.1:56266 - "POST /get HTTP/1.1" 500 Internal Server Error
+INFO:     172.22.0.1:56320 - "POST /get HTTP/1.1" 500 Internal Server Error
+INFO:     172.22.0.1:56290 - "POST /get HTTP/1.1" 500 Internal Server Error
+INFO:     172.22.0.1:56362 - "POST /kill HTTP/1.1" 204 No Content
+INFO:     172.22.0.1:56374 - "GET /get_scraper_state HTTP/1.1" 200 OK
+INFO:     172.22.0.1:56388 - "POST /get HTTP/1.1" 409 Conflict
+Could not send the close command when stopping the browser. Likely the browser is already gone. Closing the connection.
+"""
+
 class TestScraperPrep:
     def test_endpoint_terminate(self):
         """
