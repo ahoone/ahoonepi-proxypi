@@ -44,5 +44,3 @@ RUN chown -R chrome:chrome /app
 #######################################
 
 USER chrome
-
-ENTRYPOINT exec uvicorn scraper.main:app --host 0.0.0.0 --port 8000 --reload

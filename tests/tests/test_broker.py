@@ -17,6 +17,7 @@ class TestBrokerCore:
         url = Config.ORIGIN_BROKER + "/health"
         response = requests.get(url, timeout=TIMEOUT_REQUESTS)
         assert response.status_code == 200, response.content
+        health_response = HealthResponse.model_validate(response.json())
 
     def test_broker_creates_browser(self):
         pass

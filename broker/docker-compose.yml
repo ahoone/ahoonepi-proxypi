@@ -18,10 +18,10 @@ services:
     environment:
       NODE_ROLE: ${NODE_ROLE}
       PYTHONPATH: /app/broker
+    command: ["uvicorn", "broker.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
     restart: unless-stopped
     networks:
       - default
-
 # volumes:
 #   sqlite_data:
 #     driver: local

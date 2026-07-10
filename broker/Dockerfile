@@ -17,5 +17,3 @@ COPY common /app/common
 RUN pip install -e common
 
 COPY . /app
-
-ENTRYPOINT exec uvicorn broker.main:app --host 0.0.0.0 --port 8000 --reload
