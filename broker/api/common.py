@@ -1,4 +1,4 @@
-from core.Broker import Broker
+from broker.core.Broker import Broker
 from fastapi import Request
 
 

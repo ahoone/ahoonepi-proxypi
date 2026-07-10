@@ -8,12 +8,6 @@ COPY scraper/aptfile /app/scraper/aptfile
 RUN apt-get update && \
     xargs -a scraper/aptfile apt-get install -y --no-install-recommends
 
-COPY scraper/requirements.txt /app/scraper/requirements.txt
-RUN pip install --no-cache-dir -r scraper/requirements.txt
-
-COPY common /app/common
-RUN pip install -e common
-
 ARG CHROMIUM_VERSION
 ARG CHROMIUM_SNAPSHOT_DATE
 RUN ARCH=$(dpkg --print-architecture) && \
@@ -30,6 +24,12 @@ RUN ARCH=$(dpkg --print-architecture) && \
 
 RUN apt-get clean && \
     rm -rf /var/lib/apt/lists/*
+
+COPY scraper/requirements.txt /app/scraper/requirements.txt
+RUN pip install --no-cache-dir -r scraper/requirements.txt
+
+COPY common /app/common
+RUN pip install -e common
 
 COPY . /app
 RUN groupadd -r chrome && useradd -r -g chrome -m chrome

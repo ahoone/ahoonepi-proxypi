@@ -2,13 +2,13 @@ import asyncio
 import datetime
 import traceback
 
-from api.common import get_scraper
 from contract.schemas.common import ErrorResponse
 from contract.schemas.get import ScraperGetRequest, ScraperGetResponse
-from core.Scraper import Scraper
 from fastapi import APIRouter, Depends, HTTPException
 
+from scraper.api.common import get_scraper
 from scraper.core.schemas import BotSpottedError
+from scraper.core.Scraper import Scraper
 
 LIFESPAN_BUFFER_GET_REQUEST = 5  # seconds
 

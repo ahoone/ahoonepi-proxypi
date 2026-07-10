@@ -1,11 +1,12 @@
 import traceback
 from uuid import UUID
 
-from api.common import get_broker
-from core.Broker import Broker
-from core.DatabaseHandler import DatabaseHandler
-from core.models.DatabaseHandler import RecordTarget
 from fastapi import APIRouter, Depends, HTTPException
+
+from broker.api.common import get_broker
+from broker.core.Broker import Broker
+from broker.core.DatabaseHandler import DatabaseHandler
+from broker.core.models.DatabaseHandler import RecordTarget
 
 router = APIRouter()
 

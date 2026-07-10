@@ -1,10 +1,11 @@
 import traceback
 
-from api.common import get_broker
-from api.schemas.scrape import ScrapeRequest, ScrapeRequestResponse
 from contract.schemas.common import ErrorResponse
-from core.Broker import Broker
 from fastapi import APIRouter, Depends, HTTPException, status
+
+from broker.api.common import get_broker
+from broker.api.schemas.scrape import ScrapeRequest, ScrapeRequestResponse
+from broker.core.Broker import Broker
 
 router = APIRouter()
 

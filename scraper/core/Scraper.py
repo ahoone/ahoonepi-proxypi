@@ -1,15 +1,19 @@
 import asyncio
-from typing import NoReturn
 import os
+from typing import NoReturn
 
 from contract.Config import Config as ContractConfig
 from contract.schemas.architecture import ScraperModel
 from contract.schemas.get import ScraperGetRequest
 from contract.schemas.new_instance import NewInstanceRequest
-from Config import Config
-from core.Browser import Browser
 
-TIMEOUT_KILL_CANCELLED_TASKS = 2  # seconds (short, just accounts for the get_or_abort method)
+from scraper.Config import Config
+from scraper.core.Browser import Browser
+
+TIMEOUT_KILL_CANCELLED_TASKS = (
+    2  # seconds (short, just accounts for the get_or_abort method)
+)
+
 
 class Scraper:
     def __init__(self) -> None:

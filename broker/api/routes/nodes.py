@@ -1,9 +1,10 @@
 import traceback
 
-from api.common import get_broker
-from core.Broker import Broker
-from core.models.ScraperImage import ScraperImageModel
 from fastapi import APIRouter, Depends, HTTPException
+
+from broker.api.common import get_broker
+from broker.core.Broker import Broker
+from broker.core.models.ScraperImage import ScraperImageModel
 
 router = APIRouter()
 

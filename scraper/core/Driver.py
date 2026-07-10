@@ -3,7 +3,8 @@ import os
 from uuid import UUID, uuid4
 
 import zendriver as uc
-from core.Display import Display
+
+from scraper.core.Display import Display
 
 
 class Driver:

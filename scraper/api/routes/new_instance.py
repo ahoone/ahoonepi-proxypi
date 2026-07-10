@@ -1,11 +1,12 @@
 import traceback
 
-from api.common import get_scraper
 from contract.Config import Config
 from contract.schemas.common import ErrorResponse
 from contract.schemas.new_instance import NewInstanceRequest
-from core.Scraper import Scraper
 from fastapi import APIRouter, Body, Depends, HTTPException
+
+from scraper.api.common import get_scraper
+from scraper.core.Scraper import Scraper
 
 router = APIRouter()
 

@@ -4,14 +4,15 @@ from typing import Literal
 
 import httpx
 from contract.schemas.architecture import BrowserModel
-from Config import Config
-from core.models.BrowserImage import (
+from contract.schemas.get import ScraperGetResponse
+
+from broker.Config import Config
+from broker.core.models.BrowserImage import (
     BrowserImageGet,
     BrowserImageGetResult,
     BrowserImageModel,
 )
-from core.NodeIdentifier import NodeIdentifier
-from contract.schemas.get import ScraperGetResponse
+from broker.core.NodeIdentifier import NodeIdentifier
 
 # this timeout is large because it accounts for lazy loading / others
 TIMEOUT_HTTP_SCRAPING = 60  # seconds
@@ -59,7 +60,9 @@ class BrowserImage:
                 timeout=TIMEOUT_HTTP_SCRAPING,
             )
             success = response.status_code == 200
-            scraper_get_response: ScraperGetResponse = ScraperGetResponse.model_validate(response.json())
+            scraper_get_response: ScraperGetResponse = (
+                ScraperGetResponse.model_validate(response.json())
+            )
             content: str = scraper_get_response.html_content
         except httpx.TimeoutException as e:
             success = False

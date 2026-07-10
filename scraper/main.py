@@ -2,16 +2,17 @@ import asyncio
 import sys
 from contextlib import asynccontextmanager
 
-from api.routes.get import router as get_router
-from api.routes.get_scraper_state import router as get_scraper_state_router
-from api.routes.kill import router as kill_router
-from api.routes.new_instance import router as new_instance_router
-from api.routes.stream import router as stream_router
-from api.routes.terminate import router as terminate_router
-from Config import Config
-from core.Scraper import Scraper
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+from scraper.api.routes.get import router as get_router
+from scraper.api.routes.get_scraper_state import router as get_scraper_state_router
+from scraper.api.routes.kill import router as kill_router
+from scraper.api.routes.new_instance import router as new_instance_router
+from scraper.api.routes.stream import router as stream_router
+from scraper.api.routes.terminate import router as terminate_router
+from scraper.Config import Config
+from scraper.core.Scraper import Scraper
 
 sys.path.insert(0, "/plugins")
 from middleware import add_middleware
@@ -36,6 +37,8 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Scraper",
     lifespan=lifespan,
+    docs_url=None,
+    redoc_url="/docs",
 )
 
 add_middleware(app, Config.ALLOWED_NETWORKS)

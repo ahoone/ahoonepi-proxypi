@@ -1,7 +1,7 @@
 import os
 import subprocess
 
-from core.Display import Display
+from scraper.core.Display import Display
 
 STREAM_FPS = 12
 STREAM_QUALITY = 15  # 2=best 31=worst

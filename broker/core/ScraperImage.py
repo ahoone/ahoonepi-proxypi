@@ -7,10 +7,11 @@ from string import Template
 
 import httpx
 from contract.schemas.architecture import ScraperModel
-from Config import Config
-from core.BrowserImage import BrowserImage
-from core.models.ScraperImage import ScraperImageModel
-from core.NodeIdentifier import NodeIdentifier
+
+from broker.Config import Config
+from broker.core.BrowserImage import BrowserImage
+from broker.core.models.ScraperImage import ScraperImageModel
+from broker.core.NodeIdentifier import NodeIdentifier
 
 sys.path.insert(0, "/plugins")
 import proxypi
@@ -46,7 +47,7 @@ class ScraperImage:
     """
 
     online: bool
-    passport : NodeIdentifier
+    passport: NodeIdentifier
     hostname: str
     ipv6: IPv6Address
     ram_specs: str

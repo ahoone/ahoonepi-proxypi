@@ -2,23 +2,26 @@ import asyncio
 import sys
 from contextlib import asynccontextmanager
 
-from api.routes.clear import router as clear_router
-from api.routes.collect import router as collect_router
-from api.routes.get_broker_state import router as get_broker_state_router
-from api.routes.get_running_requests import router as get_running_requests_router
-from api.routes.get_unscraped_targets import router as get_unscraped_targets_router
-from api.routes.health import router as health_router
-from api.routes.logger import router as logger_router
-from api.routes.nodes import router as nodes_router
-from api.routes.results import router as results_router
-from api.routes.scrape import router as scrape_router
-from api.routes.stream import router as stream_router
-from Config import Config
-from core.Broker import Broker
-from core.DatabaseHandler import DatabaseHandler
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+
+from broker.api.routes.clear import router as clear_router
+from broker.api.routes.collect import router as collect_router
+from broker.api.routes.get_broker_state import router as get_broker_state_router
+from broker.api.routes.get_running_requests import router as get_running_requests_router
+from broker.api.routes.get_unscraped_targets import (
+    router as get_unscraped_targets_router,
+)
+from broker.api.routes.health import router as health_router
+from broker.api.routes.logger import router as logger_router
+from broker.api.routes.nodes import router as nodes_router
+from broker.api.routes.results import router as results_router
+from broker.api.routes.scrape import router as scrape_router
+from broker.api.routes.stream import router as stream_router
+from broker.Config import Config
+from broker.core.Broker import Broker
+from broker.core.DatabaseHandler import DatabaseHandler
 
 sys.path.insert(0, "/plugins")
 from middleware import add_middleware

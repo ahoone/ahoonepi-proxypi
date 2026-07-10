@@ -2,9 +2,10 @@ import asyncio
 import os
 
 import httpx
-from Config import Config
-from core.models.NodeIdentifier import NodeIdentifierModel
 from ping3 import ping
+
+from broker.Config import Config
+from broker.core.models.NodeIdentifier import NodeIdentifierModel
 
 SEMAPHORE_UPDATE_REACHABLE_NODES = 200
 TIMEOUT_SCRAPER_PING = 0.1  # seconds

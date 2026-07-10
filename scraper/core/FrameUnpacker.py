@@ -3,7 +3,7 @@ import threading
 from collections.abc import AsyncGenerator, Generator
 from typing import Any, BinaryIO
 
-from core.Streamer import Streamer
+from scraper.core.Streamer import Streamer
 
 STREAM_CHUNK_SIZE = 2**14  # 16,384 bits
 JPEG_MARKER_START = b"\xff\xd8\xff"

@@ -6,15 +6,16 @@ import zendriver as uc
 from contract.schemas.architecture import BrowserModel, BrowsingRecord
 from contract.schemas.get import ScraperGetRequest
 from contract.schemas.new_instance import NewInstanceRequest
-from Config import Config
-from core.Display import Display
-from core.Driver import Driver
-from core.FrameUnpacker import FrameUnpacker
-from core.schemas import BotSpottedError
-from core.Streamer import Streamer
-from engine.detection import herobrine_is_here
-from engine.recovery_period import recovery_period
-from engine.score import score
+
+from scraper.Config import Config
+from scraper.core.Display import Display
+from scraper.core.Driver import Driver
+from scraper.core.FrameUnpacker import FrameUnpacker
+from scraper.core.schemas import BotSpottedError
+from scraper.core.Streamer import Streamer
+from scraper.engine.detection import herobrine_is_here
+from scraper.engine.recovery_period import recovery_period
+from scraper.engine.score import score
 
 MAXIMUM_SIZE_ERROR_MESSAGE = 256
 SETTLING_WAIT_TIME_COMPLETE = 1  # seconds

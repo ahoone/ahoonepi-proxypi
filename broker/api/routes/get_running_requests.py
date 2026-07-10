@@ -1,13 +1,13 @@
 import traceback
-from typing import List
 from uuid import UUID
 
-from api.common import get_broker
 from contract.schemas.common import ErrorResponse
-from core.Broker import Broker
-from core.DatabaseHandler import DatabaseHandler
-from core.models.DatabaseHandler import RecordTarget
 from fastapi import APIRouter, Depends, HTTPException
+
+from broker.api.common import get_broker
+from broker.core.Broker import Broker
+from broker.core.DatabaseHandler import DatabaseHandler
+from broker.core.models.DatabaseHandler import RecordTarget
 
 router = APIRouter()
 
@@ -23,9 +23,9 @@ router = APIRouter()
 )
 async def get_running_requests(
     broker: Broker = Depends(get_broker),
-) -> List[RecordTarget]:
+) -> list[RecordTarget]:
     try:
-        uuids: List[UUID] = await broker.get_running_tasks()
+        uuids: list[UUID] = await broker.get_running_tasks()
         if not uuids:
             return []
         return await DatabaseHandler.get_targets_from_uuids(uuids)

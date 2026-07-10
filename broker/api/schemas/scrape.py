@@ -1,7 +1,7 @@
 import datetime
 from uuid import UUID
 
-from Config import Config
+from broker.Config import Config
 from pydantic import BaseModel, Field, HttpUrl
 
 
@@ -36,4 +36,4 @@ class ScrapeRequest(BaseModel):
 
 
 class ScrapeRequestResponse(BaseModel):
-    uuid: UUID | List[UUID]
+    uuid: UUID | list[UUID]

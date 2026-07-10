@@ -2,8 +2,9 @@ from typing import Any
 from uuid import UUID
 
 import aiosqlite
-from Config import Config
-from core.models.DatabaseHandler import RecordTarget
+
+from broker.Config import Config
+from broker.core.models.DatabaseHandler import RecordTarget
 
 
 class DatabaseHandler:
@@ -32,9 +33,7 @@ class DatabaseHandler:
             cls.__connection = None
 
     @classmethod
-    async def execute(
-        cls, query: str, params: tuple[Any, ...] | None = None
-    ) -> None:
+    async def execute(cls, query: str, params: tuple[Any, ...] | None = None) -> None:
         """
         handlers not aiming for reuse (does not return a cursor)
         but here we only have just one type of fetch per query

@@ -1,6 +1,6 @@
 import numpy as np
 
-from Config import Config
+from scraper.Config import Config
 
 
 def recovery_period() -> int:

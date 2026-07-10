@@ -5,17 +5,18 @@ import traceback
 from typing import Literal, NoReturn, Optional
 from uuid import UUID, uuid4
 
-from api.schemas.clear import ClearRequest
-from api.schemas.scrape import ScrapeRequest, ScrapeRequestResponse
-from Config import Config
-from core.BrowserImage import BrowserImage
-from core.DatabaseHandler import DatabaseHandler
-from core.models.Broker import Event, RecordRequest
-from core.models.BrowserImage import BrowserImageGet, BrowserImageGetResult
-from core.models.ScraperImage import ScraperImageModel
-from core.NodeIdentifier import NodeIdentifier
-from core.ScraperImage import ScraperImage
 from pydantic import HttpUrl
+
+from broker.api.schemas.clear import ClearRequest
+from broker.api.schemas.scrape import ScrapeRequest, ScrapeRequestResponse
+from broker.Config import Config
+from broker.core.BrowserImage import BrowserImage
+from broker.core.DatabaseHandler import DatabaseHandler
+from broker.core.models.Broker import Event, RecordRequest
+from broker.core.models.BrowserImage import BrowserImageGet, BrowserImageGetResult
+from broker.core.models.ScraperImage import ScraperImageModel
+from broker.core.NodeIdentifier import NodeIdentifier
+from broker.core.ScraperImage import ScraperImage
 
 
 class Broker:

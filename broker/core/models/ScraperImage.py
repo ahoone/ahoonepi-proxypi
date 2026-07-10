@@ -1,7 +1,7 @@
 from ipaddress import IPv6Address
 
-from core.models.BrowserImage import BrowserImageModel
-from core.models.NodeIdentifier import NodeIdentifierModel
+from broker.core.models.BrowserImage import BrowserImageModel
+from broker.core.models.NodeIdentifier import NodeIdentifierModel
 from pydantic import BaseModel
 
 

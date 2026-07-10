@@ -1,8 +1,9 @@
 import traceback
 
-from core.DatabaseHandler import DatabaseHandler
-from core.models.DatabaseHandler import RecordTarget
 from fastapi import APIRouter, HTTPException
+
+from broker.core.DatabaseHandler import DatabaseHandler
+from broker.core.models.DatabaseHandler import RecordTarget
 
 router = APIRouter()
 

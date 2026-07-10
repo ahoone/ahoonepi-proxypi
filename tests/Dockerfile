@@ -10,4 +10,7 @@ RUN pip install --no-cache-dir -r tests/requirements.txt
 COPY common /app/common
 RUN pip install -e common
 
+# to make broker.api.schemas accessible
+ENV PYTHONPATH=/app
+
 COPY . /app/

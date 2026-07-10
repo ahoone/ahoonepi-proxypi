@@ -6,8 +6,10 @@ import pytest
 import requests
 from Config import Config
 from URLGenerator import URLGenerator
+from broker.api.schemas.health import HealthResponse
 
-TIMEOUT_REQUESTS = 60  # in seconds, may take some time as we are waiting for either "complete" or "interactive" status
+TIMEOUT_GET = 60 # in seconds (long, as we are waiting for either "complete" or "interactive" status)
+TIMEOUT_REQUESTS = 4  # seconds (small genetic)
 
 
 class TestBrokerCore:

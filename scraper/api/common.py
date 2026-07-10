@@ -1,5 +1,6 @@
-from core.Scraper import Scraper
 from fastapi import Request
+
+from scraper.core.Scraper import Scraper
 
 
 def get_scraper(request: Request) -> Scraper:
