@@ -4,7 +4,6 @@ import sys
 import traceback
 from ipaddress import IPv6Address
 from string import Template
-from typing import Dict, List, Optional, Tuple, Union
 
 import httpx
 from contract.schemas.architecture import ScraperModel
@@ -46,19 +45,19 @@ class ScraperImage:
     json.decoder.JSONDecodeError: Expecting value: line 2 column 1 (char 1)
     """
 
-    def __init__(self) -> None:
-        self.online: bool = None
-        self.passport: NodeIdentifier = None
-        self.hostname: str = None  # should be UNIQUE
-        self.ipv6: IPv6Address = None
-        self.ram_specs: str = None
-        self.ram_usage: str = None
-        self.available: bool = False
-        # self.electricity_consumption: ?
-        self.browsers: Dict[str, BrowserImage] = {}  # instance_id: browser
-        self.score: float = 0.0
-        self.__lock_updating: asyncio.Lock = asyncio.Lock()
-        self.__next_refresh_timestamp: float = None
+    online: bool
+    passport : NodeIdentifier
+    hostname: str
+    ipv6: IPv6Address
+    ram_specs: str
+    ram_usage: str
+    available: bool
+    # electricity_consumption: float  # what unit ? over what period ?
+    browsers: dict[str, BrowserImage]
+    # score: float  # score for the proxy ?
+
+    __lock_updating: asyncio.Lock
+    __next_refresh_timestamp: float
 
     def to_model(self) -> ScraperImageModel:
 
@@ -88,16 +87,17 @@ class ScraperImage:
         return scraperImage
 
     async def __initialize(self, node_id: int) -> None:
-        self.online = True
-        self.passport = NodeIdentifier(node_id)
         response = await proxypi.run(
             PROXYPI_COMMAND_INFO.safe_substitute(node_id=node_id)
         )
         response_as_dict = json.loads(response)
+
+        self.online = True
+        self.passport = NodeIdentifier(node_id)
         self.hostname = response_as_dict["hostname"]
         self.ipv6 = IPv6Address(response_as_dict["ipv6"])
+        # for demo
         # import random
-
         # self.ipv6 = IPv6Address(random.getrandbits(128))
         self.__next_refresh_timestamp = asyncio.get_event_loop().time()
 
@@ -114,9 +114,9 @@ class ScraperImage:
             scraper_model: ScraperModel = ScraperModel.model_validate(
                 scraper_response.json()
             )
-            self.available = scraper_model.can_create_browser
             self.ram_specs = scraper_model.ram_specs
             self.ram_usage = scraper_model.ram_usage
+            self.available = scraper_model.can_create_browser
             self.browsers = {
                 instance_id: BrowserImage(instance_id, self.passport, browser_model)
                 for instance_id, browser_model in scraper_model.browsers.items()
@@ -136,8 +136,8 @@ class ScraperImage:
     async def new_instance(
         self,
         instance_id: str,
-        lifespan_in_seconds: Optional[int] = None,
-        window_size: Optional[Union[List[int], Tuple[int, int]]] = None,
+        lifespan_in_seconds: int | None = None,
+        window_size: tuple[int, int] | None = None,
     ) -> bool:
         payload = {"instance_id": instance_id}
         if lifespan_in_seconds:

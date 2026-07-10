@@ -1,5 +1,5 @@
 import datetime
-from typing import List, Literal
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, HttpUrl
@@ -21,6 +21,6 @@ class BrowserImageGetResult(BaseModel):
 class BrowserImageModel(BaseModel):
     created_at: datetime.datetime
     expires_at: datetime.datetime
-    browsing_history: List[str]
+    browsing_history: list[str]
     status: Literal["idle", "requesting", "spotted", "waiting"]
     score: float

@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 from uuid import UUID
 
 import aiosqlite
@@ -33,7 +33,7 @@ class DatabaseHandler:
 
     @classmethod
     async def execute(
-        cls, query: str, params: Optional[Tuple[Any, ...]] = None
+        cls, query: str, params: tuple[Any, ...] | None = None
     ) -> None:
         """
         handlers not aiming for reuse (does not return a cursor)
@@ -44,22 +44,22 @@ class DatabaseHandler:
 
     @classmethod
     async def executemany(
-        cls, query: str, params: Optional[Tuple[Any, ...]] = None
+        cls, query: str, params: tuple[Any, ...] | None = None
     ) -> None:
         await cls.__connection.executemany(query, params)
         await cls.__connection.commit()
 
     @classmethod
     async def fetchone(
-        cls, query: str, params: Optional[Tuple[Any, ...]] = None
-    ) -> Dict[str, Any]:
+        cls, query: str, params: tuple[Any, ...] | None = None
+    ) -> dict[str, Any]:
         cursor = await cls.__connection.execute(query, params)
         return await cursor.fetchone()
 
     @classmethod
     async def fetchall(
-        cls, query: str, params: Optional[Tuple[Any, ...]] = None
-    ) -> List[Dict[str, Any]]:
+        cls, query: str, params: tuple[Any, ...] | None = None
+    ) -> list[dict[str, Any]]:
         cursor = await cls.__connection.execute(query, params)
         return await cursor.fetchall()
 
@@ -161,7 +161,7 @@ class DatabaseHandler:
         await cls.__connection.commit()
 
     @classmethod
-    async def get_unscraped_targets(cls) -> List[RecordTarget]:
+    async def get_unscraped_targets(cls) -> list[RecordTarget]:
         query = f"""
             SELECT *
             FROM {Config.DB_TABLE_TARGETS} l
@@ -190,7 +190,7 @@ class DatabaseHandler:
         ]
 
     @classmethod
-    async def get_scraped_targets(cls) -> List[Dict[str, Any]]:
+    async def get_scraped_targets(cls) -> list[dict[str, Any]]:
         query = f"""
             SELECT *
             FROM {Config.DB_TABLE_REQUESTS}
@@ -201,7 +201,7 @@ class DatabaseHandler:
         return await cls.fetchall(query)
 
     @classmethod
-    async def get_targets_from_uuids(cls, uuids: List[UUID]) -> List[RecordTarget]:
+    async def get_targets_from_uuids(cls, uuids: list[UUID]) -> list[RecordTarget]:
         placeholder = ",".join("?" for _ in uuids)
         query = f"""
             SELECT *

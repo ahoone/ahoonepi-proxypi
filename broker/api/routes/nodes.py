@@ -1,5 +1,4 @@
 import traceback
-from typing import List
 
 from api.common import get_broker
 from core.Broker import Broker
@@ -16,7 +15,7 @@ router = APIRouter()
         "Endpoint used by the dashboard. "
     ),
 )
-async def nodes(broker: Broker = Depends(get_broker)) -> List[ScraperImageModel]:
+async def nodes(broker: Broker = Depends(get_broker)) -> list[ScraperImageModel]:
     try:
         return broker.to_model()
     except Exception:

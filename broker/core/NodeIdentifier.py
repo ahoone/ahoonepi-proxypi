@@ -1,6 +1,5 @@
 import asyncio
 import os
-from typing import Set
 
 import httpx
 from Config import Config
@@ -14,11 +13,11 @@ TIMEOUT_SCRAPER_PING = 0.1  # seconds
 class NodeIdentifier:
     WIREGUARD_CIDR_PREFIX = int(os.getenv("WIREGUARD_CIDR_PREFIX"))
     if WIREGUARD_CIDR_PREFIX == 24:
-        node_ids: Set[int] = set(range(255))
+        node_ids: set[int] = set(range(255))
     else:
         raise ValueError(f"CIDR prefix {WIREGUARD_CIDR_PREFIX} not implemented")
 
-    reachable_nodes: Set[int] = set()
+    reachable_nodes: set[int] = set()
 
     @staticmethod
     async def ping(

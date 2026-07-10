@@ -1,5 +1,4 @@
 import datetime
-from typing import List
 from uuid import UUID
 
 from Config import Config
@@ -7,7 +6,7 @@ from pydantic import BaseModel, Field, HttpUrl
 
 
 class ScrapeRequest(BaseModel):
-    url: HttpUrl | List[HttpUrl] = Field(
+    url: HttpUrl | list[HttpUrl] = Field(
         description=(
             "Can be either an url or a list of urls. "
             "They will all get the same tag and antwortzeit. "

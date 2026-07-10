@@ -1,5 +1,4 @@
 import datetime
-from typing import Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field, HttpUrl
@@ -12,4 +11,4 @@ class RecordTarget(BaseModel):
     created_at: datetime.datetime
     tag: str
     flag_lazy_loading: bool
-    is_running: Optional[bool] = Field(default=None)
+    is_running: bool | None = Field(default=None)

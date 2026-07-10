@@ -1,5 +1,4 @@
 import traceback
-from typing import List
 
 from core.DatabaseHandler import DatabaseHandler
 from core.models.DatabaseHandler import RecordTarget
@@ -9,7 +8,7 @@ router = APIRouter()
 
 
 @router.get("/get_unscraped_targets")
-async def get_unscraped_targets() -> List[RecordTarget]:
+async def get_unscraped_targets() -> list[RecordTarget]:
     try:
         return await DatabaseHandler.get_unscraped_targets()
     except Exception:
