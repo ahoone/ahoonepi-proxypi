@@ -56,19 +56,19 @@ class TestScraperPrep:
         """
         url = BASE + "/terminate"
         response = requests.post(url, timeout=TIMEOUT_TERMINATE)
-        assert response.status_code == 204
+        assert response.status_code == 204, response.content
 
     def test_no_instance_running(self):
         url = BASE + "/get_scraper_state"
         response = requests.get(url, timeout=TIMEOUT_REQUESTS)
-        assert response.status_code == 200
+        assert response.status_code == 200, response.content
         scraper_model = ScraperModel.model_validate(response.json())
         assert not scraper_model.browsers
 
     def test_health(self):
         url = BASE + "/get_scraper_state"
         response = requests.get(url, timeout=TIMEOUT_REQUESTS)
-        assert response.status_code == 200
+        assert response.status_code == 200, response.content
         scraper_model = ScraperModel.model_validate(response.json())
         assert not scraper_model.is_running_as_root
         assert scraper_model.can_create_browser

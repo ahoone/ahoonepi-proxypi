@@ -3,10 +3,14 @@ import os
 
 
 class Config:
-    HTTP_PORT_SCRAPER = os.environ["HTTP_PORT_SCRAPER"]
-    NODE_ROLE = os.environ["NODE_ROLE"].split(",")
-    SSH_NETWORK_BASE = os.environ["SSH_NETWORK_BASE"]
-    WIREGUARD_NETWORK_PREFIX = os.environ["WIREGUARD_NETWORK_PREFIX"]
+    # the tests container loads this class but does not have the environment variables
+    try:
+        HTTP_PORT_SCRAPER = os.environ["HTTP_PORT_SCRAPER"]
+        NODE_ROLE = os.environ["NODE_ROLE"].split(",")
+        SSH_NETWORK_BASE = os.environ["SSH_NETWORK_BASE"]
+        WIREGUARD_NETWORK_PREFIX = os.environ["WIREGUARD_NETWORK_PREFIX"]
+    except Exception:
+        pass
 
     ALLOWED_NETWORKS = [
         ipaddress.ip_network("127.0.0.0/8"),  # localhost

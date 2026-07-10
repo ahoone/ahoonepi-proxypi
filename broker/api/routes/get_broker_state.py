@@ -1,12 +1,11 @@
 import traceback
-from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 
 from broker.api.common import get_broker
 from broker.core.Broker import Broker
-from broker.core.DatabaseHandler import DatabaseHandler
-from broker.core.models.DatabaseHandler import RecordTarget
+from broker.core.models.Broker import BrokerModel
+from contract.schemas.common import ErrorResponse
 
 router = APIRouter()
 
@@ -14,41 +13,20 @@ router = APIRouter()
 @router.get(
     "/get_broker_state",
     description=(
-        "There could be a race in between the collection, so the endpoint is supposed to deduplicate on `RecordTarget.uuid`. "
+        "Similar to the `get_scraper_state` for the scraper API, and includes the health fields. "
+        "There could be a race in between the collection of running requests and unscraped targets, "
+        "so the endpoint is supposed to deduplicate on `RecordTarget.uuid`. "
+        "The running requests should be provided with more information (when started, on which node...). "
+        "A query limit should be strongly enforced. "
     ),
+    responses={
+        500: {"model": ErrorResponse, "description": "Internal server error"},
+    }
 )
-async def get_broker_state(broker: Broker = Depends(get_broker)) -> list[RecordTarget]:
+async def get_broker_state(
+    broker: Broker = Depends(get_broker),
+) -> BrokerModel:
     try:
-        result: list[RecordTarget] = []
-        for record in await DatabaseHandler.get_unscraped_targets():
-            new_record = RecordTarget(
-                id=record.id,
-                url=record.url,
-                antwortzeit=record.antwortzeit,
-                created_at=record.created_at,
-                tag=record.tag,
-                flag_lazy_loading=record.flag_lazy_loading,
-                is_running=False,
-            )
-            result.append(new_record)
-        uuids_running_requests: list[UUID] = await broker.get_running_tasks()
-        if uuids_running_requests:
-            for record in await DatabaseHandler.get_targets_from_uuids(
-                uuids_running_requests
-            ):
-                new_record = RecordTarget(
-                    id=record.id,
-                    url=record.url,
-                    antwortzeit=record.antwortzeit,
-                    created_at=record.created_at,
-                    tag=record.tag,
-                    flag_lazy_loading=record.flag_lazy_loading,
-                    is_running=True,
-                )
-                result.append(new_record)
-        # This overwrites unscraped_targets by running_results
-        # return list({record.id: record for record in result}.values())
-        return result
-
+        return await broker.to_model()
     except Exception:
         raise HTTPException(status_code=500, detail=traceback.format_exc())

@@ -3,6 +3,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, HttpUrl
 
+from broker.Config import Config
+
 
 class RecordTarget(BaseModel):
     id: UUID
@@ -10,5 +12,4 @@ class RecordTarget(BaseModel):
     antwortzeit: datetime.datetime
     created_at: datetime.datetime
     tag: str
-    flag_lazy_loading: bool
-    is_running: bool | None = Field(default=None)
+    flag_lazy_loading: bool = Field(default=Config.TRIGGER_LAZY_LOADING_BY_DEFAULT)

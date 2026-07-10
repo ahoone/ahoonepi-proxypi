@@ -1,8 +1,9 @@
 import asyncio
 import datetime
+import os
 import random
 import traceback
-from typing import Literal, NoReturn, Optional
+from typing import Literal, NoReturn
 from uuid import UUID, uuid4
 
 from pydantic import HttpUrl
@@ -12,9 +13,8 @@ from broker.api.schemas.scrape import ScrapeRequest, ScrapeRequestResponse
 from broker.Config import Config
 from broker.core.BrowserImage import BrowserImage
 from broker.core.DatabaseHandler import DatabaseHandler
-from broker.core.models.Broker import Event, RecordRequest
+from broker.core.models.Broker import BrokerModel, Event, RecordRequest
 from broker.core.models.BrowserImage import BrowserImageGet, BrowserImageGetResult
-from broker.core.models.ScraperImage import ScraperImageModel
 from broker.core.NodeIdentifier import NodeIdentifier
 from broker.core.ScraperImage import ScraperImage
 
@@ -22,27 +22,43 @@ from broker.core.ScraperImage import ScraperImage
 class Broker:
     def __init__(self) -> None:
         self.scrapers: dict[int, ScraperImage] = {}  # node_id -> scraper
-        self.logger: list[Event] = []
-        self.__lock_logger: asyncio.Lock = asyncio.Lock()
+        self.logs: list[Event] = []
+        self.__lock_logs: asyncio.Lock = asyncio.Lock()
         self.effective_refresh_period: float | None = None
         self.__current_tasks: dict[UUID, asyncio.Task] = {}
         self.__lock_current_tasks: asyncio.Lock = asyncio.Lock()
         self.__lock_hibernate: asyncio.Lock = asyncio.Lock()
         self.__counter_update_loop: int = 0
 
-    def to_model(self) -> list[ScraperImageModel]:
-        return [scraper.to_model() for scraper in self.scrapers.values()]
+    async def to_model(self) -> BrokerModel:
+
+        running_requests = await DatabaseHandler.get_unscraped_targets()
+        unscraped_targets = await DatabaseHandler.get_targets_from_uuids(
+            await self.get_running_tasks()
+        )
+        scraped_targets = await DatabaseHandler.get_scraped_targets()
+
+        return BrokerModel(
+            is_running_as_root=os.getuid() == 0,
+            broker_refresh_period=Config.REFRESH_PERIOD_BROKER,
+            broker_effective_refresh_period=self.effective_refresh_period,
+            nodes=[scraper.to_model() for scraper in self.scrapers.values()],
+            logs=list(self.logs),
+            running_requests=running_requests,
+            unscraped_targets=unscraped_targets,
+            scraped_targets=scraped_targets,
+        )
 
     async def log(
         self,
         detail: str,
-        level: Optional[Literal["DEBUG", "INFO", "WARNING"]] = "INFO",
+        level: Literal["DEBUG", "INFO", "WARNING"] | None = "INFO",
     ) -> None:
-        async with self.__lock_logger:
+        async with self.__lock_logs:
             event = Event(detail=detail, level=level)
             if level != "DEBUG":
-                self.logger.insert(0, event)
-                self.logger = self.logger[: Config.BUFFER_LOGGER_SIZE]
+                self.logs.insert(0, event)
+                self.logs = self.logs[: Config.BUFFER_LOGGER_SIZE]
         query = f"INSERT INTO {Config.DB_TABLE_LOGS} (timestamp, detail, level) VALUES (?, ?, ?)"
         await DatabaseHandler.execute(
             query,
@@ -132,7 +148,7 @@ class Broker:
         await self.log(f"created browser {random_id}")
         return True
 
-    async def get_available_browser(self) -> Optional[BrowserImage]:
+    async def get_available_browser(self) -> BrowserImage | None:
         """
         returns the object (BrowserImage) browser that can handle the job
         """
@@ -158,7 +174,7 @@ class Broker:
             browsers = get_browsers()
         return random.choice(browsers) if browsers else None
 
-    async def __get_target(self) -> Optional[BrowserImageGet]:
+    async def __get_target(self) -> BrowserImageGet | None:
         async with self.__lock_current_tasks:
             current_tasks_ids_placeholder = "".join(
                 [f"AND l.id != '{current_id}' " for current_id in self.__current_tasks]
@@ -181,12 +197,12 @@ class Broker:
             return None
 
     async def __distribute_task(self) -> None:
-        target: Optional[BrowserImageGet] = await self.__get_target()
+        target: BrowserImageGet | None = await self.__get_target()
         if not target:
             await self.log("no target found")
             return
         await self.log(f"selected target {target.url}")
-        browser: Optional[BrowserImage] = await self.get_available_browser()
+        browser: BrowserImage | None = await self.get_available_browser()
         if not browser:
             await self.log(f"no browser available for {target.id}", level="WARNING")
             return
@@ -199,7 +215,7 @@ class Broker:
         target_uuid: UUID,
         task: asyncio.Task,
         flag_cancel_if_not_done: bool = False,
-    ) -> Optional[RecordRequest]:
+    ) -> RecordRequest | None:
         """
         implements a flag to cancel a task if it is not done
         (useful to clean the environment)
@@ -271,7 +287,7 @@ class Broker:
         load the records in the database
         """
         async with self.__lock_current_tasks:
-            completed: list[Optional[RecordRequest]] = await asyncio.gather(
+            completed: list[RecordRequest] | None = await asyncio.gather(
                 *[
                     self.__unwrap_task(target_uuid, task)
                     for target_uuid, task in self.__current_tasks.items()
@@ -333,7 +349,7 @@ class Broker:
             if sleep_time > 0:
                 await asyncio.sleep(sleep_time)
 
-    def get_scraper_from_hostname(self, hostname: str) -> Optional[ScraperImage]:
+    def get_scraper_from_hostname(self, hostname: str) -> ScraperImage | None:
         for scraper in self.scrapers.values():
             if scraper.hostname == hostname:
                 return scraper

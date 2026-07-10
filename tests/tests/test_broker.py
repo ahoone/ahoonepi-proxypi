@@ -6,19 +6,40 @@ import pytest
 import requests
 from Config import Config
 from URLGenerator import URLGenerator
-from broker.api.schemas.health import HealthResponse
 
-TIMEOUT_GET = 60 # in seconds (long, as we are waiting for either "complete" or "interactive" status)
+from broker.core.models.Broker import BrokerModel
+
+BASE = Config.ORIGIN_BROKER
+TIMEOUT_GET = 60  # in seconds (long, as we are waiting for either "complete" or "interactive" status)
 TIMEOUT_REQUESTS = 4  # seconds (small genetic)
 
 
-class TestBrokerCore:
-    def test_health(self):
-        url = Config.ORIGIN_BROKER + "/health"
+class TestBrokerPrep:
+    def test_endpoint_get_scraper_state(self):
+        url = BASE + "/get_broker_state"
         response = requests.get(url, timeout=TIMEOUT_REQUESTS)
         assert response.status_code == 200, response.content
-        health_response = HealthResponse.model_validate(response.json())
+        broker = BrokerModel.model_validate(response.json())
+        assert broker.is_running_as_root
 
+    def test_available_worker(self):
+        pass
+
+    def test_endpoint_clear(self):
+        url = BASE + "/clear"
+        response = requests.post(url, timeout=TIMEOUT_REQUESTS)
+        assert response.status_code == 204, response.content
+
+    def test_no_running_jobs_no_targets(self):
+        url = BASE + "/get_broker_state"
+        response = requests.get(url, timeout=TIMEOUT_REQUESTS)
+        assert response.status_code == 200, response.content
+        broker = BrokerModel.model_validate(response.json())
+        assert not broker.running_requests
+        assert not broker.unscraped_targets
+
+
+class TestBrokerCore:
     def test_broker_creates_browser(self):
         pass
 

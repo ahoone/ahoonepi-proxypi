@@ -56,8 +56,6 @@ class ScraperImage:
     # electricity_consumption: float  # what unit ? over what period ?
     browsers: dict[str, BrowserImage]
     # score: float  # score for the proxy ?
-
-    __lock_updating: asyncio.Lock
     __next_refresh_timestamp: float
 
     def to_model(self) -> ScraperImageModel:
@@ -97,6 +95,8 @@ class ScraperImage:
         self.passport = NodeIdentifier(node_id)
         self.hostname = response_as_dict["hostname"]
         self.ipv6 = IPv6Address(response_as_dict["ipv6"])
+        self.ram_specs = ""
+        self.ram_usage = ""
         # for demo
         # import random
         # self.ipv6 = IPv6Address(random.getrandbits(128))

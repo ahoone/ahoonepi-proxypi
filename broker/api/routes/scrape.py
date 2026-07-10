@@ -1,7 +1,7 @@
 import traceback
 
 from contract.schemas.common import ErrorResponse
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 
 from broker.api.common import get_broker
 from broker.api.schemas.scrape import ScrapeRequest, ScrapeRequestResponse
@@ -18,7 +18,7 @@ router = APIRouter()
         "This endpoint should be used with `get.collect`. "
         "One improvment would be to add an expected time of collect. "
     ),
-    status_code=status.HTTP_202_ACCEPTED,
+    status_code=202,
     responses={500: {"model": ErrorResponse, "description": "Internal server error"}},
 )
 async def scrape(

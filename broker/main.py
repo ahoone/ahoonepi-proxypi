@@ -9,14 +9,6 @@ from fastapi.responses import FileResponse
 from broker.api.routes.clear import router as clear_router
 from broker.api.routes.collect import router as collect_router
 from broker.api.routes.get_broker_state import router as get_broker_state_router
-from broker.api.routes.get_running_requests import router as get_running_requests_router
-from broker.api.routes.get_unscraped_targets import (
-    router as get_unscraped_targets_router,
-)
-from broker.api.routes.health import router as health_router
-from broker.api.routes.logger import router as logger_router
-from broker.api.routes.nodes import router as nodes_router
-from broker.api.routes.results import router as results_router
 from broker.api.routes.scrape import router as scrape_router
 from broker.api.routes.stream import router as stream_router
 from broker.Config import Config
@@ -66,12 +58,6 @@ app.add_middleware(
 app.include_router(clear_router)
 app.include_router(collect_router)
 app.include_router(get_broker_state_router)
-app.include_router(get_running_requests_router)
-app.include_router(get_unscraped_targets_router)
-app.include_router(health_router)
-app.include_router(logger_router)
-app.include_router(nodes_router)
-app.include_router(results_router)
 app.include_router(scrape_router)
 app.include_router(stream_router)
 

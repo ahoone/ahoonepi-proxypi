@@ -1,7 +1,7 @@
 import traceback
 
 from contract.schemas.common import ErrorResponse
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Response
 
 from broker.api.common import get_broker
 from broker.api.schemas.clear import ClearRequest
@@ -12,7 +12,7 @@ router = APIRouter()
 
 @router.post(
     "/clear",
-    status_code=status.HTTP_204_NO_CONTENT,
+    status_code=204,
     description=(
         "Implements different flags to clear states handled by the broker without restarting the service. "
         "Makes the broker hibernate (skip its update cycle) until completed. "
@@ -24,7 +24,7 @@ router = APIRouter()
     },
 )
 async def clear(
-    request: ClearRequest | None, broker: Broker = Depends(get_broker)
+    request: ClearRequest | None = ClearRequest(), broker: Broker = Depends(get_broker)
 ) -> Response:
     try:
         await broker.clear(request)
