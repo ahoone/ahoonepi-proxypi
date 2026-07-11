@@ -41,4 +41,5 @@ async def kill(request: KillRequest, scraper: Scraper = Depends(get_scraper)):
     try:
         await scraper.kill(request.instance_id)
     except Exception:
+        print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=traceback.format_exc())

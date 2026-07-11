@@ -35,4 +35,5 @@ async def terminate(scraper: Scraper = Depends(get_scraper)):
     try:
         await scraper.terminate()
     except Exception:
+        print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=traceback.format_exc())

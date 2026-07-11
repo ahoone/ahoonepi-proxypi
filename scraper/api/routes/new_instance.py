@@ -51,4 +51,5 @@ async def new_instance(
     try:
         await scraper.new_instance(request)
     except Exception:
+        print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=traceback.format_exc())

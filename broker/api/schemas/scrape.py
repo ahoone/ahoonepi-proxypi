@@ -10,10 +10,10 @@ class ScrapeRequest(BaseModel):
     url: HttpUrl | list[HttpUrl] = Field(
         description=(
             "Can be either an url or a list of urls. "
-            "They will all get the same tag and antwortzeit. "
+            "They will all get the same tag and expected_response_time. "
         ),
     )
-    antwortzeit: datetime.datetime = Field(
+    expected_response_time: datetime.datetime = Field(
         default_factory=datetime.datetime.now,
         description=(
             "Time you hope the response to be completed. "
@@ -36,5 +36,5 @@ class ScrapeRequest(BaseModel):
     )
 
 
-class ScrapeRequestResponse(BaseModel):
+class ScrapeResponse(BaseModel):
     uuid: UUID | list[UUID]

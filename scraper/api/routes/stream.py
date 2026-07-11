@@ -41,4 +41,5 @@ async def stream(instance_id: str, scraper: Scraper = Depends(get_scraper)):
             headers={"X-Accel-Buffering": "no"},
         )
     except Exception:
+        print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=traceback.format_exc())

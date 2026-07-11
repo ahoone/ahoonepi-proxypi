@@ -83,4 +83,5 @@ async def get(
     except BotSpottedError as e:
         raise HTTPException(status_code=503, detail=e.detail)
     except Exception:
+        print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=traceback.format_exc())

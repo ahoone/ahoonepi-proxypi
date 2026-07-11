@@ -9,12 +9,13 @@ from uuid import UUID, uuid4
 from pydantic import HttpUrl
 
 from broker.api.schemas.clear import ClearRequest
-from broker.api.schemas.scrape import ScrapeRequest, ScrapeRequestResponse
+from broker.api.schemas.scrape import ScrapeRequest, ScrapeResponse
 from broker.Config import Config
 from broker.core.BrowserImage import BrowserImage
 from broker.core.DatabaseHandler import DatabaseHandler
 from broker.core.models.Broker import BrokerModel, Event, RecordRequest
 from broker.core.models.BrowserImage import BrowserImageGet, BrowserImageGetResult
+from broker.core.models.DatabaseHandler import RecordTarget
 from broker.core.NodeIdentifier import NodeIdentifier
 from broker.core.ScraperImage import ScraperImage
 
@@ -30,19 +31,31 @@ class Broker:
         self.__lock_hibernate: asyncio.Lock = asyncio.Lock()
         self.__counter_update_loop: int = 0
 
+    async def __get_running_requests(self) -> list[RecordTarget]:
+        uuids = await self.get_running_tasks()
+        return await DatabaseHandler.get_targets_from_uuids(uuids)
+
     async def to_model(self) -> BrokerModel:
 
-        running_requests = await DatabaseHandler.get_unscraped_targets()
-        unscraped_targets = await DatabaseHandler.get_targets_from_uuids(
-            await self.get_running_tasks()
+        (
+            running_requests,
+            unscraped_targets,
+            scraped_targets,
+            nodes,
+        ) = await asyncio.gather(
+            DatabaseHandler.get_unscraped_targets(),
+            self.__get_running_requests(),
+            DatabaseHandler.get_scraped_targets(),
+            asyncio.to_thread(
+                lambda: [scraper.to_model() for scraper in self.scrapers.values()]
+            ),
         )
-        scraped_targets = await DatabaseHandler.get_scraped_targets()
 
         return BrokerModel(
             is_running_as_root=os.getuid() == 0,
             broker_refresh_period=Config.REFRESH_PERIOD_BROKER,
             broker_effective_refresh_period=self.effective_refresh_period,
-            nodes=[scraper.to_model() for scraper in self.scrapers.values()],
+            nodes=nodes,
             logs=list(self.logs),
             running_requests=running_requests,
             unscraped_targets=unscraped_targets,
@@ -65,28 +78,28 @@ class Broker:
             (event.timestamp, event.detail, event.level),
         )
 
-    async def scrape(self, request: ScrapeRequest) -> ScrapeRequestResponse:
+    async def scrape(self, request: ScrapeRequest) -> ScrapeResponse:
         query = f"""
             INSERT INTO {Config.DB_TABLE_TARGETS}
-            (id, url, antwortzeit, tag, flag_lazy_loading)
+            (id, url, expected_response_time, tag, flag_lazy_loading)
             VALUES (?, ?, ?, ?, ?)
         """
 
-        async def scrape_url(request: ScrapeRequest) -> ScrapeRequestResponse:
+        async def scrape_url(request: ScrapeRequest) -> ScrapeResponse:
             uuid: UUID = uuid4()
             data: list[tuple[str, str, datetime.datetime, str, bool]] = [
                 (
                     str(uuid),
                     str(request.url),
-                    request.antwortzeit,
+                    request.expected_response_time,
                     request.tag,
                     request.flag_lazy_loading,
                 )
             ]
             await DatabaseHandler.executemany(query, data)
-            return ScrapeRequestResponse(uuid=uuid)
+            return ScrapeResponse(uuid=uuid)
 
-        async def scrape_urls(request: ScrapeRequest) -> ScrapeRequestResponse:
+        async def scrape_urls(request: ScrapeRequest) -> ScrapeResponse:
             uuids: list[UUID] = []
             data: list[tuple[str, str, datetime.datetime, str, bool]] = []
             for url in request.url:
@@ -96,13 +109,13 @@ class Broker:
                     (
                         str(uuid),
                         str(url),
-                        request.antwortzeit,
+                        request.expected_response_time,
                         request.tag,
                         request.flag_lazy_loading,
                     )
                 )
             await DatabaseHandler.executemany(query, data)
-            return ScrapeRequestResponse(uuid=uuids)
+            return ScrapeResponse(uuid=uuids)
 
         if isinstance(request.url, HttpUrl):
             return await scrape_url(request)
@@ -185,7 +198,7 @@ class Broker:
                 WHERE 1=1
                     {current_tasks_ids_placeholder}
                     AND l.enabled = 1
-                ORDER BY l.antwortzeit ASC
+                ORDER BY l.expected_response_time ASC
             """
             response = await DatabaseHandler.fetchone(query)
             if response:

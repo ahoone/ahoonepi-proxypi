@@ -9,7 +9,7 @@ from broker.Config import Config
 class RecordTarget(BaseModel):
     id: UUID
     url: HttpUrl
-    antwortzeit: datetime.datetime
+    expected_response_time: datetime.datetime
     created_at: datetime.datetime
     tag: str
     flag_lazy_loading: bool = Field(default=Config.TRIGGER_LAZY_LOADING_BY_DEFAULT)

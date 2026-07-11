@@ -4,7 +4,7 @@ from contract.schemas.common import ErrorResponse
 from fastapi import APIRouter, Depends, HTTPException
 
 from broker.api.common import get_broker
-from broker.api.schemas.scrape import ScrapeRequest, ScrapeRequestResponse
+from broker.api.schemas.scrape import ScrapeRequest, ScrapeResponse
 from broker.core.Broker import Broker
 
 router = APIRouter()
@@ -24,7 +24,7 @@ router = APIRouter()
 async def scrape(
     request: ScrapeRequest,
     broker: Broker = Depends(get_broker),
-) -> ScrapeRequestResponse:
+) -> ScrapeResponse:
     try:
         return await broker.scrape(request)
     except Exception:

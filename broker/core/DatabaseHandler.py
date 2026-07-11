@@ -79,7 +79,7 @@ class DatabaseHandler:
             CREATE TABLE IF NOT EXISTS {Config.DB_TABLE_TARGETS} (
                 id TEXT PRIMARY KEY NOT NULL,
                 url TEXT NOT NULL,
-                antwortzeit DATETIME NOT NULL,
+                expected_response_time DATETIME NOT NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 tag TEXT NOT NULL,
                 flag_lazy_loading BOOLEAN NOT NULL,
@@ -173,14 +173,14 @@ class DatabaseHandler:
                         AND r.{Config.DB_TABLE_TARGETS}_id = l.id
                         AND r.success = TRUE
                 )
-            ORDER BY antwortzeit ASC
+            ORDER BY expected_response_time ASC
             LIMIT {Config.LIMIT_SQL_QUERIES}
         """
         return [
             RecordTarget(
                 id=record["id"],
                 url=record["url"],
-                antwortzeit=record["antwortzeit"],
+                expected_response_time=record["expected_response_time"],
                 created_at=record["created_at"],
                 tag=record["tag"],
                 flag_lazy_loading=record["flag_lazy_loading"],
@@ -189,7 +189,7 @@ class DatabaseHandler:
         ]
 
     @classmethod
-    async def get_scraped_targets(cls) -> list[dict[str, Any]]:
+    async def get_scraped_targets(cls) -> list[RecordTarget]:
         query = f"""
             SELECT *
             FROM {Config.DB_TABLE_REQUESTS}
@@ -197,7 +197,17 @@ class DatabaseHandler:
             ORDER BY id ASC
             LIMIT {Config.LIMIT_SQL_QUERIES}
         """
-        return await cls.fetchall(query)
+        return [
+            RecordTarget(
+                id=record["id"],
+                url=record["url"],
+                expected_response_time=record["expected_response_time"],
+                created_at=record["created_at"],
+                tag=record["tag"],
+                flag_lazy_loading=record["flag_lazy_loading"],
+            )
+            for record in await cls.fetchall(query)
+        ]
 
     @classmethod
     async def get_targets_from_uuids(cls, uuids: list[UUID]) -> list[RecordTarget]:
@@ -211,7 +221,7 @@ class DatabaseHandler:
             RecordTarget(
                 id=record["id"],
                 url=record["url"],
-                antwortzeit=record["antwortzeit"],
+                expected_response_time=record["expected_response_time"],
                 created_at=record["created_at"],
                 tag=record["tag"],
                 flag_lazy_loading=record["flag_lazy_loading"],

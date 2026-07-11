@@ -97,6 +97,7 @@ class ScraperImage:
         self.ipv6 = IPv6Address(response_as_dict["ipv6"])
         self.ram_specs = ""
         self.ram_usage = ""
+        self.available = False
         # for demo
         # import random
         # self.ipv6 = IPv6Address(random.getrandbits(128))
