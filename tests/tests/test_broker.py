@@ -4,11 +4,11 @@ from time import sleep
 
 import pytest
 import requests
-from Config import Config
-from URLGenerator import URLGenerator
 
 from broker.api.schemas.scrape import ScrapeRequest, ScrapeResponse
 from broker.core.models.Broker import BrokerModel
+from tests.Config import Config
+from tests.URLGenerator import URLGenerator
 
 BASE = Config.ORIGIN_BROKER
 TIMEOUT_GET = 60  # in seconds (long, as we are waiting for either "complete" or "interactive" status)
@@ -48,7 +48,7 @@ class TestBrokerPrep:
 class TestBrokerCore:
     shared_data = {}
 
-    @pytest.mark.dependency(name="0")
+    @pytest.mark.dependency()
     def test_endpoint_scrape(self):
         url = BASE + "/scrape"
         payload = ScrapeRequest(
@@ -64,7 +64,7 @@ class TestBrokerCore:
         assert model.uuid
         TestBrokerCore.shared_data["uuid"] = model.uuid
 
-    @pytest.mark.dependency(depends="0", name="1")
+    @pytest.mark.dependency(depends=["test_endpoint_scrape"])
     def test_browser_created(self):
         """
         For now, we consider fine that the broker creates

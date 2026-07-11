@@ -124,17 +124,23 @@ class ScraperImage:
                 instance_id: BrowserImage(instance_id, self.passport, browser_model)
                 for instance_id, browser_model in scraper_model.browsers.items()
             }
+        except httpx.ReadTimeout:
+            print(f"""
+                [{self.passport.vpn_address}:{Config.HTTP_PORT_SCRAPER}] Took too much time to response.
+                The remote scraper container must be busy.
+            """)
         except httpx.ConnectError:
-            print(
-                f"Unable to connect to {self.passport.vpn_address}. Will backoff for {BACKOFF_REFRESH_PERIOD_SCRAPER} seconds. Check for the scraper container running."
-            )
+            print(f"""
+                [{self.passport.vpn_address}:{Config.HTTP_PORT_SCRAPER}] Unable to connect.
+                Will backoff for {BACKOFF_REFRESH_PERIOD_SCRAPER} seconds.
+                Check for the remote scraper container running.
+            """)
             self.__next_refresh_timestamp = loop.time() + BACKOFF_REFRESH_PERIOD_SCRAPER
-            return
         except Exception as e:
             print(f"[{self.passport.vpn_address}:{Config.HTTP_PORT_SCRAPER}] {e}")
             print(traceback.format_exc())
-            return
-        self.__next_refresh_timestamp = loop.time() + REFRESH_PERIOD_SCRAPER
+        finally:
+            self.__next_refresh_timestamp = loop.time() + REFRESH_PERIOD_SCRAPER
 
     async def new_instance(
         self,

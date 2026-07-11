@@ -3,7 +3,7 @@ import datetime
 from typing import Literal
 
 import httpx
-from contract.schemas.architecture import BrowserModel
+from contract.schemas.architecture import BrowserModel, BrowsingRecord
 from contract.schemas.get import ScraperGetResponse
 
 from broker.Config import Config
@@ -30,7 +30,7 @@ class BrowserImage:
         self.passport: NodeIdentifier = passport
         self.created_at: datetime.datetime = browser_model.created_at
         self.expires_at: datetime.datetime = browser_model.expires_at
-        self.browsing_history: list[str] = []
+        self.browsing_history: list[BrowsingRecord] = browser_model.browsing_history
         self.status: Literal["idle", "requesting", "spotted", "waiting"] = (
             browser_model.status
         )

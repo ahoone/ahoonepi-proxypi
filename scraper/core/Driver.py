@@ -6,6 +6,8 @@ import zendriver as uc
 
 from scraper.core.Display import Display
 
+TIMEOUT_DRIVER_STOP = 5  # seconds
+
 
 class Driver:
     driver: uc.Browser
@@ -36,7 +38,14 @@ class Driver:
         )
 
     async def kill(self) -> None:
-        asyncio.create_task(self.driver.stop())
-        # probably never stopping
-        # creates a zombie process
-        # 999      4088371  0.0  0.0      0     0 ?        Z    Apr20   0:00 [chrome_crashpad] <defunct>
+        """
+        probably never stopping:
+        creates a zombie process
+        999      4088371  0.0  0.0      0     0 ?        Z    Apr20   0:00 [chrome_crashpad] <defunct>
+
+        The best option would be to track the chromium processn and manually kill it.
+        """
+        try:
+            await asyncio.wait_for(self.driver.stop(), timeout=TIMEOUT_DRIVER_STOP)
+        except asyncio.TimeoutError:
+            print(f"failed to close the driver {self.__profile_uuid}")

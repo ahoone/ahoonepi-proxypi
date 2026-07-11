@@ -3,9 +3,10 @@ import os
 
 
 class Config:
-    NODE_ROLE = os.getenv("NODE_ROLE").split(",")
-    if "SCRAPER" not in NODE_ROLE:
-        raise ValueError("the node should be a scraper to launch this image")
+    try:
+        NODE_ROLE = os.getenv("NODE_ROLE").split(",")
+    except Exception:
+        pass
 
     ALLOWED_NETWORKS = [
         ipaddress.ip_network("127.0.0.0/8"),  # localhost

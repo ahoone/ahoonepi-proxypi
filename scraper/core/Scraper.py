@@ -22,8 +22,6 @@ class Scraper:
         self.__browser_active_tasks: dict[str, set[asyncio.Task]] = {}
         self.__lock: asyncio.Lock = asyncio.Lock()
         self.__lock_terminate: asyncio.Lock = asyncio.Lock()
-        self.__lock_pending_kills: asyncio.Lock = asyncio.Lock()
-        self.__pending_kills: set[asyncio.Task] = set()
 
     @staticmethod
     def __read_memory_info() -> tuple[int, int, int]:
@@ -78,12 +76,18 @@ class Scraper:
                 self.__browser_active_tasks[request.instance_id].discard(task)
 
     async def kill(self, instance_id: str) -> None:
+        """
+        First, remove logically the browser
+        Second, do the cleaning up process
+        """
 
         async with self.__lock:
-            snapshot_tasks = set(self.__browser_active_tasks[instance_id])
+            browser = self.browsers.pop(instance_id)
+            snapshot_tasks = self.__browser_active_tasks.pop(instance_id)
 
         for task in snapshot_tasks:
             task.cancel()
+
         try:
             await asyncio.wait_for(
                 asyncio.gather(*snapshot_tasks, return_exceptions=True),
@@ -92,19 +96,8 @@ class Scraper:
         except asyncio.TimeoutError:
             pass
 
-        pending_kill_task = asyncio.create_task(
-            self.browsers[instance_id].kill()
-        )  # browser.kill() may create a zombie process (not fixable, due to Xfvb, chromium and ffmepg)
-        async with self.__lock_pending_kills:
-            self.__pending_kills.add(pending_kill_task)
-            # pending_kill_task.add_done_callback(lambda t:
-            #     self.__pending_kills.discard(t),
-            #     t.exception() and print(f"browser.kill() failed for {instance_id}: {t.exception()}")
-            # )
-
-        async with self.__lock:
-            del self.browsers[instance_id]
-            del self.__browser_active_tasks[instance_id]
+        # guaranteed to return within a few seconds
+        await browser.kill()
 
     async def __update(self) -> None:
         """

@@ -8,6 +8,6 @@ services:
       HTTP_PORT_BROKER: ${HTTP_PORT_BROKER}
       HTTP_PORT_SCRAPER: ${HTTP_PORT_SCRAPER}
       WIREGUARD_NETWORK_PREFIX: ${WIREGUARD_NETWORK_PREFIX}
-      PYTHONPATH: /app  # to access the apis schemas
+      PYTHONPATH: /app # to access the apis schemas of broker and the config of scraper
     command: ["pytest", "-v", "-s"]
     restart: "no"

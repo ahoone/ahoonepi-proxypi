@@ -1,19 +1,20 @@
-from time import sleep
 import math
+import threading
+from time import sleep
 
 import requests
-import threading
+from contract.Config import Config as ContractConfig
 from contract.schemas.architecture import ScraperModel
-from contract.schemas.new_instance import NewInstanceRequest
 from contract.schemas.get import ScraperGetRequest, ScraperGetResponse
 from contract.schemas.kill import KillRequest
-from contract.Config import Config as ContractConfig
-from Config import Config
-from URLGenerator import URLGenerator
+from contract.schemas.new_instance import NewInstanceRequest
 
+from scraper.Config import Config as ScraperConfig
+from tests.Config import Config
+from tests.URLGenerator import URLGenerator
 
 BASE = Config.ORIGIN_SCRAPER
-TIMEOUT_GET = 60 # in seconds (long, as we are waiting for either "complete" or "interactive" status)
+TIMEOUT_GET = 60  # in seconds (long, as we are waiting for either "complete" or "interactive" status)
 TIMEOUT_REQUESTS = 4  # seconds (small genetic)
 TIMEOUT_TERMINATE = 8  # seconds (medium)
 
@@ -49,6 +50,7 @@ INFO:     172.22.0.1:56388 - "POST /get HTTP/1.1" 409 Conflict
 Could not send the close command when stopping the browser. Likely the browser is already gone. Closing the connection.
 """
 
+
 class TestScraperPrep:
     def test_endpoint_terminate(self):
         """
@@ -75,8 +77,8 @@ class TestScraperPrep:
         assert scraper_model.ram_specs
         assert scraper_model.ram_usage
 
-class TestScraperCore:
 
+class TestScraperCore:
     BROWSER_EXPLICIT_ID = "explicit"
     BROWSER_EXPLICIT_LIFESPAN = 10
     BROWSER_EXPLICIT_WINDOW = (1024, 768)
@@ -94,7 +96,11 @@ class TestScraperCore:
         assert ContractConfig.BROWSER_DEFAULT_ID in scraper_model.browsers
         browser_model = scraper_model.browsers[ContractConfig.BROWSER_DEFAULT_ID]
         assert browser_model.window_size == ContractConfig.BROWSER_DEFAULT_WINDOW
-        assert math.isclose(browser_model.remaining_lifespan.total_seconds(), ContractConfig.BROWSER_DEFAULT_LIFESPAN, rel_tol=.05)
+        assert math.isclose(
+            browser_model.remaining_lifespan.total_seconds(),
+            ContractConfig.BROWSER_DEFAULT_LIFESPAN,
+            rel_tol=0.05,
+        )
         assert browser_model.status == "idle"
         assert not browser_model.browsing_history
 
@@ -112,7 +118,9 @@ class TestScraperCore:
             lifespan_in_seconds=self.BROWSER_EXPLICIT_LIFESPAN,
             window_size=self.BROWSER_EXPLICIT_WINDOW,
         )
-        response = requests.post(url, json=payload.model_dump(), timeout=TIMEOUT_REQUESTS)
+        response = requests.post(
+            url, json=payload.model_dump(), timeout=TIMEOUT_REQUESTS
+        )
         assert response.status_code == 201, response.content
 
     def test_explicit_instance(self):
@@ -123,7 +131,11 @@ class TestScraperCore:
         assert self.BROWSER_EXPLICIT_ID in scraper_model.browsers
         browser_model = scraper_model.browsers[self.BROWSER_EXPLICIT_ID]
         assert browser_model.window_size == self.BROWSER_EXPLICIT_WINDOW
-        assert math.isclose(browser_model.remaining_lifespan.total_seconds(), self.BROWSER_EXPLICIT_LIFESPAN, rel_tol=.05)
+        assert math.isclose(
+            browser_model.remaining_lifespan.total_seconds(),
+            self.BROWSER_EXPLICIT_LIFESPAN,
+            rel_tol=0.05,
+        )
         assert browser_model.status == "idle"
         assert not browser_model.browsing_history
 
@@ -141,7 +153,9 @@ class TestScraperCore:
             url=URLGenerator.next(),
             flag_lazy_loading=False,
         )
-        response = requests.post(url, json=payload.model_dump(mode="json"), timeout=TIMEOUT_GET)
+        response = requests.post(
+            url, json=payload.model_dump(mode="json"), timeout=TIMEOUT_GET
+        )
         assert response.status_code == 200, response.content
         scraper_get_response = ScraperGetResponse.model_validate(response.json())
         assert scraper_get_response.html_content
@@ -153,13 +167,21 @@ class TestScraperCore:
             url=URLGenerator.next(),
             flag_lazy_loading=False,
         )
-        response = requests.post(url, json=payload.model_dump(mode="json"), timeout=TIMEOUT_GET)
+        response = requests.post(
+            url, json=payload.model_dump(mode="json"), timeout=TIMEOUT_GET
+        )
         assert response.status_code == 200, response.content
         scraper_get_response = ScraperGetResponse.model_validate(response.json())
         assert scraper_get_response.html_content
 
     def test_explicit_instance_dead(self):
-        sleep(self.BROWSER_EXPLICIT_LIFESPAN)
+        """
+        we need to account for:
+            - the lifespan of the browser
+            - the time for the loop to spot the expiration
+            - the time for the kill method to be done (let's say 1 seconds)
+        """
+        sleep(self.BROWSER_EXPLICIT_LIFESPAN + ScraperConfig.REFRESH_RATE_SCRAPER + 1)
         url = BASE + "/get_scraper_state"
         response = requests.get(url, timeout=TIMEOUT_REQUESTS)
         assert response.status_code == 200, response.content
@@ -169,10 +191,10 @@ class TestScraperCore:
 
     def test_kill_default_instance(self):
         url = BASE + "/kill"
-        payload = KillRequest(
-            instance_id=ContractConfig.BROWSER_DEFAULT_ID
+        payload = KillRequest(instance_id=ContractConfig.BROWSER_DEFAULT_ID)
+        response = requests.post(
+            url, json=payload.model_dump(mode="json"), timeout=TIMEOUT_GET
         )
-        response = requests.post(url, json=payload.model_dump(mode="json"), timeout=TIMEOUT_GET)
         assert response.status_code == 204, response.content
 
     def test_default_instance_dead(self):
@@ -182,8 +204,8 @@ class TestScraperCore:
         scraper_model = ScraperModel.model_validate(response.json())
         assert len(scraper_model.browsers) == 0
 
-class TestScraperIntense:
 
+class TestScraperIntense:
     SIMULTANEOUS_REQUESTS = 10
 
     def test_recreate_default_instance(self):
@@ -199,7 +221,11 @@ class TestScraperIntense:
         assert ContractConfig.BROWSER_DEFAULT_ID in scraper_model.browsers
         browser_model = scraper_model.browsers[ContractConfig.BROWSER_DEFAULT_ID]
         assert browser_model.window_size == ContractConfig.BROWSER_DEFAULT_WINDOW
-        assert math.isclose(browser_model.remaining_lifespan.total_seconds(), ContractConfig.BROWSER_DEFAULT_LIFESPAN, rel_tol=.05)
+        assert math.isclose(
+            browser_model.remaining_lifespan.total_seconds(),
+            ContractConfig.BROWSER_DEFAULT_LIFESPAN,
+            rel_tol=0.05,
+        )
         assert browser_model.status == "idle"
         assert not browser_model.browsing_history
 
@@ -212,8 +238,15 @@ class TestScraperIntense:
                 url=URLGenerator.next(),
                 flag_lazy_loading=False,
             )
-            response = requests.post(url, json=payload.model_dump(mode="json"), timeout=TIMEOUT_GET)
+            response = requests.post(
+                url, json=payload.model_dump(mode="json"), timeout=TIMEOUT_GET
+            )
             if response.status_code == 500:
+                return
+                # not expected: race condition
+                # - the broker was existing when the check was done in the api route
+                # - the broker had been deleted when the route called the scraper method
+            elif response.status_code == 503:
                 return  # expected: request was killed mid-flight by the next test
             elif response.status_code == 409:
                 return  # expected: request was received after the scraper killed the instance
@@ -226,10 +259,10 @@ class TestScraperIntense:
 
     def test_cancelling_tasks(self):
         url = BASE + "/kill"
-        payload = KillRequest(
-            instance_id=ContractConfig.BROWSER_DEFAULT_ID
+        payload = KillRequest(instance_id=ContractConfig.BROWSER_DEFAULT_ID)
+        response = requests.post(
+            url, json=payload.model_dump(mode="json"), timeout=TIMEOUT_GET
         )
-        response = requests.post(url, json=payload.model_dump(mode="json"), timeout=TIMEOUT_GET)
         assert response.status_code == 204, response.content
 
     def test_default_instance_dead(self):
@@ -246,8 +279,11 @@ class TestScraperIntense:
             url=URLGenerator.next(),
             flag_lazy_loading=False,
         )
-        response = requests.post(url, json=payload.model_dump(mode="json"), timeout=TIMEOUT_GET)
+        response = requests.post(
+            url, json=payload.model_dump(mode="json"), timeout=TIMEOUT_GET
+        )
         assert response.status_code == 409, response.content
+
 
 class TestScraperFeatures:
     # should test lazy loading (on playin)

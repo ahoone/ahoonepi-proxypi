@@ -133,7 +133,7 @@ class Browser:
         try:
             async with self.__get_lock:
                 return await self.get(request)
-        except asyncio.CancelledError as e:
+        except asyncio.CancelledError:
             self.browsing_history.append(
                 BrowsingRecord(
                     url=request.url,
@@ -141,7 +141,7 @@ class Browser:
                     timestamp=datetime.datetime.now().isoformat(),
                 )
             )
-            raise ValueError(e)
+            raise
 
     async def trigger_lazy_loading(self, page: uc.Tab) -> bool:
         """
@@ -230,8 +230,8 @@ class Browser:
 
     async def kill(self) -> None:
         await asyncio.gather(
+            self.__driver.kill(),
             asyncio.to_thread(self.__frame_unpacker.kill),
             asyncio.to_thread(self.__streamer.kill),
             asyncio.to_thread(self.__display.kill),
         )
-        await self.__driver.kill()

@@ -192,8 +192,14 @@ class DatabaseHandler:
     async def get_scraped_targets(cls) -> list[RecordTarget]:
         query = f"""
             SELECT *
-            FROM {Config.DB_TABLE_REQUESTS}
-            WHERE success = TRUE
+            FROM {Config.DB_TABLE_TARGETS} l
+            WHERE EXISTS (
+                SELECT 1
+                FROM {Config.DB_TABLE_REQUESTS} r
+                WHERE 1=1
+                    AND r.{Config.DB_TABLE_TARGETS}_id = l.id
+                    AND r.success = TRUE
+                )
             ORDER BY id ASC
             LIMIT {Config.LIMIT_SQL_QUERIES}
         """
