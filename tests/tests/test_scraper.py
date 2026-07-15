@@ -2,6 +2,7 @@ import math
 import threading
 from time import sleep
 
+import pytest
 import requests
 from contract.Config import Config as ContractConfig
 from contract.schemas.architecture import ScraperModel
@@ -51,31 +52,36 @@ Could not send the close command when stopping the browser. Likely the browser i
 """
 
 
-class TestScraperPrep:
-    def test_endpoint_terminate(self):
-        """
-        Test the endpoint and clear the browsers for the following tests.
-        """
-        url = BASE + "/terminate"
-        response = requests.post(url, timeout=TIMEOUT_TERMINATE)
-        assert response.status_code == 204, response.content
+def __terminate_scraper():
+    url = BASE + "/terminate"
+    response = requests.post(url, timeout=TIMEOUT_TERMINATE)
+    assert response.status_code == 204, response.content
 
-    def test_no_instance_running(self):
-        url = BASE + "/get_scraper_state"
-        response = requests.get(url, timeout=TIMEOUT_REQUESTS)
-        assert response.status_code == 200, response.content
-        scraper_model = ScraperModel.model_validate(response.json())
-        assert not scraper_model.browsers
 
-    def test_health(self):
-        url = BASE + "/get_scraper_state"
-        response = requests.get(url, timeout=TIMEOUT_REQUESTS)
-        assert response.status_code == 200, response.content
-        scraper_model = ScraperModel.model_validate(response.json())
-        assert not scraper_model.is_running_as_root
-        assert scraper_model.can_create_browser
-        assert scraper_model.ram_specs
-        assert scraper_model.ram_usage
+def __assert_no_instances_running():
+    url = BASE + "/get_scraper_state"
+    response = requests.get(url, timeout=TIMEOUT_REQUESTS)
+    assert response.status_code == 200, response.content
+    scraper_model = ScraperModel.model_validate(response.json())
+    assert not scraper_model.browsers
+
+
+def __assert_health():
+    url = BASE + "/get_scraper_state"
+    response = requests.get(url, timeout=TIMEOUT_REQUESTS)
+    assert response.status_code == 200, response.content
+    scraper_model = ScraperModel.model_validate(response.json())
+    assert not scraper_model.is_running_as_root
+    assert scraper_model.can_create_browser
+    assert scraper_model.ram_specs
+    assert scraper_model.ram_usage
+
+
+@pytest.fixture(scope="class", autouse=True)
+def prep():
+    __terminate_scraper()
+    __assert_no_instances_running()
+    __assert_health()
 
 
 class TestScraperCore:

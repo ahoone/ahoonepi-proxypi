@@ -8,5 +8,5 @@ class CollectRequest(BaseModel):
     # flag to delete when retrieve ?
 
 
-class CollectRequestResponse(BaseModel):
+class CollectResponse(BaseModel):
     content: str

@@ -5,6 +5,7 @@ from time import sleep
 import pytest
 import requests
 
+from broker.api.schemas.collect import CollectRequest, CollectResponse
 from broker.api.schemas.scrape import ScrapeRequest, ScrapeResponse
 from broker.core.models.Broker import BrokerModel
 from tests.Config import Config
@@ -16,44 +17,41 @@ TIMEOUT_REQUESTS = 4  # seconds (small genetic)
 LATENCY = 4  # seconds (time we give to the broker to handle requests)
 
 
-class TestBrokerPrep:
-    def test_endpoint_get_scraper_state(self):
-        url = BASE + "/get_broker_state"
-        response = requests.get(url, timeout=TIMEOUT_REQUESTS)
-        assert response.status_code == 200, response.content
-        broker = BrokerModel.model_validate(response.json())
-        assert broker.is_running_as_root
+def __clear_broker():
+    url = BASE + "/clear"
+    response = requests.post(url, timeout=TIMEOUT_REQUESTS)
+    assert response.status_code == 204, response.content
 
-    def test_endpoint_clear(self):
-        url = BASE + "/clear"
-        response = requests.post(url, timeout=TIMEOUT_REQUESTS)
-        assert response.status_code == 204, response.content
 
-    def test_no_running_jobs_no_targets(self):
-        url = BASE + "/get_broker_state"
-        response = requests.get(url, timeout=TIMEOUT_REQUESTS)
-        assert response.status_code == 200, response.content
-        broker = BrokerModel.model_validate(response.json())
-        assert not broker.running_requests
-        assert not broker.unscraped_targets
+def __assert_one_scraper_no_requests_no_targets():
+    url = BASE + "/get_broker_state"
+    response = requests.get(url, timeout=TIMEOUT_REQUESTS)
+    assert response.status_code == 200, response.content
+    broker = BrokerModel.model_validate(response.json())
+    assert broker.is_running_as_root
+    assert len(broker.nodes) >= 1
+    assert not broker.running_requests
+    assert not broker.unscraped_targets
 
-    def test_available_worker(self):
-        url = BASE + "/get_broker_state"
-        response = requests.get(url, timeout=TIMEOUT_REQUESTS)
-        assert response.status_code == 200, response.content
-        broker = BrokerModel.model_validate(response.json())
-        assert len(broker.nodes) >= 1
+
+@pytest.fixture(scope="class", autouse=True)
+def prep():
+    __clear_broker()
+    __assert_one_scraper_no_requests_no_targets()
 
 
 class TestBrokerCore:
+    TEST_URL = "http://example.com"
+    TEST_TAG = "test_endpoint_scrape"
+
     shared_data = {}
 
     @pytest.mark.dependency()
     def test_endpoint_scrape(self):
         url = BASE + "/scrape"
         payload = ScrapeRequest(
-            url="http://example.com",
-            tag="test_endpoint_scrape",
+            url=self.TEST_URL,
+            tag=self.TEST_TAG,
             flag_lazy_loading=False,
         )
         response = requests.post(
@@ -64,7 +62,7 @@ class TestBrokerCore:
         assert model.uuid
         TestBrokerCore.shared_data["uuid"] = model.uuid
 
-    @pytest.mark.dependency(depends=["test_endpoint_scrape"])
+    @pytest.mark.dependency(depends=["TestBrokerCore::test_endpoint_scrape"])
     def test_browser_created(self):
         """
         For now, we consider fine that the broker creates
@@ -77,46 +75,26 @@ class TestBrokerCore:
         response = requests.get(url, timeout=TIMEOUT_REQUESTS)
         assert response.status_code == 200, response.content
         broker = BrokerModel.model_validate(response.json())
-        assert len(broker.nodes) >= 1
-        assert sum([len(node.browsers) for node in broker.nodes]) >= 1
+        assert len(broker.nodes) >= 1, broker.nodes
+        assert sum([len(node.browsers) for node in broker.nodes]) >= 1, broker.nodes
 
-    # def test_scrape_and_collect(self):
-    #     """
-    #     Gives a target to the broker.
-    #     The broker creates a browser instance.
-    #     The result is collected in the time limit.
-    #     The instance is left alive.
-    #     """
-    #     url = Config.ORIGIN_BROKER + "/scrape"
-    #     payload = {
-    #         "url": "https://example.com/",
-    #         "tag": "test_broker_scrape_and_collect",
-    #         "flag_lazy_loading": False,
-    #     }
-    #     response = requests.post(url, json=payload, timeout=TIMEOUT_REQUESTS)
-    #     assert response.status_code == 202, response.content
-    #     response_as_dict = json.loads(response.text)
-    #     assert "uuid" in response_as_dict, response_as_dict
-    #     uuid = response_as_dict["uuid"]
+    @pytest.mark.dependency(depends=["TestBrokerCore::test_browser_created"])
+    def test_endpoint_collect(self):
+        url = BASE + "/collect"
+        payload = CollectRequest(uuid=self.shared_data["uuid"])
+        response = requests.get(
+            url, json=payload.model_dump(mode="json"), timeout=TIMEOUT_REQUESTS
+        )
+        assert response.status_code == 200, response.content
+        collect_object = CollectResponse.model_validate(response.json())
+        assert collect_object.content
+        assert (
+            "This domain is for use in documentation examples without needing permission. Avoid use in operations."
+            in collect_object.content
+        )
 
-    #     url = Config.ORIGIN_BROKER + "/collect"
-    #     payload = {"uuid": uuid}
-    #     response = requests.get(url, json=payload, timeout=TIMEOUT_REQUESTS)
-
-    #     assert response.status_code in [200, 425], (
-    #         f"unexpected status code {response.status_code}"
-    #     )
-    #     for _ in range(6):
-    #         if response.status_code == 425:
-    #             sleep(10)
-    #             response = requests.get(url, json=payload, timeout=TIMEOUT_REQUESTS)
-
-    #     assert response.status_code == 200, response
-    #     response_as_dict = json.loads(response.text)
-    #     assert (
-    #         "This domain is for use in documentation examples without needing permission."
-    #         in response_as_dict["content"]
-    #     )
+    def test_endpoint_scrape_multiple_urls(self):
+        pass
 
     # def test_scrape_multiple_urls(self):
     #     url = Config.ORIGIN_BROKER + "/scrape"

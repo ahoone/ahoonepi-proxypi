@@ -4,7 +4,7 @@ from contract.schemas.common import ErrorResponse
 from fastapi import APIRouter, Depends, HTTPException
 
 from broker.api.common import get_broker
-from broker.api.schemas.collect import CollectRequest, CollectRequestResponse
+from broker.api.schemas.collect import CollectRequest, CollectResponse
 from broker.Config import Config
 from broker.core.Broker import Broker
 from broker.core.DatabaseHandler import DatabaseHandler
@@ -33,11 +33,11 @@ router = APIRouter()
 async def collect(
     request: CollectRequest,
     broker: Broker = Depends(get_broker),
-) -> CollectRequestResponse:
+) -> CollectResponse:
     query = f"""
         SELECT 1
         FROM {Config.DB_TABLE_TARGETS}
-        WHERE id = (?)
+        WHERE uuid = (?)
     """
     try:
         response = await DatabaseHandler.fetchone(query, (str(request.uuid),))
@@ -64,7 +64,7 @@ async def collect(
         FROM {Config.DB_TABLE_REQUESTS}
         WHERE 1=1
             AND success = TRUE
-            AND {Config.DB_TABLE_TARGETS}_id = '{request.uuid}'
+            AND {Config.DB_TABLE_TARGETS}_uuid = '{request.uuid}'
         ORDER BY id ASC
     """
     try:
@@ -76,4 +76,4 @@ async def collect(
             status_code=425,
             detail="Target yet to be proceed.",
         )
-    return CollectRequestResponse(content=response["content"])
+    return CollectResponse(content=response["content"])

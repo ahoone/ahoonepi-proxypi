@@ -77,7 +77,7 @@ class DatabaseHandler:
 
         await cls.__connection.execute(f"""
             CREATE TABLE IF NOT EXISTS {Config.DB_TABLE_TARGETS} (
-                id TEXT PRIMARY KEY NOT NULL,
+                uuid TEXT PRIMARY KEY NOT NULL,
                 url TEXT NOT NULL,
                 expected_response_time DATETIME NOT NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -90,12 +90,12 @@ class DatabaseHandler:
         await cls.__connection.execute(f"""
             CREATE TABLE IF NOT EXISTS {Config.DB_TABLE_REQUESTS} (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                {Config.DB_TABLE_TARGETS}_id TEXT NOT NULL,
+                {Config.DB_TABLE_TARGETS}_uuid TEXT NOT NULL,
                 request_timestamp DATETIME NOT NULL,
                 response_timestamp DATETIME,
                 success BOOLEAN,
                 content BLOB,
-                FOREIGN KEY ({Config.DB_TABLE_TARGETS}_id) REFERENCES {Config.DB_TABLE_TARGETS}(id)
+                FOREIGN KEY ({Config.DB_TABLE_TARGETS}_uuid) REFERENCES {Config.DB_TABLE_TARGETS}(uuid)
             );
         """)
 
@@ -121,7 +121,7 @@ class DatabaseHandler:
                     SELECT 1
                     FROM {Config.DB_TABLE_REQUESTS} r
                     WHERE 1=1
-                        AND r.{Config.DB_TABLE_TARGETS}_id = l.id
+                        AND r.{Config.DB_TABLE_TARGETS}_uuid = l.uuid
                         AND r.success = TRUE
                 );
         """
@@ -139,7 +139,7 @@ class DatabaseHandler:
                     SELECT COUNT(*)
                     FROM {Config.DB_TABLE_REQUESTS} r
                     WHERE 1=1
-                        AND r.{Config.DB_TABLE_TARGETS}_id = l.id
+                        AND r.{Config.DB_TABLE_TARGETS}_uuid = l.uuid
                         AND r.success = FALSE
                 ) >= {Config.RETRIES};
         """
@@ -170,7 +170,7 @@ class DatabaseHandler:
                     SELECT 1
                     FROM {Config.DB_TABLE_REQUESTS} r
                     WHERE 1=1
-                        AND r.{Config.DB_TABLE_TARGETS}_id = l.id
+                        AND r.{Config.DB_TABLE_TARGETS}_uuid = l.uuid
                         AND r.success = TRUE
                 )
             ORDER BY expected_response_time ASC
@@ -178,7 +178,7 @@ class DatabaseHandler:
         """
         return [
             RecordTarget(
-                id=record["id"],
+                id=record["uuid"],
                 url=record["url"],
                 expected_response_time=record["expected_response_time"],
                 created_at=record["created_at"],
@@ -197,15 +197,15 @@ class DatabaseHandler:
                 SELECT 1
                 FROM {Config.DB_TABLE_REQUESTS} r
                 WHERE 1=1
-                    AND r.{Config.DB_TABLE_TARGETS}_id = l.id
+                    AND r.{Config.DB_TABLE_TARGETS}_uuid = l.uuid
                     AND r.success = TRUE
                 )
-            ORDER BY id ASC
+            ORDER BY expected_response_time ASC
             LIMIT {Config.LIMIT_SQL_QUERIES}
         """
         return [
             RecordTarget(
-                id=record["id"],
+                id=record["uuid"],
                 url=record["url"],
                 expected_response_time=record["expected_response_time"],
                 created_at=record["created_at"],
@@ -221,11 +221,11 @@ class DatabaseHandler:
         query = f"""
             SELECT *
             FROM {Config.DB_TABLE_TARGETS}
-            WHERE id in ({placeholder});
+            WHERE uuid in ({placeholder});
         """
         return [
             RecordTarget(
-                id=record["id"],
+                id=record["uuid"],
                 url=record["url"],
                 expected_response_time=record["expected_response_time"],
                 created_at=record["created_at"],

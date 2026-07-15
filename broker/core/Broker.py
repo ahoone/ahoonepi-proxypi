@@ -81,7 +81,7 @@ class Broker:
     async def scrape(self, request: ScrapeRequest) -> ScrapeResponse:
         query = f"""
             INSERT INTO {Config.DB_TABLE_TARGETS}
-            (id, url, expected_response_time, tag, flag_lazy_loading)
+            (uuid, url, expected_response_time, tag, flag_lazy_loading)
             VALUES (?, ?, ?, ?, ?)
         """
 
@@ -190,7 +190,10 @@ class Broker:
     async def __get_target(self) -> BrowserImageGet | None:
         async with self.__lock_current_tasks:
             current_tasks_ids_placeholder = "".join(
-                [f"AND l.id != '{current_id}' " for current_id in self.__current_tasks]
+                [
+                    f"AND l.uuid != '{current_id}' "
+                    for current_id in self.__current_tasks
+                ]
             )
             query = f"""
                 SELECT *
@@ -203,7 +206,7 @@ class Broker:
             response = await DatabaseHandler.fetchone(query)
             if response:
                 return BrowserImageGet(
-                    id=response["id"],
+                    id=response["uuid"],
                     url=response["url"],
                     flag_lazy_loading=response["flag_lazy_loading"],
                 )
@@ -276,7 +279,7 @@ class Broker:
 
     async def __load_records(self, records: list[RecordRequest]) -> None:
         query = f"""
-            INSERT INTO {Config.DB_TABLE_REQUESTS} ({Config.DB_TABLE_TARGETS}_id, request_timestamp, response_timestamp, success, content)
+            INSERT INTO {Config.DB_TABLE_REQUESTS} ({Config.DB_TABLE_TARGETS}_uuid, request_timestamp, response_timestamp, success, content)
             VALUES (?, ?, ?, ?, ?)
         """
         await DatabaseHandler.executemany(
