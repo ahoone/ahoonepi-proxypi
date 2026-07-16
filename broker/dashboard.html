@@ -91,7 +91,7 @@
 
                 <section class="card logger">
                     <div class="card-header">
-                        <span class="card-title">Logger</span>
+                        <span class="card-title">Logs</span>
                         <div class="card-timestamp-group">
                             <!--                     <span class="live-dot">&nbsp;</span> -->
                             <span id="ts-broker" class="timestamp">—</span>
@@ -119,13 +119,9 @@
         </main>
 
         <script>
-            const NODES_SOCKET = "/nodes";
-            const NODES_REFRESH_PERIOD = 1_000;
-            const BROKER_SOCKET = "/get_unscraped_targets";
-            const BROKER_REFRESH_PERIOD = 1_000;
-            const LOGGER_SOCKET = "/logger";
-            const LOGGER_REFRESH_PERIOD = 1_000;
-            const SIZE_BUFFER_LOGGER = 13;
+            const SOCKET = "/get_broker_state";
+            const REFRESH_PERIOD = 500;
+            const SIZE_BUFFER_LOGS = 20;
 
             function upsertTable(container, rows, rowKey, columns) {
                 let table = container.querySelector("table");
@@ -278,7 +274,7 @@
                 },
             ];
 
-            const LOGGER_COLUMNS = [
+            const LOGS_COLUMNS = [
                 {
                     label: "Timestamp",
                     render: function (r) {
@@ -359,18 +355,18 @@
                     new Date().toLocaleTimeString();
             }
 
-            function renderLogger(rawRows) {
+            function renderLogs(rawRows) {
                 const container = document.querySelector(".card.logger");
                 const rows = Array.isArray(rawRows) ? rawRows : [];
 
                 if (rows.length) {
                     upsertTable(
                         container,
-                        rows.slice(0, SIZE_BUFFER_LOGGER),
+                        rows.slice(0, SIZE_BUFFER_LOGS),
                         function (r, idx) {
                             return r.timestamp || idx;
                         },
-                        LOGGER_COLUMNS,
+                        LOGS_COLUMNS,
                     );
                 }
                 container.querySelector("#ts-broker").textContent =
@@ -383,55 +379,35 @@
                 });
             }
 
-            async function fetchNodes() {
+            async function fetchData() {
                 try {
-                    const res = await fetch(NODES_SOCKET);
+                    const res = await fetch(SOCKET);
                     if (!res.ok) throw new Error("HTTP " + res.status);
                     const json = await res.json();
-                    renderNodes(Array.isArray(json) ? json : json.output || []);
+                    renderNodes(
+                        Array.isArray(json.nodes)
+                            ? json.nodes
+                            : json.nodes.output || [],
+                    );
+                    renderBroker(
+                        Array.isArray(json.unscraped_targets)
+                            ? json.unscraped_targets
+                            : json.unscraped_targets.output || [],
+                    );
+                    renderLogs(
+                        Array.isArray(json.logs)
+                            ? json.logs
+                            : json.logs.output || [],
+                    );
                 } catch (e) {
                     console.error("Failed to fetch nodes:", e);
                 }
             }
 
-            async function fetchBroker() {
-                try {
-                    const res = await fetch(BROKER_SOCKET);
-                    if (!res.ok) throw new Error("HTTP " + res.status);
-                    const json = await res.json();
-                    renderBroker(
-                        Array.isArray(json) ? json : json.output || [],
-                    );
-                } catch (e) {
-                    console.error("Failed to fetch broker:", e);
-                }
-            }
+            fetchData();
 
-            async function fetchLogger() {
-                try {
-                    const res = await fetch(LOGGER_SOCKET);
-                    if (!res.ok) throw new Error("HTTP " + res.status);
-                    const json = await res.json();
-                    renderLogger(
-                        Array.isArray(json) ? json : json.output || [],
-                    );
-                } catch (e) {
-                    console.error("Failed to fetch logger:", e);
-                }
-            }
-
-            fetchNodes();
-            fetchBroker();
-            fetchLogger();
-
-            if (NODES_REFRESH_PERIOD > 0) {
-                setInterval(fetchNodes, NODES_REFRESH_PERIOD);
-            }
-            if (BROKER_REFRESH_PERIOD > 0) {
-                setInterval(fetchBroker, BROKER_REFRESH_PERIOD);
-            }
-            if (LOGGER_REFRESH_PERIOD > 0) {
-                setInterval(fetchLogger, LOGGER_REFRESH_PERIOD);
+            if (REFRESH_PERIOD > 0) {
+                setInterval(fetchData, REFRESH_PERIOD);
             }
         </script>
     </body>
