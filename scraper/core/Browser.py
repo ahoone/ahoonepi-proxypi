@@ -82,6 +82,9 @@ class Browser:
             browsing_history=self.browsing_history,
         )
 
+    def stream(self):
+        return self.__frame_unpacker.stream()
+
     def status(self) -> Literal["idle", "requesting", "spotted", "waiting"]:
         if self.spotted:
             return "spotted"
