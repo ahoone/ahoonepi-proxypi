@@ -17,7 +17,6 @@ class ScrapeRequest(BaseModel):
         default_factory=datetime.datetime.now,
         description=(
             "Time you hope the response to be completed. "
-            "As an isoformat string of <datetime.datetime>. "
             "By default, the timestamp of the request. "
         ),
     )

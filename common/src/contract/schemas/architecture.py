@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field, HttpUrl
 class BrowsingRecord(BaseModel):
     url: HttpUrl
     status: Literal["aborted", "blocked", "failed", "success"] | None = None
-    timestamp: str | None = None  # datetime.datetime.isoformat
+    timestamp: datetime.datetime | None = None
     page_state: Literal["complete", "interactive", "loading"] | None = None
     success_lazy_loading: bool | None = None
     error: str | None = None

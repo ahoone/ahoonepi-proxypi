@@ -138,7 +138,7 @@ class Browser:
                 BrowsingRecord(
                     url=request.url,
                     status="aborted",
-                    timestamp=datetime.datetime.now().isoformat(),
+                    timestamp=datetime.datetime.now(),
                 )
             )
             raise
@@ -212,19 +212,19 @@ class Browser:
         except BotSpottedError as e:
             browsing_record.status = "blocked"
             browsing_record.html = e.html
-            browsing_record.timestamp = (datetime.datetime.now().isoformat(),)
+            browsing_record.timestamp = datetime.datetime.now()
             self.browsing_history.append(browsing_record)
             raise ValueError(e)
 
         except Exception as e:
             browsing_record.status = "failed"
             browsing_record.error = str(e)
-            browsing_record.timestamp = (datetime.datetime.now().isoformat(),)
+            browsing_record.timestamp = datetime.datetime.now()
             self.browsing_history.append(browsing_record)
             raise ValueError(e)
 
         browsing_record.status = "success"
-        browsing_record.timestamp = datetime.datetime.now().isoformat()
+        browsing_record.timestamp = datetime.datetime.now()
         self.browsing_history.append(browsing_record)
         return html
 

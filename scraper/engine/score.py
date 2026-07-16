@@ -13,10 +13,9 @@ def score(browsing_history: list[BrowsingRecord]) -> float:
         too unexponential
         """
         if not access_record.timestamp:
-            return .0
+            return 0.0
         time_elapsed = (
-            datetime.datetime.now()
-            - datetime.datetime.fromisoformat(access_record.timestamp)
+            datetime.datetime.now() - access_record.timestamp
         ).total_seconds()
         return SCORE_PARAMETER_LAMBDA * exp(-time_elapsed * SCORE_PARAMETER_LAMBDA)
 
