@@ -26,7 +26,7 @@ class Config:
     BROKER_DATABASE = "/data/broker.db"
     BROKER_CLEAR_DB_ON_STARTUP = True
     DB_TABLE_TARGETS = "targets"
-    DB_TABLE_REQUESTS = "jobs"
+    DB_TABLE_JOBS = "jobs"
     DB_TABLE_LOGS = "logs"
     BUFFER_LOGGER_SIZE = 20
     LIMIT_SQL_QUERIES = 200

@@ -8,7 +8,7 @@ class BrowsingRecord(BaseModel):
     url: HttpUrl
     status: Literal["aborted", "blocked", "failed", "success"] | None = None
     timestamp: datetime.datetime | None = None
-    page_state: Literal["complete", "interactive", "loading"] | None = None
+    tab_state: Literal["complete", "interactive", "loading"] | None = None
     success_lazy_loading: bool | None = None
     error: str | None = None
     html: str | None = None

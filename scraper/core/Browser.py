@@ -6,6 +6,7 @@ import zendriver as uc
 from contract.schemas.architecture import BrowserModel, BrowsingRecord
 from contract.schemas.get import ScraperGetRequest
 from contract.schemas.new_instance import NewInstanceRequest
+from zendriver.core.cloudflare import cf_is_interactive_challenge_present, verify_cf
 
 from scraper.Config import Config
 from scraper.core.Display import Display
@@ -17,10 +18,10 @@ from scraper.engine.detection import herobrine_is_here
 from scraper.engine.recovery_period import recovery_period
 from scraper.engine.score import score
 
-MAXIMUM_SIZE_ERROR_MESSAGE = 256
 SETTLING_WAIT_TIME_COMPLETE = 1  # seconds
 SETTLING_WAIT_TIME_INTERACTIVE = 3  # seconds
 GET_QUEUE_MAXSIZE = 6
+TIMEOUT_DETECTION_CF_CHALLENGE = 5  # seconds
 
 
 class Browser:
@@ -108,28 +109,28 @@ class Browser:
         return self.expires_at < datetime.datetime.now()
 
     @staticmethod
-    async def smart_wait(page) -> Literal["complete", "interactive", "loading"]:
+    async def smart_wait(tab) -> Literal["complete", "interactive", "loading"]:
         """
         tries to wait up for the complete status, but returns with any status after a certain waiting time
         """
-        current_state = await page.evaluate("document.readyState")
+        current_state = await tab.evaluate("document.readyState")
         if current_state == "complete":
             pass
         elif current_state == "interactive":
             try:
-                await page.wait_for_ready_state(
+                await tab.wait_for_ready_state(
                     until="complete", timeout=SETTLING_WAIT_TIME_COMPLETE
                 )
             except asyncio.TimeoutError:
                 pass
         else:
             try:
-                await page.wait_for_ready_state(
+                await tab.wait_for_ready_state(
                     until="interactive", timeout=SETTLING_WAIT_TIME_INTERACTIVE
                 )
             except asyncio.TimeoutError:
                 pass
-        current_state = await page.evaluate("document.readyState")
+        current_state = await tab.evaluate("document.readyState")
         return current_state
 
     async def get_or_abort(self, request: ScraperGetRequest) -> str:
@@ -146,7 +147,7 @@ class Browser:
             )
             raise
 
-    async def trigger_lazy_loading(self, page: uc.Tab) -> bool:
+    async def trigger_lazy_loading(self, tab: uc.Tab) -> bool:
         """
         INCOMPLETE
         Should:
@@ -165,7 +166,7 @@ class Browser:
         )
         # scroll_height = 0  # percentages of the screen height
         while datetime.datetime.now() < time_limit:
-            await page.scroll_down(1000)
+            await tab.scroll_down(1000)
             await asyncio.sleep(4)
             return True
 
@@ -173,7 +174,7 @@ class Browser:
 
     async def get(self, request: ScraperGetRequest) -> str:
         """
-        Moves the current page and captures its html content.
+        Moves the current tab and captures its html content.
 
         Args:
             request (GetRequest): .
@@ -192,29 +193,47 @@ class Browser:
             await asyncio.sleep(delta)
 
         try:
-            page = await self.__driver.driver.get(
+            tab = await self.__driver.driver.get(
                 str(request.url), new_tab=False, new_window=False
             )
-            browsing_record.page_state = await self.smart_wait(page)
-            self.recovery_period = datetime.datetime.now() + datetime.timedelta(
-                milliseconds=recovery_period()
-            )
-            html = await page.get_content()
+            browsing_record.tab_state = await self.smart_wait(tab)
 
-            if herobrine_is_here(html):
-                self.spotted = True
-                raise BotSpottedError(html)
+            if await cf_is_interactive_challenge_present(
+                tab, timeout=TIMEOUT_DETECTION_CF_CHALLENGE
+            ):
+                print(f"{request.url} is protected by cloudflare challenge!")
+                await verify_cf(tab)
+
+            # ie if we passed the challenge but cloudflare is still here
+            if await herobrine_is_here(tab):
+                raise BotSpottedError(await tab.get_content())
                 # should also raise a html error to the broker
 
             if request.flag_lazy_loading:
                 browsing_record.success_lazy_loading = await self.trigger_lazy_loading(
-                    page
+                    tab
                 )
-                html = await page.get_content()
+
+            html = await tab.get_content()
+
+            # after the last action of the tab
+            self.recovery_period = datetime.datetime.now() + datetime.timedelta(
+                milliseconds=recovery_period()
+            )
 
         except BotSpottedError as e:
+            self.spotted = True
+
             browsing_record.status = "blocked"
             browsing_record.html = e.html
+            browsing_record.timestamp = datetime.datetime.now()
+            self.browsing_history.append(browsing_record)
+            raise ValueError(e)
+
+        except TimeoutError as e:
+            self.spotted = True
+
+            browsing_record.status = "blocked"
             browsing_record.timestamp = datetime.datetime.now()
             self.browsing_history.append(browsing_record)
             raise ValueError(e)
@@ -229,6 +248,7 @@ class Browser:
         browsing_record.status = "success"
         browsing_record.timestamp = datetime.datetime.now()
         self.browsing_history.append(browsing_record)
+
         return html
 
     async def kill(self) -> None:

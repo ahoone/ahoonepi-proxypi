@@ -69,7 +69,7 @@ class DatabaseHandler:
                 DROP TABLE IF EXISTS {Config.DB_TABLE_TARGETS};
             """)
             await cls.__connection.execute(f"""
-                DROP TABLE IF EXISTS {Config.DB_TABLE_REQUESTS};
+                DROP TABLE IF EXISTS {Config.DB_TABLE_JOBS};
             """)
             await cls.__connection.execute(f"""
                 DROP TABLE IF EXISTS {Config.DB_TABLE_LOGS};
@@ -88,7 +88,7 @@ class DatabaseHandler:
         """)
 
         await cls.__connection.execute(f"""
-            CREATE TABLE IF NOT EXISTS {Config.DB_TABLE_REQUESTS} (
+            CREATE TABLE IF NOT EXISTS {Config.DB_TABLE_JOBS} (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 {Config.DB_TABLE_TARGETS}_uuid TEXT NOT NULL,
                 request_timestamp DATETIME NOT NULL,
@@ -119,7 +119,7 @@ class DatabaseHandler:
                 AND l.enabled = 1
                 AND EXISTS (
                     SELECT 1
-                    FROM {Config.DB_TABLE_REQUESTS} r
+                    FROM {Config.DB_TABLE_JOBS} r
                     WHERE 1=1
                         AND r.{Config.DB_TABLE_TARGETS}_uuid = l.uuid
                         AND r.success = TRUE
@@ -137,7 +137,7 @@ class DatabaseHandler:
                 AND l.enabled = 1
                 AND (
                     SELECT COUNT(*)
-                    FROM {Config.DB_TABLE_REQUESTS} r
+                    FROM {Config.DB_TABLE_JOBS} r
                     WHERE 1=1
                         AND r.{Config.DB_TABLE_TARGETS}_uuid = l.uuid
                         AND r.success = FALSE
@@ -168,7 +168,7 @@ class DatabaseHandler:
                 AND enabled = TRUE
                 AND NOT EXISTS (
                     SELECT 1
-                    FROM {Config.DB_TABLE_REQUESTS} r
+                    FROM {Config.DB_TABLE_JOBS} r
                     WHERE 1=1
                         AND r.{Config.DB_TABLE_TARGETS}_uuid = l.uuid
                         AND r.success = TRUE
@@ -195,7 +195,7 @@ class DatabaseHandler:
             FROM {Config.DB_TABLE_TARGETS} l
             WHERE EXISTS (
                 SELECT 1
-                FROM {Config.DB_TABLE_REQUESTS} r
+                FROM {Config.DB_TABLE_JOBS} r
                 WHERE 1=1
                     AND r.{Config.DB_TABLE_TARGETS}_uuid = l.uuid
                     AND r.success = TRUE

@@ -2,6 +2,7 @@ import asyncio
 import json
 from time import sleep
 
+import httpx
 import pytest
 import requests
 
@@ -14,12 +15,13 @@ from tests.URLGenerator import URLGenerator
 BASE = Config.ORIGIN_BROKER
 TIMEOUT_GET = 60  # in seconds (long, as we are waiting for either "complete" or "interactive" status)
 TIMEOUT_REQUESTS = 4  # seconds (small genetic)
+TIMEOUT_CLEAR = 20  # seconds (needs sometime to kill instances)
 LATENCY = 4  # seconds (time we give to the broker to handle requests)
 
 
 def __clear_broker():
     url = BASE + "/clear"
-    response = requests.post(url, timeout=TIMEOUT_REQUESTS)
+    response = requests.post(url, timeout=TIMEOUT_CLEAR)
     assert response.status_code == 204, response.content
 
 
@@ -41,17 +43,14 @@ def prep():
 
 
 class TestBrokerCore:
-    TEST_URL = "http://example.com"
-    TEST_TAG = "test_endpoint_scrape"
-
     shared_data = {}
 
     @pytest.mark.dependency()
     def test_endpoint_scrape(self):
         url = BASE + "/scrape"
         payload = ScrapeRequest(
-            url=self.TEST_URL,
-            tag=self.TEST_TAG,
+            url="http://example.com",
+            tag="test_endpoint_scrape",
             flag_lazy_loading=False,
         )
         response = requests.post(
@@ -80,6 +79,7 @@ class TestBrokerCore:
 
     @pytest.mark.dependency(depends=["TestBrokerCore::test_browser_created"])
     def test_endpoint_collect(self):
+        sleep(TIMEOUT_GET)
         url = BASE + "/collect"
         payload = CollectRequest(uuid=self.shared_data["uuid"])
         response = requests.get(
@@ -94,80 +94,107 @@ class TestBrokerCore:
         )
 
     def test_endpoint_scrape_multiple_urls(self):
-        pass
-
-    # def test_scrape_multiple_urls(self):
-    #     url = Config.ORIGIN_BROKER + "/scrape"
-    #     payload = {
-    #         "url": [URLGenerator.next() for _ in range(20)],
-    #         "tag": "test_scrape_multiple_urls",
-    #         "flag_lazy_loading": True,
-    #     }
-    #     response = requests.post(url, json=payload, timeout=TIMEOUT_REQUESTS)
-    #     assert response.status_code == 202, response.content
-
-    # def test_clear(self):
-    #     url = Config.ORIGIN_BROKER + "/clear"
-    #     payload = {
-    #         "flag_cancel_running_tasks": True,
-    #         "flag_kill_browsers": True,
-    #         "flag_clear_unassigned_targets": True,
-    #     }
-    #     response = requests.post(url, json=payload, timeout=TIMEOUT_REQUESTS)
-    #     assert response.status_code == 204, response.content
-
-    # def test_no_targets(self):
-    #     url = Config.ORIGIN_BROKER + "/get_unscraped_targets"
-    #     response = requests.get(url, timeout=TIMEOUT_REQUESTS)
-    #     assert response.status_code == 200, response.content
-    #     assert len(json.loads(response.content)) == 0, response.content
-
-    # def test_no_browsers(self):
-    #     # need to wait a bit for the clear method to push to proxies and to retrieve the update
-    #     sleep(5)
-    #     url = Config.ORIGIN_BROKER + "/nodes"
-    #     response = requests.get(url, timeout=TIMEOUT_REQUESTS)
-    #     assert response.status_code == 200, response.content
-    #     response_as_dict = json.loads(response.content)
-    #     for node in response_as_dict:
-    #         assert "browsers" in node, node
-    #         assert len(node["browsers"]) == 0, node
+        MULTIPLIER = 20
+        url = BASE + "/scrape"
+        payload = ScrapeRequest(
+            url=[URLGenerator.next() for _ in range(MULTIPLIER)],
+            tag="test_endpoint_scrape_multiple_urls",
+            flag_lazy_loading=True,
+        )
+        response = requests.post(url, json=payload.model_dump(mode="json"))
+        assert response.status_code == 202, response.content
 
 
-# class TestBrokerIntense:
-#     @pytest.mark.asyncio
-#     async def test_no_freeze(self):
-#         """
-#         - sends sequentially 20 targets with a semaphore
+class TestBrokerCloudflare:
+    shared_data = {}
 
-#         silently fails, need to find the error swalloing
-#         """
+    URL = "https://httpx.readthedocs.io/en/latest/"
 
-#         async def scrape_and_collect_one(sem: asyncio.Semaphore):
-#             async with sem:
-#                 url = Config.ORIGIN_BROKER + "/scrape"
-#                 payload = {
-#                     "url": URLGenerator.next(),
-#                     "tag": "test_no_freeze",
-#                     "flag_lazy_loading": True,
-#                 }
-#                 response = requests.post(url, json=payload, timeout=TIMEOUT_REQUESTS)
-#                 assert response.status_code == 202, response.content
-#                 response_as_dict = json.loads(response.text)
-#                 assert "uuid" in response_as_dict, response_as_dict
-#                 uuid = response_as_dict["uuid"]
-#                 url = Config.ORIGIN_BROKER + "/collect"
-#                 payload = {"uuid": uuid}
-#                 response = requests.get(url, json=payload, timeout=TIMEOUT_REQUESTS)
+    @pytest.mark.dependency()
+    def test_cloudflare_challenge_bypass(self):
+        url = BASE + "/scrape"
+        payload = ScrapeRequest(
+            url=self.URL,
+            tag="test_cloudflare_challenge_bypass",
+            flag_lazy_loading=False,
+        )
+        response = requests.post(
+            url, json=payload.model_dump(mode="json"), timeout=TIMEOUT_REQUESTS
+        )
+        assert response.status_code == 202, response.content
+        model = ScrapeResponse.model_validate(response.json())
+        assert model.uuid
+        TestBrokerCore.shared_data["uuid"] = model.uuid
 
-#                 assert response.status_code in [200, 425], (
-#                     f"unexpected status code {response.status_code}"
-#                 )
-#                 if response.status_code == 425:
-#                     sleep(20)
-#                     response = requests.get(url, json=payload, timeout=TIMEOUT_REQUESTS)
+    @pytest.mark.dependency(
+        depends=["TestBrokerCloudflare::test_cloudflare_challenge_bypass"]
+    )
+    def test_endpoint_collect(self):
+        sleep(TIMEOUT_GET)
+        url = BASE + "/collect"
+        payload = CollectRequest(uuid=self.shared_data["uuid"])
+        response = requests.get(
+            url, json=payload.model_dump(mode="json"), timeout=TIMEOUT_REQUESTS
+        )
+        assert response.status_code == 200, response.content
+        collect_object = CollectResponse.model_validate(response.json())
+        assert collect_object.content
+        assert "Welcome to Read the Doc" in collect_object.content
 
-#                 assert response.status_code == 200, response
 
-#         sem = asyncio.Semaphore(4)  # maximum number of browser instances per scraper
-#         await asyncio.gather(*[scrape_and_collect_one(sem) for _ in range(20)])
+class TestBrokerIntense:
+    client = httpx.AsyncClient()
+
+    @pytest.mark.asyncio
+    async def test_no_freeze(self):
+        """
+        - sends sequentially 20 targets with a semaphore
+
+        silently fails, need to find the error swalloing
+        """
+        MULTIPLIER = 8
+        SEMAPHORE = 8
+
+        async def scrape_and_collect_one(sem: asyncio.Semaphore):
+            url = Config.ORIGIN_BROKER + "/scrape"
+            payload = ScrapeRequest(
+                url=URLGenerator.next(),
+                tag="test_no_freeze",
+                flag_lazy_loading=True,
+            )
+            response = await self.client.request(
+                "POST",
+                url,
+                json=payload.model_dump(mode="json"),
+                timeout=TIMEOUT_REQUESTS,
+            )
+            assert response.status_code == 202, response.content
+            uuid = ScrapeResponse.model_validate(response.json()).uuid
+            assert uuid
+            url = Config.ORIGIN_BROKER + "/collect"
+            payload = CollectRequest(uuid=uuid)
+            response = await self.client.request(
+                "GET",
+                url,
+                json=payload.model_dump(mode="json"),
+                timeout=TIMEOUT_REQUESTS,
+            )
+
+            assert response.status_code in [200, 425], (
+                response.status_code,
+                response.content,
+            )
+            if response.status_code == 425:
+                # this timeout applies to the entire BATCH
+                await asyncio.sleep(2 * TIMEOUT_GET)
+                response = await self.client.request(
+                    "GET",
+                    url,
+                    json=payload.model_dump(mode="json"),
+                    timeout=TIMEOUT_REQUESTS,
+                )
+
+            assert response.status_code == 200, response
+
+        sem = asyncio.Semaphore(SEMAPHORE)
+        await asyncio.gather(*[scrape_and_collect_one(sem) for _ in range(MULTIPLIER)])

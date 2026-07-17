@@ -125,7 +125,7 @@ class TestScraperCore:
             window_size=self.BROWSER_EXPLICIT_WINDOW,
         )
         response = requests.post(
-            url, json=payload.model_dump(), timeout=TIMEOUT_REQUESTS
+            url, json=payload.model_dump(mode="json"), timeout=TIMEOUT_REQUESTS
         )
         assert response.status_code == 201, response.content
 

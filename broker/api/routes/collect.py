@@ -61,7 +61,7 @@ async def collect(
 
     query = query = f"""
         SELECT *
-        FROM {Config.DB_TABLE_REQUESTS}
+        FROM {Config.DB_TABLE_JOBS}
         WHERE 1=1
             AND success = TRUE
             AND {Config.DB_TABLE_TARGETS}_uuid = '{request.uuid}'

@@ -279,7 +279,7 @@ class Broker:
 
     async def __load_records(self, records: list[RecordRequest]) -> None:
         query = f"""
-            INSERT INTO {Config.DB_TABLE_REQUESTS} ({Config.DB_TABLE_TARGETS}_uuid, request_timestamp, response_timestamp, success, content)
+            INSERT INTO {Config.DB_TABLE_JOBS} ({Config.DB_TABLE_TARGETS}_uuid, request_timestamp, response_timestamp, success, content)
             VALUES (?, ?, ?, ?, ?)
         """
         await DatabaseHandler.executemany(
