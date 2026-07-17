@@ -1,11 +1,11 @@
 import traceback
 
+from contract.schemas.common import ErrorResponse
 from fastapi import APIRouter, Depends, HTTPException
 
 from broker.api.common import get_broker
 from broker.core.Broker import Broker
 from broker.core.models.Broker import BrokerModel
-from contract.schemas.common import ErrorResponse
 
 router = APIRouter()
 
@@ -18,10 +18,12 @@ router = APIRouter()
         "so the endpoint is supposed to deduplicate on `RecordTarget.uuid`. "
         "The running requests should be provided with more information (when started, on which node...). "
         "A query limit should be strongly enforced. "
+        "The unscraped targets includes the running requests, but it should not... "
+        "kinda akward in the dashboard. "
     ),
     responses={
         500: {"model": ErrorResponse, "description": "Internal server error"},
-    }
+    },
 )
 async def get_broker_state(
     broker: Broker = Depends(get_broker),
