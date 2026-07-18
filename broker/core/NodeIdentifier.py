@@ -68,7 +68,7 @@ class NodeIdentifier:
         self.node_id: int = node_id
         self.vpn_address: str = f"{Config.WIREGUARD_NETWORK_PREFIX}.{node_id}"
         self.ssh_port: int = int(Config.SSH_NETWORK_BASE) + node_id - 2
-        self.client: httpx.AsyncClient = httpx.AsyncClient()
+        self.client: httpx.AsyncClient = httpx.AsyncClient(timeout=120)
 
     def to_model(self) -> NodeIdentifierModel:
         return NodeIdentifierModel(

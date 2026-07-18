@@ -1,5 +1,6 @@
 import asyncio
 import datetime
+import traceback
 from typing import Literal
 
 import httpx
@@ -15,7 +16,7 @@ from broker.core.models.BrowserImage import (
 from broker.core.NodeIdentifier import NodeIdentifier
 
 # this timeout is large because it accounts for lazy loading / others
-TIMEOUT_HTTP_SCRAPING = 60  # seconds
+TIMEOUT_HTTP_SCRAPING = 120  # seconds
 TIMEOUT_HTTP_KILL = 10  # seconds
 
 
@@ -50,8 +51,7 @@ class BrowserImage:
         should be cancellable
         (therefore response_timestamp is not defined)
         """
-        loop = asyncio.get_running_loop()
-        request_timestamp = loop.time()
+        request_timestamp = datetime.datetime.now()
         try:
             response = await self.passport.client.post(
                 f"http://{self.passport.vpn_address}:{Config.HTTP_PORT_SCRAPER}/get",
@@ -60,20 +60,28 @@ class BrowserImage:
                 timeout=TIMEOUT_HTTP_SCRAPING,
             )
             success = response.status_code == 200
+            if not success:
+                response_timestamp = datetime.datetime.now()
+                return BrowserImageGetResult(
+                    request_timestamp=request_timestamp,
+                    response_timestamp=response_timestamp,
+                    success=success,
+                    content=response.json()["detail"],
+                )
             scraper_get_response: ScraperGetResponse = (
                 ScraperGetResponse.model_validate(response.json())
             )
             content: str = scraper_get_response.html_content
-        except httpx.TimeoutException as e:
+        except httpx.TimeoutException:
             success = False
-            content = str(e)
+            content = traceback.format_exc()
             print(
-                f"Request went timeout on {self.passport.vpn_address}:({self.instance_id}) with error: {e}"
+                f"Request went timeout on {self.passport.vpn_address}: ({self.instance_id})"
             )
-        except Exception as e:
+        except Exception:
             success = False
-            content = str(e)
-        response_timestamp = loop.time()
+            content = traceback.format_exc()
+        response_timestamp = datetime.datetime.now()
         return BrowserImageGetResult(
             request_timestamp=request_timestamp,
             response_timestamp=response_timestamp,

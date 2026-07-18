@@ -43,8 +43,8 @@ class Broker:
             scraped_targets,
             nodes,
         ) = await asyncio.gather(
-            DatabaseHandler.get_unscraped_targets(),
             self.__get_running_requests(),
+            DatabaseHandler.get_unscraped_targets(),
             DatabaseHandler.get_scraped_targets(),
             asyncio.to_thread(
                 lambda: [scraper.to_model() for scraper in self.scrapers.values()]
@@ -337,8 +337,8 @@ class Broker:
                 try:
                     await self.__update_available_nodes()
                     await self.__update_nodes()
-                    await self.__distribute_task()
                     await self.__retrieve_tasks()
+                    await self.__distribute_task()
                     await DatabaseHandler.disable_successfull_targets()
                     await DatabaseHandler.disable_unsuccesfull_targets()
                 except Exception:
