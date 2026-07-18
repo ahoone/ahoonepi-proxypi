@@ -2,17 +2,14 @@ import asyncio
 import datetime
 import traceback
 from typing import Literal
+from uuid import UUID
 
 import httpx
 from contract.schemas.architecture import BrowserModel, BrowsingRecord
-from contract.schemas.get import ScraperGetResponse
+from contract.schemas.get import ScraperGetRequest
 
 from broker.Config import Config
-from broker.core.models.BrowserImage import (
-    BrowserImageGet,
-    BrowserImageGetResult,
-    BrowserImageModel,
-)
+from broker.core.models.BrowserImage import BrowserImageModel
 from broker.core.NodeIdentifier import NodeIdentifier
 
 # this timeout is large because it accounts for lazy loading / others
@@ -46,48 +43,45 @@ class BrowserImage:
             score=self.score,
         )
 
-    async def get(self, payload: BrowserImageGet) -> BrowserImageGetResult:
+    async def get(
+        self, target_uuid: UUID, payload: ScraperGetRequest
+    ) -> BrowsingRecord:
         """
-        should be cancellable
-        (therefore response_timestamp is not defined)
+        Swallows `asyncio.CancelledError`
         """
-        request_timestamp = datetime.datetime.now()
         try:
             response = await self.passport.client.post(
                 f"http://{self.passport.vpn_address}:{Config.HTTP_PORT_SCRAPER}/get",
-                json=payload.model_dump(mode="json")
-                | {"instance_id": self.instance_id},
+                json=payload.model_dump(mode="json"),
                 timeout=TIMEOUT_HTTP_SCRAPING,
             )
-            success = response.status_code == 200
-            if not success:
-                response_timestamp = datetime.datetime.now()
-                return BrowserImageGetResult(
-                    request_timestamp=request_timestamp,
-                    response_timestamp=response_timestamp,
-                    success=success,
-                    content=response.json()["detail"],
-                )
-            scraper_get_response: ScraperGetResponse = (
-                ScraperGetResponse.model_validate(response.json())
-            )
-            content: str = scraper_get_response.html_content
         except httpx.TimeoutException:
-            success = False
-            content = traceback.format_exc()
-            print(
-                f"Request went timeout on {self.passport.vpn_address}: ({self.instance_id})"
+            return BrowsingRecord(
+                target_uuid=target_uuid,
+                url=payload.url,
+                status="timeout",
+                traceback=traceback.format_exc(),
             )
-        except Exception:
-            success = False
-            content = traceback.format_exc()
-        response_timestamp = datetime.datetime.now()
-        return BrowserImageGetResult(
-            request_timestamp=request_timestamp,
-            response_timestamp=response_timestamp,
-            success=success,
-            content=content,
-        )
+        except asyncio.CancelledError:
+            return BrowsingRecord(
+                target_uuid=target_uuid,
+                url=payload.url,
+                status="aborted",
+                traceback=traceback.format_exc(),
+            )
+
+        if response.status_code != 200:
+            return BrowsingRecord(
+                target_uuid=target_uuid,
+                url=payload.url,
+                status="implementation_error",
+                http_error_code=response.status_code,
+                traceback=response.json()["detail"],
+            )
+
+        record = BrowsingRecord.model_validate(response.json())
+        record.target_uuid = target_uuid
+        return record
 
     async def kill(self) -> bool:
         try:

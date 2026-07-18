@@ -2,8 +2,9 @@ import asyncio
 import datetime
 import traceback
 
+from contract.schemas.architecture import BrowsingRecord
 from contract.schemas.common import ErrorResponse
-from contract.schemas.get import ScraperGetRequest, ScraperGetResponse
+from contract.schemas.get import ScraperGetRequest
 from fastapi import APIRouter, Depends, HTTPException
 
 from scraper.api.common import get_scraper
@@ -43,7 +44,7 @@ router = APIRouter()
 )
 async def get(
     request: ScraperGetRequest, scraper: Scraper = Depends(get_scraper)
-) -> ScraperGetResponse:
+) -> BrowsingRecord:
     if scraper.busy:
         raise HTTPException(
             status_code=423,
@@ -74,8 +75,7 @@ async def get(
     #     )
 
     try:
-        html_content = await scraper.get(request)
-        return ScraperGetResponse(html_content=html_content)
+        return await scraper.get(request)
     except asyncio.CancelledError:
         raise HTTPException(
             status_code=503, detail="The task was cancelled by the scraper."

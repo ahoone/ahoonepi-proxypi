@@ -8,19 +8,6 @@ from broker.core.models.DatabaseHandler import RecordTarget
 from broker.core.models.ScraperImage import ScraperImageModel
 
 
-class RecordRequest(BaseModel):
-    """
-    similar to core.BrowserImage.BrowserImageGetResult
-    but enhanced with the target_uuid
-    """
-
-    target_uuid: UUID
-    request_timestamp: datetime.datetime
-    response_timestamp: datetime.datetime
-    success: bool
-    content: str
-
-
 class Event(BaseModel):
     timestamp: datetime.datetime = Field(default_factory=datetime.datetime.now)
     detail: str

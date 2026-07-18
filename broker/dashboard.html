@@ -357,7 +357,7 @@
                         table,
                         rows,
                         function (r, idx) {
-                            return r.id || idx;
+                            return r.uuid != null ? r.uuid : idx;
                         },
                         BROKER_COLUMNS,
                     );
@@ -386,7 +386,7 @@
                         table,
                         rows,
                         function (r, idx) {
-                            return r.id || idx;
+                            return r.uuid != null ? r.uuid : idx;
                         },
                         BROKER_COLUMNS,
                     );

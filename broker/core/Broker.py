@@ -6,6 +6,8 @@ import traceback
 from typing import Literal, NoReturn
 from uuid import UUID, uuid4
 
+from contract.schemas.architecture import BrowsingRecord
+from contract.schemas.get import ScraperGetRequest
 from pydantic import HttpUrl
 
 from broker.api.schemas.clear import ClearRequest
@@ -13,8 +15,7 @@ from broker.api.schemas.scrape import ScrapeRequest, ScrapeResponse
 from broker.Config import Config
 from broker.core.BrowserImage import BrowserImage
 from broker.core.DatabaseHandler import DatabaseHandler
-from broker.core.models.Broker import BrokerModel, Event, RecordRequest
-from broker.core.models.BrowserImage import BrowserImageGet, BrowserImageGetResult
+from broker.core.models.Broker import BrokerModel, Event
 from broker.core.models.DatabaseHandler import RecordTarget
 from broker.core.NodeIdentifier import NodeIdentifier
 from broker.core.ScraperImage import ScraperImage
@@ -153,7 +154,7 @@ class Broker:
             for scraper in self.scrapers.values()
             if scraper.available
         ]
-        if len(availables) == 0:
+        if not len(availables):
             await self.log("unable to create a new instance", level="WARNING")
             return False
         random_id = f"{random.choice(Config.SCRAPER_ADJECTIVES)} {random.choice(Config.SCRAPER_FIRST_NAMES)}"
@@ -187,7 +188,7 @@ class Broker:
             browsers = get_browsers()
         return random.choice(browsers) if browsers else None
 
-    async def __get_target(self) -> BrowserImageGet | None:
+    async def __get_target(self) -> RecordTarget | None:
         async with self.__lock_current_tasks:
             current_tasks_ids_placeholder = "".join(
                 [
@@ -205,42 +206,36 @@ class Broker:
             """
             response = await DatabaseHandler.fetchone(query)
             if response:
-                return BrowserImageGet(
-                    id=response["uuid"],
-                    url=response["url"],
-                    flag_lazy_loading=response["flag_lazy_loading"],
-                )
+                return RecordTarget.model_validate(dict(response))
             return None
 
     async def __distribute_task(self) -> None:
-        target: BrowserImageGet | None = await self.__get_target()
+        target: RecordTarget | None = await self.__get_target()
         if not target:
             await self.log("no target found")
             return
         await self.log(f"selected target {target.url}")
         browser: BrowserImage | None = await self.get_available_browser()
         if not browser:
-            await self.log(f"no browser available for {target.id}", level="WARNING")
+            await self.log(f"no browser available for {target.uuid}", level="WARNING")
             return
-        await self.log(f"browser {browser.instance_id} selected for {target.id}")
+        await self.log(f"browser {browser.instance_id} selected for {target.uuid}")
+        payload = ScraperGetRequest(
+            instance_id=browser.instance_id,
+            url=target.url,
+            flag_lazy_loading=target.flag_lazy_loading,
+        )
         async with self.__lock_current_tasks:
-            self.__current_tasks[target.id] = asyncio.create_task(browser.get(target))
+            self.__current_tasks[target.uuid] = asyncio.create_task(
+                browser.get(target.uuid, payload)
+            )
 
     async def __unwrap_task(
         self,
         target_uuid: UUID,
         task: asyncio.Task,
         flag_cancel_if_not_done: bool = False,
-    ) -> RecordRequest | None:
-        """
-        implements a flag to cancel a task if it is not done
-        (useful to clean the environment)
-        Returns a RecordRequest if the task is done or if the flag_cancel_if_not_done is set to true.
-
-        it would be nice to have the retry number of the task in the logs
-        but we would need to query the database
-        kinda useless
-        """
+    ) -> BrowsingRecord | None:
         if task.done():
             # Here we do not examine for task.exception()
             # because BrowserImage.get() is already formatting any exception
@@ -249,52 +244,19 @@ class Broker:
             # (see https://docs.python.org/3/library/asyncio-task.html#asyncio.Task.exception)
             # We need to be careful here about using try/except block
             # because we do not want to swallow the error
-            result: BrowserImageGetResult = task.result()
+            result: BrowsingRecord = task.result()
             if not result.success:
                 await self.log(
-                    f"task {target_uuid} failed: {result.content}",
+                    f"task {target_uuid} failed: {result.traceback}",
                     level="WARNING",
                 )
-            return RecordRequest(
-                target_uuid=target_uuid,
-                request_timestamp=result.request_timestamp,
-                response_timestamp=result.response_timestamp,
-                success=result.success,
-                content=result.content,
-            )
-        if flag_cancel_if_not_done:
+            return result
+        elif flag_cancel_if_not_done:
+            # `BrowserImage.get` swallows the `asyncio.CancelledError`
+            # and put it in shape as `BrowsingRecord`
             task.cancel()
-            try:
-                await task
-            except asyncio.CancelledError as e:
-                print(f"Cancelletion of task {target_uuid} failed: {e}")
-            return RecordRequest(
-                target_uuid=target_uuid,
-                request_timestamp=datetime.datetime.now(),
-                response_timestamp=datetime.datetime.now(),
-                success=False,
-                content="Task was cancelled due to: flag_cancel_if_not_done",
-            )
+            return await task
         return None
-
-    async def __load_records(self, records: list[RecordRequest]) -> None:
-        query = f"""
-            INSERT INTO {Config.DB_TABLE_JOBS} ({Config.DB_TABLE_TARGETS}_uuid, request_timestamp, response_timestamp, success, content)
-            VALUES (?, ?, ?, ?, ?)
-        """
-        await DatabaseHandler.executemany(
-            query,
-            [
-                (
-                    str(record.target_uuid),
-                    record.request_timestamp,
-                    record.response_timestamp,
-                    record.success,
-                    record.content,
-                )
-                for record in records
-            ],
-        )
 
     async def __retrieve_tasks(self) -> None:
         """
@@ -303,17 +265,17 @@ class Broker:
         load the records in the database
         """
         async with self.__lock_current_tasks:
-            completed: list[RecordRequest] | None = await asyncio.gather(
+            unwrapped: list[BrowsingRecord | None] = await asyncio.gather(
                 *[
                     self.__unwrap_task(target_uuid, task)
                     for target_uuid, task in self.__current_tasks.items()
                 ]
             )
-            completed_without_none: list[RecordRequest] = [_ for _ in completed if _]
-            for record in completed_without_none:
+            completed: list[BrowsingRecord] = [_ for _ in unwrapped if _]
+            for record in completed:
                 del self.__current_tasks[record.target_uuid]
-        if len(completed_without_none) > 0:
-            await self.__load_records(completed_without_none)
+        if len(completed):
+            await DatabaseHandler.insert_job_records(completed)
 
     async def __update(self) -> None:
         """
@@ -338,9 +300,9 @@ class Broker:
                     await self.__update_available_nodes()
                     await self.__update_nodes()
                     await self.__retrieve_tasks()
-                    await self.__distribute_task()
                     await DatabaseHandler.disable_successfull_targets()
                     await DatabaseHandler.disable_unsuccesfull_targets()
+                    await self.__distribute_task()
                 except Exception:
                     traceback.print_exc()
                 finally:
@@ -388,14 +350,14 @@ class Broker:
         """
         async with self.__lock_current_tasks:
             # in here no record is None due to the flag
-            completed: list[RecordRequest] = await asyncio.gather(
+            completed: list[BrowsingRecord] = await asyncio.gather(
                 *[
                     self.__unwrap_task(target_uuid, task, flag_cancel_if_not_done=True)
                     for target_uuid, task in self.__current_tasks.items()
                 ]
             )
-            if len(completed) > 0:
-                await self.__load_records(completed)
+            if len(completed):
+                await DatabaseHandler.insert_job_records(completed)
             self.__current_tasks = {}
 
     async def kill_browsers(self) -> None:

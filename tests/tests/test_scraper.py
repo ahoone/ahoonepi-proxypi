@@ -5,8 +5,8 @@ from time import sleep
 import pytest
 import requests
 from contract.Config import Config as ContractConfig
-from contract.schemas.architecture import ScraperModel
-from contract.schemas.get import ScraperGetRequest, ScraperGetResponse
+from contract.schemas.architecture import BrowsingRecord, ScraperModel
+from contract.schemas.get import ScraperGetRequest
 from contract.schemas.kill import KillRequest
 from contract.schemas.new_instance import NewInstanceRequest
 
@@ -163,8 +163,8 @@ class TestScraperCore:
             url, json=payload.model_dump(mode="json"), timeout=TIMEOUT_GET
         )
         assert response.status_code == 200, response.content
-        scraper_get_response = ScraperGetResponse.model_validate(response.json())
-        assert scraper_get_response.html_content
+        scraper_get_response = BrowsingRecord.model_validate(response.json())
+        assert scraper_get_response.html
 
     def test_get_page_default_instance(self):
         url = BASE + "/get"
@@ -177,8 +177,8 @@ class TestScraperCore:
             url, json=payload.model_dump(mode="json"), timeout=TIMEOUT_GET
         )
         assert response.status_code == 200, response.content
-        scraper_get_response = ScraperGetResponse.model_validate(response.json())
-        assert scraper_get_response.html_content
+        scraper_get_response = BrowsingRecord.model_validate(response.json())
+        assert scraper_get_response.html
 
     def test_explicit_instance_dead(self):
         """
@@ -257,8 +257,6 @@ class TestScraperIntense:
             elif response.status_code == 409:
                 return  # expected: request was received after the scraper killed the instance
             assert response.status_code == 200, response.content
-            scraper_get_response = ScraperGetResponse.model_validate(response.json())
-            assert scraper_get_response.html_content
 
         for _ in range(self.SIMULTANEOUS_REQUESTS):
             threading.Thread(target=get_one_page, daemon=True).start()

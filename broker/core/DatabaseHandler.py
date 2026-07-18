@@ -2,6 +2,7 @@ from typing import Any
 from uuid import UUID
 
 import aiosqlite
+from contract.schemas.architecture import BrowsingRecord
 
 from broker.Config import Config
 from broker.core.models.DatabaseHandler import RecordTarget
@@ -91,10 +92,20 @@ class DatabaseHandler:
             CREATE TABLE IF NOT EXISTS {Config.DB_TABLE_JOBS} (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 {Config.DB_TABLE_TARGETS}_uuid TEXT NOT NULL,
-                request_timestamp DATETIME NOT NULL,
-                response_timestamp DATETIME,
-                success BOOLEAN,
-                content BLOB,
+                success BOOLEAN NOT NULL,
+                status TEXT NOT NULL,
+                tab_state TEXT,
+                html TEXT,
+                timestamp DATETIME,
+                timedelta_driver_get FLOAT,
+                timedelta_smart_wait FLOAT,
+                timedelta_search_cf_challenge FLOAT,
+                timedelta_resolve_cf_challenge FLOAT,
+                timedelta_check_cf_blocking_content FLOAT,
+                timedelta_lazy_loading FLOAT,
+                timedelta_get_content FLOAT,
+                traceback TEXT,
+                http_error_code INT,
                 FOREIGN KEY ({Config.DB_TABLE_TARGETS}_uuid) REFERENCES {Config.DB_TABLE_TARGETS}(uuid)
             );
         """)
@@ -177,14 +188,7 @@ class DatabaseHandler:
             LIMIT {Config.LIMIT_SQL_QUERIES}
         """
         return [
-            RecordTarget(
-                id=record["uuid"],
-                url=record["url"],
-                expected_response_time=record["expected_response_time"],
-                created_at=record["created_at"],
-                tag=record["tag"],
-                flag_lazy_loading=record["flag_lazy_loading"],
-            )
+            RecordTarget.model_validate(dict(record))
             for record in await cls.fetchall(query)
         ]
 
@@ -204,14 +208,7 @@ class DatabaseHandler:
             LIMIT {Config.LIMIT_SQL_QUERIES}
         """
         return [
-            RecordTarget(
-                id=record["uuid"],
-                url=record["url"],
-                expected_response_time=record["expected_response_time"],
-                created_at=record["created_at"],
-                tag=record["tag"],
-                flag_lazy_loading=record["flag_lazy_loading"],
-            )
+            RecordTarget.model_validate(dict(record))
             for record in await cls.fetchall(query)
         ]
 
@@ -224,15 +221,53 @@ class DatabaseHandler:
             WHERE uuid in ({placeholder});
         """
         return [
-            RecordTarget(
-                id=record["uuid"],
-                url=record["url"],
-                expected_response_time=record["expected_response_time"],
-                created_at=record["created_at"],
-                tag=record["tag"],
-                flag_lazy_loading=record["flag_lazy_loading"],
-            )
+            RecordTarget.model_validate(dict(record))
             for record in await cls.fetchall(
                 query, params=tuple(str(uuid) for uuid in uuids)
             )
         ]
+
+    @classmethod
+    async def insert_job_records(cls, records: list[BrowsingRecord]):
+        query = f"""
+            INSERT INTO {Config.DB_TABLE_JOBS} (
+                {Config.DB_TABLE_TARGETS}_uuid,
+                success,
+                status,
+                tab_state,
+                html,
+                timestamp,
+                timedelta_driver_get,
+                timedelta_smart_wait,
+                timedelta_search_cf_challenge,
+                timedelta_resolve_cf_challenge,
+                timedelta_check_cf_blocking_content,
+                timedelta_lazy_loading,
+                timedelta_get_content,
+                traceback,
+                http_error_code
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """
+        rows = [
+            (
+                str(record.target_uuid),
+                record.success,
+                record.status,
+                record.tab_state,
+                record.html,
+                record.timestamp,
+                record.timedelta_driver_get,
+                record.timedelta_smart_wait,
+                record.timedelta_search_cf_challenge,
+                record.timedelta_resolve_cf_challenge,
+                record.timedelta_check_cf_blocking_content,
+                record.timedelta_lazy_loading,
+                record.timedelta_get_content,
+                record.traceback,
+                record.http_error_code,
+            )
+            for record in records
+        ]
+        await cls.__connection.executemany(query, rows)
+        await cls.__connection.commit()

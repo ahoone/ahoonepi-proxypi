@@ -4,13 +4,11 @@ import traceback
 from typing import Literal
 
 import zendriver as uc
-from common.utils import timed
 from contract.schemas.architecture import BrowserModel, BrowsingRecord
 from contract.schemas.get import ScraperGetRequest
 from contract.schemas.new_instance import NewInstanceRequest
 from zendriver.core.cloudflare import cf_is_interactive_challenge_present, verify_cf
 
-from scraper.Config import Config
 from scraper.core.Display import Display
 from scraper.core.Driver import Driver
 from scraper.core.FrameUnpacker import FrameUnpacker
@@ -27,8 +25,9 @@ TIMEOUT_DETECTION_CF_CHALLENGE = 10  # seconds
 TIMEOUT_SEARCH_CF_CHALLENGE = 10  # seconds
 TIMEOUT_RESOLVE_CF_CHALLENGE = 10  # seconds
 TIMEOUT_GET = 60  # seconds
-TIME_LIMIT_GET_CONTENT = 4  # seconds
-TIME_LIMIT_LAZY_LOADING = 10  # seconds
+TIMEOUT_GET_CONTENT = 4  # seconds
+TIMEOUT_LAZY_LOADING = 10  # seconds
+TIMEOUT_DRIVER_GET = 20  # seconds
 
 
 class Browser:
@@ -87,7 +86,7 @@ class Browser:
             remaining_lifespan=self.remaining_lifespan(),
             status=self.status(),
             score=self.score(),
-            browsing_history=self.browsing_history,
+            browsing_history=[],  # self.browsing_history,
         )
 
     def stream(self):
@@ -141,22 +140,22 @@ class Browser:
         return current_state
 
     async def get_or_abort(self, request: ScraperGetRequest) -> BrowsingRecord:
+        browsing_record = BrowsingRecord(url=request.url)
         try:
             async with self.__get_lock:
                 delta = (self.recovery_period - datetime.datetime.now()).total_seconds()
                 if delta > 0.0:
                     await asyncio.sleep(delta)
-                result = self.get(request)
+                await self.get(request, browsing_record)
                 self.recovery_period = datetime.datetime.now() + datetime.timedelta(
                     milliseconds=recovery_period()
                 )
-                return result
         except asyncio.CancelledError:
-            self.browsing_history.append(
-                BrowsingRecord(
-                    url=request.url, status="aborted", timestamp=datetime.datetime.now()
-                )
-            )
+            browsing_record.status = "aborted"
+        finally:
+            browsing_record.timestamp = datetime.datetime.now()
+            self.browsing_history.append(browsing_record)
+        return browsing_record
 
     async def trigger_lazy_loading(self, tab: uc.Tab) -> None:
         """
@@ -177,8 +176,12 @@ class Browser:
             await tab.scroll_down(1000)
             await asyncio.sleep(1)
 
-    async def get(self, request: ScraperGetRequest) -> BrowsingRecord:
+    async def get(
+        self, request: ScraperGetRequest, browsing_record: BrowsingRecord
+    ) -> None:
         """
+        Directly updatest the given `BrowsingRecord`.
+
         Moves the current tab and captures its html content
         - moves the tab,
         - waits for the page to load,
@@ -190,12 +193,16 @@ class Browser:
         """
 
         loop = asyncio.get_running_loop()
-        browsing_record = BrowsingRecord(url=request.url, status="success")
 
         start_time = loop.time()
-        tab = await self.__driver.driver.get(
+        awaitable = self.__driver.driver.get(
             str(request.url), new_tab=False, new_window=False
         )
+        try:
+            tab = await asyncio.wait_for(awaitable, TIMEOUT_DRIVER_GET)
+        except asyncio.TimeoutError:
+            browsing_record.status = "failed"
+            return
         browsing_record.timedelta_driver_get = loop.time() - start_time
 
         # This operation is time self-constrainted
@@ -231,6 +238,7 @@ class Browser:
         except BotSpottedError:
             self.spotted = True
             browsing_record.status = "blocked"
+            return
         browsing_record.timedelta_check_cf_blocking_content = loop.time() - start_time
 
         # This element can fail without causing problems
@@ -240,7 +248,7 @@ class Browser:
             awaitable = self.trigger_lazy_loading(tab)
             start_time = loop.time()
             try:
-                await asyncio.wait_for(awaitable, TIME_LIMIT_LAZY_LOADING)
+                await asyncio.wait_for(awaitable, TIMEOUT_LAZY_LOADING)
             except asyncio.TimeoutError:
                 pass
             browsing_record.timedelta_lazy_loading = loop.time() - start_time
@@ -249,17 +257,15 @@ class Browser:
         start_time = loop.time()
         try:
             browsing_record.html = await asyncio.wait_for(
-                awaitable, TIME_LIMIT_GET_CONTENT
+                awaitable, TIMEOUT_GET_CONTENT
             )
         except asyncio.TimeoutError:
             browsing_record.status = "failed"
-            browsing_record.error = traceback.format_exc()
+            browsing_record.traceback = traceback.format_exc()
+            return
         browsing_record.timedelta_get_content = loop.time() - start_time
 
-        browsing_record.timestamp = datetime.datetime.now()
-
-        self.browsing_history.append(browsing_record)
-        return browsing_record
+        browsing_record.status = "success"
 
     async def kill(self) -> None:
         await asyncio.gather(

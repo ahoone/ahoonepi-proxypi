@@ -76,4 +76,4 @@ async def collect(
             status_code=425,
             detail="Target yet to be proceed.",
         )
-    return CollectResponse(content=response["content"])
+    return CollectResponse(content=response["html"])

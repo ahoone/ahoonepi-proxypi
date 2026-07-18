@@ -3,7 +3,7 @@ import os
 from typing import NoReturn
 
 from contract.Config import Config as ContractConfig
-from contract.schemas.architecture import ScraperModel
+from contract.schemas.architecture import BrowsingRecord, ScraperModel
 from contract.schemas.get import ScraperGetRequest
 from contract.schemas.new_instance import NewInstanceRequest
 
@@ -63,17 +63,31 @@ class Scraper:
             self.browsers[request.instance_id] = browser
             self.__browser_active_tasks[request.instance_id] = set()
 
-    async def get(self, request: ScraperGetRequest) -> str:
+    async def get(self, request: ScraperGetRequest) -> BrowsingRecord:
+        """
+        Cannot be used with `asyncio.wait_for` because
+        the task is not really cancelled :
+        the error is swallowed inside `Browser.get_or_abort`
+        and a record is always returned.
+
+        The fix would be to have this function to pass the `BrowsingRecord` reference
+        and to have `Browser.get_or_abort` to raise after `asyncio.CancelledError`.
+        """
         async with self.__lock:
             task = asyncio.create_task(
                 self.browsers[request.instance_id].get_or_abort(request)
             )
             self.__browser_active_tasks[request.instance_id].add(task)
         try:
-            return await task
+            result = await task
         finally:
             async with self.__lock:
-                self.__browser_active_tasks[request.instance_id].discard(task)
+                # race condition:
+                # kill could have dropped the instance_id while we did not have the lock
+                # so we let kill discards the tasks
+                if request.instance_id in self.__browser_active_tasks:
+                    self.__browser_active_tasks[request.instance_id].discard(task)
+        return result
 
     async def kill(self, instance_id: str) -> None:
         """
@@ -86,6 +100,7 @@ class Scraper:
             snapshot_tasks = self.__browser_active_tasks.pop(instance_id)
 
         for task in snapshot_tasks:
+            # not a problem to cancel it even if it was done
             task.cancel()
 
         try:

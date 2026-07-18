@@ -7,7 +7,7 @@ from broker.Config import Config
 
 
 class RecordTarget(BaseModel):
-    id: UUID  # should be renamed uuid
+    uuid: UUID
     url: HttpUrl
     expected_response_time: datetime.datetime
     created_at: datetime.datetime

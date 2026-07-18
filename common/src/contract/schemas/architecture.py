@@ -1,17 +1,51 @@
 import datetime
 from typing import Literal
+from uuid import UUID
 
-from pydantic import BaseModel, Field, HttpUrl
+from pydantic import BaseModel, Field, HttpUrl, computed_field
 
 
 class BrowsingRecord(BaseModel):
+    target_uuid: UUID | None = None
     url: HttpUrl
-    status: Literal["aborted", "blocked", "failed", "success"] | None = None
-    timestamp: datetime.datetime | None = None
+    status: (
+        Literal[
+            "aborted", "blocked", "failed", "timeout", "success", "implementation_error"
+        ]
+        | None
+    ) = Field(
+        default=None,
+        description=(
+            "aborted: task was cancelled either by the broker or the scraper. "
+            "blocked: content was detected as a cloudflare firewall. "
+            "failed: zendriver failed to move the tab or get the content. "
+            "timeout: the transaction was stopped by the broker. "
+            "implementation_error: the scraper api did not return a 200. "
+        ),
+    )
     tab_state: Literal["complete", "interactive", "loading"] | None = None
-    success_lazy_loading: bool | None = None
-    error: str | None = None
     html: str | None = None
+    timestamp: datetime.datetime | None = Field(
+        default=None, description=("Set by the scraper. Completed when the task ends. ")
+    )
+
+    timedelta_driver_get: float | None = None
+    timedelta_smart_wait: float | None = None
+    timedelta_search_cf_challenge: float | None = None
+    timedelta_resolve_cf_challenge: float | None = None
+    timedelta_check_cf_blocking_content: float | None = None
+    timedelta_lazy_loading: float | None = None
+    timedelta_get_content: float | None = None
+
+    traceback: str | None = None
+    http_error_code: int | None = None
+
+    @computed_field
+    @property
+    def success(self) -> bool | None:
+        if not self.status:
+            return None
+        return self.status == "success"
 
 
 class BrowserModel(BaseModel):
