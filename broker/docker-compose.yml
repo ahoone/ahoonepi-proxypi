@@ -1,25 +1,27 @@
 services:
   fastapi:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: broker/Dockerfile
     env_file:
       - path: ../config.env
         required: true
     ports:
       - "${HTTP_PORT_BROKER}:8000"
     volumes:
-      - ./:/app
+      - ../broker:/app/broker:ro
+      - ../common:/app/common:ro
       - ./data:/data
       # - sqlite_data:/data
       - ../plugins:/plugins:ro
       - /tmp/proxypi.sock:/tmp/proxypi.sock
     environment:
       NODE_ROLE: ${NODE_ROLE}
+      PYTHONPATH: /app/broker
+    command: ["uvicorn", "broker.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
     restart: unless-stopped
     networks:
       - default
-
 # volumes:
 #   sqlite_data:
 #     driver: local

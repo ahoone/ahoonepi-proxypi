@@ -1,6 +1,7 @@
 scraper/issues.md
 test.py
 
+*.egg-info
 /.env
 *.key
 keys.json

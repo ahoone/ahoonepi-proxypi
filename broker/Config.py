@@ -3,13 +3,14 @@ import os
 
 
 class Config:
-    HTTP_PORT_SCRAPER = os.environ["HTTP_PORT_SCRAPER"]
-    NODE_ROLE = os.environ["NODE_ROLE"].split(",")
-    SSH_NETWORK_BASE = os.environ["SSH_NETWORK_BASE"]
-    WIREGUARD_NETWORK_PREFIX = os.environ["WIREGUARD_NETWORK_PREFIX"]
-
-    if "LIGHTHOUSE" not in NODE_ROLE:
-        raise ValueError("the node should be a lighthouse to launch this image")
+    # the tests container loads this class but does not have the environment variables
+    try:
+        HTTP_PORT_SCRAPER = os.environ["HTTP_PORT_SCRAPER"]
+        NODE_ROLE = os.environ["NODE_ROLE"].split(",")
+        SSH_NETWORK_BASE = os.environ["SSH_NETWORK_BASE"]
+        WIREGUARD_NETWORK_PREFIX = os.environ["WIREGUARD_NETWORK_PREFIX"]
+    except Exception:
+        pass
 
     ALLOWED_NETWORKS = [
         ipaddress.ip_network("127.0.0.0/8"),  # localhost
@@ -25,13 +26,14 @@ class Config:
     BROKER_DATABASE = "/data/broker.db"
     BROKER_CLEAR_DB_ON_STARTUP = True
     DB_TABLE_TARGETS = "targets"
-    DB_TABLE_REQUESTS = "requests"
+    DB_TABLE_JOBS = "jobs"
     DB_TABLE_LOGS = "logs"
     BUFFER_LOGGER_SIZE = 20
     LIMIT_SQL_QUERIES = 200
     REFRESH_PERIOD_BROKER = 1  # seconds
     THRESHOLD_SCORE = 300
     TRIGGER_LAZY_LOADING_BY_DEFAULT = True
+    RETRIES = 3
 
     SCRAPER_FIRST_NAMES = (
         "Noah",

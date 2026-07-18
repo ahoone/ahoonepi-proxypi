@@ -1,92 +1,108 @@
 import asyncio
 import datetime
+import os
 import random
 import traceback
-from typing import Dict, List, Literal, NoReturn, Optional, Set, Tuple
+from typing import Literal, NoReturn
 from uuid import UUID, uuid4
 
-from Config import Config
-from core.BrowserImage import BrowserImage, BrowserImageGet, BrowserImageGetResult
-from core.DatabaseHandler import DatabaseHandler
-from core.NodeIdentifier import NodeIdentifier
-from core.schemas import ClearRequest, ScrapeRequest, ScrapeRequestResponse
-from core.ScraperImage import ScraperImage, ScraperImageModel
-from pydantic import BaseModel, Field, HttpUrl
+from contract.schemas.architecture import BrowsingRecord
+from contract.schemas.get import ScraperGetRequest
+from pydantic import HttpUrl
 
-
-class RecordRequest(BaseModel):
-    """
-    similar to core.BrowserImage.BrowserImageGetResult
-    but enhanced with the target_uuid
-    """
-
-    target_uuid: UUID
-    request_timestamp: datetime.datetime
-    response_timestamp: datetime.datetime
-    success: bool
-    content: str
-
-
-class Event(BaseModel):
-    timestamp: datetime.datetime = Field(default_factory=datetime.datetime.now)
-    detail: str
-    level: Literal["DEBUG", "INFO", "WARNING"]
+from broker.api.schemas.clear import ClearRequest
+from broker.api.schemas.scrape import ScrapeRequest, ScrapeResponse
+from broker.Config import Config
+from broker.core.BrowserImage import BrowserImage
+from broker.core.DatabaseHandler import DatabaseHandler
+from broker.core.models.Broker import BrokerModel, Event
+from broker.core.models.DatabaseHandler import RecordTarget
+from broker.core.NodeIdentifier import NodeIdentifier
+from broker.core.ScraperImage import ScraperImage
 
 
 class Broker:
     def __init__(self) -> None:
-        self.scrapers: Dict[int, ScraperImage] = {}  # node_id -> scraper
-        self.logger: List[Event] = []
-        self.__lock_logger: asyncio.Lock = asyncio.Lock()
-        self.effective_refresh_period: float = None
-        self.__current_tasks: Dict[UUID, asyncio.Task] = {}
+        self.scrapers: dict[int, ScraperImage] = {}  # node_id -> scraper
+        self.logs: list[Event] = []
+        self.__lock_logs: asyncio.Lock = asyncio.Lock()
+        self.effective_refresh_period: float | None = None
+        self.__current_tasks: dict[UUID, asyncio.Task] = {}
         self.__lock_current_tasks: asyncio.Lock = asyncio.Lock()
         self.__lock_hibernate: asyncio.Lock = asyncio.Lock()
         self.__counter_update_loop: int = 0
 
-    def to_model(self) -> List[ScraperImageModel]:
-        return [scraper.to_model() for scraper in self.scrapers.values()]
+    async def __get_running_requests(self) -> list[RecordTarget]:
+        uuids = await self.get_running_tasks()
+        return await DatabaseHandler.get_targets_from_uuids(uuids)
+
+    async def to_model(self) -> BrokerModel:
+
+        (
+            running_requests,
+            unscraped_targets,
+            scraped_targets,
+            nodes,
+        ) = await asyncio.gather(
+            self.__get_running_requests(),
+            DatabaseHandler.get_unscraped_targets(),
+            DatabaseHandler.get_scraped_targets(),
+            asyncio.to_thread(
+                lambda: [scraper.to_model() for scraper in self.scrapers.values()]
+            ),
+        )
+
+        return BrokerModel(
+            is_running_as_root=os.getuid() == 0,
+            broker_refresh_period=Config.REFRESH_PERIOD_BROKER,
+            broker_effective_refresh_period=self.effective_refresh_period,
+            nodes=nodes,
+            logs=list(self.logs),
+            running_requests=running_requests,
+            unscraped_targets=unscraped_targets,
+            scraped_targets=scraped_targets,
+        )
 
     async def log(
         self,
         detail: str,
-        level: Optional[Literal["DEBUG", "INFO", "WARNING"]] = "INFO",
+        level: Literal["DEBUG", "INFO", "WARNING"] | None = "INFO",
     ) -> None:
-        async with self.__lock_logger:
+        async with self.__lock_logs:
             event = Event(detail=detail, level=level)
             if level != "DEBUG":
-                self.logger.insert(0, event)
-                self.logger = self.logger[: Config.BUFFER_LOGGER_SIZE]
+                self.logs.insert(0, event)
+                self.logs = self.logs[: Config.BUFFER_LOGGER_SIZE]
         query = f"INSERT INTO {Config.DB_TABLE_LOGS} (timestamp, detail, level) VALUES (?, ?, ?)"
         await DatabaseHandler.execute(
             query,
             (event.timestamp, event.detail, event.level),
         )
 
-    async def scrape(self, request: ScrapeRequest) -> ScrapeRequestResponse:
+    async def scrape(self, request: ScrapeRequest) -> ScrapeResponse:
         query = f"""
             INSERT INTO {Config.DB_TABLE_TARGETS}
-            (id, url, antwortzeit, tag, flag_lazy_loading)
+            (uuid, url, expected_response_time, tag, flag_lazy_loading)
             VALUES (?, ?, ?, ?, ?)
         """
 
-        async def scrape_url(request: ScrapeRequest) -> ScrapeRequestResponse:
+        async def scrape_url(request: ScrapeRequest) -> ScrapeResponse:
             uuid: UUID = uuid4()
-            data: List[Tuple[str, str, datetime.datetime, str, bool]] = [
+            data: list[tuple[str, str, datetime.datetime, str, bool]] = [
                 (
                     str(uuid),
                     str(request.url),
-                    request.antwortzeit,
+                    request.expected_response_time,
                     request.tag,
                     request.flag_lazy_loading,
                 )
             ]
             await DatabaseHandler.executemany(query, data)
-            return ScrapeRequestResponse(uuid=uuid)
+            return ScrapeResponse(uuid=uuid)
 
-        async def scrape_urls(request: ScrapeRequest) -> ScrapeRequestResponse:
-            uuids: List[UUID] = []
-            data: List[Tuple[str, str, datetime.datetime, str, bool]] = []
+        async def scrape_urls(request: ScrapeRequest) -> ScrapeResponse:
+            uuids: list[UUID] = []
+            data: list[tuple[str, str, datetime.datetime, str, bool]] = []
             for url in request.url:
                 uuid = uuid4()
                 uuids.append(uuid)
@@ -94,13 +110,13 @@ class Broker:
                     (
                         str(uuid),
                         str(url),
-                        request.antwortzeit,
+                        request.expected_response_time,
                         request.tag,
                         request.flag_lazy_loading,
                     )
                 )
             await DatabaseHandler.executemany(query, data)
-            return ScrapeRequestResponse(uuid=uuids)
+            return ScrapeResponse(uuid=uuids)
 
         if isinstance(request.url, HttpUrl):
             return await scrape_url(request)
@@ -111,7 +127,7 @@ class Broker:
 
     async def __update_available_nodes(self) -> None:
         await NodeIdentifier.update_reachable_nodes()
-        reachable_node_ids: Set[int] = NodeIdentifier.reachable_nodes
+        reachable_node_ids: set[int] = NodeIdentifier.reachable_nodes
 
         for node_id in reachable_node_ids:
             if node_id not in self.scrapers.keys():
@@ -138,7 +154,7 @@ class Broker:
             for scraper in self.scrapers.values()
             if scraper.available
         ]
-        if len(availables) == 0:
+        if not len(availables):
             await self.log("unable to create a new instance", level="WARNING")
             return False
         random_id = f"{random.choice(Config.SCRAPER_ADJECTIVES)} {random.choice(Config.SCRAPER_FIRST_NAMES)}"
@@ -146,7 +162,7 @@ class Broker:
         await self.log(f"created browser {random_id}")
         return True
 
-    async def get_available_browser(self) -> Optional[BrowserImage]:
+    async def get_available_browser(self) -> BrowserImage | None:
         """
         returns the object (BrowserImage) browser that can handle the job
         """
@@ -172,10 +188,13 @@ class Broker:
             browsers = get_browsers()
         return random.choice(browsers) if browsers else None
 
-    async def __get_target(self) -> Optional[BrowserImageGet]:
+    async def __get_target(self) -> RecordTarget | None:
         async with self.__lock_current_tasks:
             current_tasks_ids_placeholder = "".join(
-                [f"AND l.id != '{current_id}' " for current_id in self.__current_tasks]
+                [
+                    f"AND l.uuid != '{current_id}' "
+                    for current_id in self.__current_tasks
+                ]
             )
             query = f"""
                 SELECT *
@@ -183,49 +202,40 @@ class Broker:
                 WHERE 1=1
                     {current_tasks_ids_placeholder}
                     AND l.enabled = 1
-                    AND NOT EXISTS (
-                        SELECT 1
-                        FROM {Config.DB_TABLE_REQUESTS} r
-                        WHERE 1=1
-                            AND r.{Config.DB_TABLE_TARGETS}_id = l.id
-                            AND r.success = TRUE
-                    )
-                ORDER BY l.antwortzeit ASC
+                ORDER BY l.expected_response_time ASC
             """
             response = await DatabaseHandler.fetchone(query)
             if response:
-                return BrowserImageGet(
-                    id=response["id"],
-                    url=response["url"],
-                    flag_lazy_loading=response["flag_lazy_loading"],
-                )
+                return RecordTarget.model_validate(dict(response))
             return None
 
     async def __distribute_task(self) -> None:
-        target: Optional[BrowserImageGet] = await self.__get_target()
+        target: RecordTarget | None = await self.__get_target()
         if not target:
             await self.log("no target found")
             return
         await self.log(f"selected target {target.url}")
-        browser: Optional[BrowserImage] = await self.get_available_browser()
+        browser: BrowserImage | None = await self.get_available_browser()
         if not browser:
-            await self.log(f"no browser available for {target.id}", level="WARNING")
+            await self.log(f"no browser available for {target.uuid}", level="WARNING")
             return
-        await self.log(f"browser {browser.instance_id} selected for {target.id}")
+        await self.log(f"browser {browser.instance_id} selected for {target.uuid}")
+        payload = ScraperGetRequest(
+            instance_id=browser.instance_id,
+            url=target.url,
+            flag_lazy_loading=target.flag_lazy_loading,
+        )
         async with self.__lock_current_tasks:
-            self.__current_tasks[target.id] = asyncio.create_task(browser.get(target))
+            self.__current_tasks[target.uuid] = asyncio.create_task(
+                browser.get(target.uuid, payload)
+            )
 
     async def __unwrap_task(
         self,
         target_uuid: UUID,
         task: asyncio.Task,
         flag_cancel_if_not_done: bool = False,
-    ) -> Optional[RecordRequest]:
-        """
-        implements a flag to cancel a task if it is not done
-        (useful to clean the environment)
-        Returns a RecordRequest if the task is done or if the flag_cancel_if_not_done is set to true.
-        """
+    ) -> BrowsingRecord | None:
         if task.done():
             # Here we do not examine for task.exception()
             # because BrowserImage.get() is already formatting any exception
@@ -234,53 +244,19 @@ class Broker:
             # (see https://docs.python.org/3/library/asyncio-task.html#asyncio.Task.exception)
             # We need to be careful here about using try/except block
             # because we do not want to swallow the error
-            result: BrowserImageGetResult = task.result()
+            result: BrowsingRecord = task.result()
             if not result.success:
-                # print(traceback.format_exc())
                 await self.log(
-                    f"task {target_uuid} failed: {result.content}",
+                    f"task {target_uuid} failed: {result.traceback}",
                     level="WARNING",
                 )
-            return RecordRequest(
-                target_uuid=target_uuid,
-                request_timestamp=result.request_timestamp,
-                response_timestamp=result.response_timestamp,
-                success=result.success,
-                content=result.content,
-            )
-        if flag_cancel_if_not_done:
+            return result
+        elif flag_cancel_if_not_done:
+            # `BrowserImage.get` swallows the `asyncio.CancelledError`
+            # and put it in shape as `BrowsingRecord`
             task.cancel()
-            try:
-                await task
-            except asyncio.CancelledError as e:
-                print(f"Cancelletion of task {target_uuid} failed: {e}")
-            return RecordRequest(
-                target_uuid=target_uuid,
-                request_timestamp=datetime.datetime.now(),
-                response_timestamp=datetime.datetime.now(),
-                success=False,
-                content="Task was cancelled due to: flag_cancel_if_not_done",
-            )
+            return await task
         return None
-
-    async def __load_records(self, records: List[RecordRequest]) -> None:
-        query = f"""
-            INSERT INTO {Config.DB_TABLE_REQUESTS} ({Config.DB_TABLE_TARGETS}_id, request_timestamp, response_timestamp, success, content)
-            VALUES (?, ?, ?, ?, ?)
-        """
-        await DatabaseHandler.executemany(
-            query,
-            [
-                (
-                    str(record.target_uuid),
-                    record.request_timestamp,
-                    record.response_timestamp,
-                    record.success,
-                    record.content,
-                )
-                for record in records
-            ],
-        )
 
     async def __retrieve_tasks(self) -> None:
         """
@@ -289,17 +265,17 @@ class Broker:
         load the records in the database
         """
         async with self.__lock_current_tasks:
-            completed: List[Optional[RecordRequest]] = await asyncio.gather(
+            unwrapped: list[BrowsingRecord | None] = await asyncio.gather(
                 *[
                     self.__unwrap_task(target_uuid, task)
                     for target_uuid, task in self.__current_tasks.items()
                 ]
             )
-            completed: List[RecordRequest] = [_ for _ in completed if _]
+            completed: list[BrowsingRecord] = [_ for _ in unwrapped if _]
             for record in completed:
                 del self.__current_tasks[record.target_uuid]
-        if len(completed) > 0:
-            await self.__load_records(completed)
+        if len(completed):
+            await DatabaseHandler.insert_job_records(completed)
 
     async def __update(self) -> None:
         """
@@ -323,8 +299,10 @@ class Broker:
                 try:
                     await self.__update_available_nodes()
                     await self.__update_nodes()
-                    await self.__distribute_task()
                     await self.__retrieve_tasks()
+                    await DatabaseHandler.disable_successfull_targets()
+                    await DatabaseHandler.disable_unsuccesfull_targets()
+                    await self.__distribute_task()
                 except Exception:
                     traceback.print_exc()
                 finally:
@@ -349,13 +327,13 @@ class Broker:
             if sleep_time > 0:
                 await asyncio.sleep(sleep_time)
 
-    def get_scraper_from_hostname(self, hostname: str) -> Optional[ScraperImage]:
+    def get_scraper_from_hostname(self, hostname: str) -> ScraperImage | None:
         for scraper in self.scrapers.values():
             if scraper.hostname == hostname:
                 return scraper
         return None
 
-    async def get_running_tasks(self) -> List[UUID]:
+    async def get_running_tasks(self) -> list[UUID]:
         async with self.__lock_current_tasks:
             return [_ for _ in self.__current_tasks]
 
@@ -372,14 +350,14 @@ class Broker:
         """
         async with self.__lock_current_tasks:
             # in here no record is None due to the flag
-            completed: List[RecordRequest] = await asyncio.gather(
+            completed: list[BrowsingRecord] = await asyncio.gather(
                 *[
                     self.__unwrap_task(target_uuid, task, flag_cancel_if_not_done=True)
                     for target_uuid, task in self.__current_tasks.items()
                 ]
             )
-            if len(completed) > 0:
-                await self.__load_records(completed)
+            if len(completed):
+                await DatabaseHandler.insert_job_records(completed)
             self.__current_tasks = {}
 
     async def kill_browsers(self) -> None:
@@ -398,4 +376,4 @@ class Broker:
             if request.flag_kill_browsers:
                 await self.kill_browsers()
             if request.flag_clear_unassigned_targets:
-                await DatabaseHandler.clear_unassigned_targets()
+                await DatabaseHandler.disable_unassigned_targets()

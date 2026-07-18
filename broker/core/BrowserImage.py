@@ -1,37 +1,20 @@
 import asyncio
 import datetime
-from typing import Any, Dict, List, Literal
+import traceback
+from typing import Literal
 from uuid import UUID
 
 import httpx
-from Config import Config
-from core.NodeIdentifier import NodeIdentifier
-from pydantic import BaseModel, HttpUrl
+from contract.schemas.architecture import BrowserModel, BrowsingRecord
+from contract.schemas.get import ScraperGetRequest
+
+from broker.Config import Config
+from broker.core.models.BrowserImage import BrowserImageModel
+from broker.core.NodeIdentifier import NodeIdentifier
 
 # this timeout is large because it accounts for lazy loading / others
-TIMEOUT_HTTP_SCRAPING = 60  # seconds
+TIMEOUT_HTTP_SCRAPING = 120  # seconds
 TIMEOUT_HTTP_KILL = 10  # seconds
-
-
-class BrowserImageGet(BaseModel):
-    id: UUID
-    url: HttpUrl
-    flag_lazy_loading: bool
-
-
-class BrowserImageGetResult(BaseModel):
-    request_timestamp: datetime.datetime
-    response_timestamp: datetime.datetime
-    success: bool
-    content: str
-
-
-class BrowserImageModel(BaseModel):
-    created_at: datetime.datetime
-    expires_at: datetime.datetime
-    browsing_history: List[str]
-    status: Literal["idle", "requesting", "spotted", "waiting"]
-    score: float
 
 
 class BrowserImage:
@@ -39,17 +22,17 @@ class BrowserImage:
         self,
         instance_id: str,
         passport: NodeIdentifier,
-        scraper_response: Dict[str, Any],
+        browser_model: BrowserModel,
     ) -> None:
         self.instance_id: str = instance_id
         self.passport: NodeIdentifier = passport
-        self.created_at: datetime.datetime = scraper_response["created_at"]
-        self.expires_at: datetime.datetime = scraper_response["expires_at"]
-        self.browsing_history: List[str] = []
+        self.created_at: datetime.datetime = browser_model.created_at
+        self.expires_at: datetime.datetime = browser_model.expires_at
+        self.browsing_history: list[BrowsingRecord] = browser_model.browsing_history
         self.status: Literal["idle", "requesting", "spotted", "waiting"] = (
-            scraper_response["status"]
+            browser_model.status
         )
-        self.score: float = scraper_response["score"]
+        self.score: float = browser_model.score
 
     def to_model(self) -> BrowserImageModel:
         return BrowserImageModel(
@@ -60,38 +43,45 @@ class BrowserImage:
             score=self.score,
         )
 
-    async def get(self, payload: BrowserImageGet) -> BrowserImageGetResult:
+    async def get(
+        self, target_uuid: UUID, payload: ScraperGetRequest
+    ) -> BrowsingRecord:
         """
-        should be cancellable
-        (therefore response_timestamp is not defined)
+        Swallows `asyncio.CancelledError`
         """
-        loop = asyncio.get_running_loop()
-        request_timestamp = loop.time()
         try:
             response = await self.passport.client.post(
                 f"http://{self.passport.vpn_address}:{Config.HTTP_PORT_SCRAPER}/get",
-                json=payload.model_dump(mode="json")
-                | {"instance_id": self.instance_id},
+                json=payload.model_dump(mode="json"),
                 timeout=TIMEOUT_HTTP_SCRAPING,
             )
-            success = response.status_code == 200  # Should examine the content
-            content = response.json()
-        except httpx.TimeoutException as e:
-            success = False
-            content = str(e)
-            print(
-                f"Request went timeout on {self.passport.vpn_address}:({self.instance_id}) with error: {e}"
+        except httpx.TimeoutException:
+            return BrowsingRecord(
+                target_uuid=target_uuid,
+                url=payload.url,
+                status="timeout",
+                traceback=traceback.format_exc(),
             )
-        except Exception as e:
-            success = False
-            content = str(e)
-        response_timestamp = loop.time()
-        return BrowserImageGetResult(
-            request_timestamp=request_timestamp,
-            response_timestamp=response_timestamp,
-            success=success,
-            content=content,
-        )
+        except asyncio.CancelledError:
+            return BrowsingRecord(
+                target_uuid=target_uuid,
+                url=payload.url,
+                status="aborted",
+                traceback=traceback.format_exc(),
+            )
+
+        if response.status_code != 200:
+            return BrowsingRecord(
+                target_uuid=target_uuid,
+                url=payload.url,
+                status="implementation_error",
+                http_error_code=response.status_code,
+                traceback=response.json()["detail"],
+            )
+
+        record = BrowsingRecord.model_validate(response.json())
+        record.target_uuid = target_uuid
+        return record
 
     async def kill(self) -> bool:
         try:

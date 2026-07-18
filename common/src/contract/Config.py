@@ -1,0 +1,5 @@
+class Config:
+    BROWSER_DEFAULT_ID = "default"
+    BROWSER_DEFAULT_LIFESPAN = 3600  # 1 hour in seconds
+    BROWSER_DEFAULT_WINDOW = (1920, 1080)
+    MAX_INSTANCES_PER_SCRAPER = 4

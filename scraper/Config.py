@@ -3,10 +3,10 @@ import os
 
 
 class Config:
-    MAX_INSTANCES_PER_SCRAPER = int(os.getenv("MAX_INSTANCES_PER_SCRAPER"))
-    NODE_ROLE = os.getenv("NODE_ROLE").split(",")
-    if "SCRAPER" not in NODE_ROLE:
-        raise ValueError("the node should be a scraper to launch this image")
+    try:
+        NODE_ROLE = os.getenv("NODE_ROLE").split(",")
+    except Exception:
+        pass
 
     ALLOWED_NETWORKS = [
         ipaddress.ip_network("127.0.0.0/8"),  # localhost
@@ -21,14 +21,10 @@ class Config:
         ipaddress.ip_network("::1/128"),  # IPv6 localhost
     ]
 
-    BROWSER_DEFAULT_ID = "default"
-    BROWSER_DEFAULT_LIFESPAN = 3600  # 1 hour in seconds
-    BROWSER_DEFAULT_WINDOW = [1920, 1080]
+    RECOVERY_PERIOD_MINIMUM = 2000  # milliseconds
+    RECOVERY_PERIOD_MEAN = 5000  # milliseconds
+    RECOVERY_PERIOD_SPREAD = 0.5  # variance
 
-    ERHOLUNGSZEIT_MINIMUM = 2000  # milliseconds
-    ERHOLUNGSZEIT_MEAN = 5000  # milliseconds
-    ERHOLUNGSZEIT_SPREAD = 0.5  # variance
-
-    REFRESH_RATE_SCRAPER = 0.1  # seconds
+    REFRESH_RATE_SCRAPER = 0.01  # seconds
 
     TIME_LIMIT_LAZY_LOADING = 10  # seconds

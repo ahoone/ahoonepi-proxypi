@@ -1,15 +1,19 @@
 services:
   fastapi:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: scraper/Dockerfile
+      args:
+        CHROMIUM_VERSION: ${CHROMIUM_VERSION}
+        CHROMIUM_SNAPSHOT_DATE: ${CHROMIUM_SNAPSHOT_DATE}
     env_file:
       - path: ../config.env
         required: true
     ports:
       - "${HTTP_PORT_SCRAPER}:8000"
     volumes:
-      - ./:/app
+      - ../scraper:/app/scraper
+      - ../common:/app/common
       # Can not do a COPY inside the Dockerfile, as we are outside the component context
       # and that other services like NPM have limited permissions
       # And we mount outside of app as Docker tries to create an empty `plugins` folder inside of app
@@ -18,11 +22,7 @@ services:
       - /tmp/proxypi.sock:/tmp/proxypi.sock
     environment:
       NODE_ROLE: ${NODE_ROLE}
-      # not sure if those are useful (those arguments are also set in main.py)
-      # (which initiates the browser including those)
-      CHROME_EXTRA_ARGS: >-
-        --no-sandbox
-        --disable-setuid-sandbox
+      PYTHONPATH: /app/scraper
     # Your kernel does not support memory limit capabilities or the cgroup is not mounted. Limitation discarded.
     # deploy:
     #   resources:
@@ -30,6 +30,7 @@ services:
     #       cpus: ${SCRAPER_CPUS}
     #       memory: ${SCRAPER_MEMORY}
     # shm_size: ${SCRAPER_SHM_SIZE}
+    command: ["uvicorn", "scraper.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
     restart: unless-stopped
     networks:
       - default

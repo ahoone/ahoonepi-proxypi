@@ -1,15 +1,17 @@
 import asyncio
 import json
 import sys
+import traceback
 from ipaddress import IPv6Address
 from string import Template
-from typing import Any, Dict, List, Optional, Tuple, Union
 
 import httpx
-from Config import Config
-from core.BrowserImage import BrowserImage, BrowserImageModel
-from core.NodeIdentifier import NodeIdentifier, NodeIdentifierModel
-from pydantic import BaseModel
+from contract.schemas.architecture import ScraperModel
+
+from broker.Config import Config
+from broker.core.BrowserImage import BrowserImage
+from broker.core.models.ScraperImage import ScraperImageModel
+from broker.core.NodeIdentifier import NodeIdentifier
 
 sys.path.insert(0, "/plugins")
 import proxypi
@@ -17,19 +19,8 @@ import proxypi
 PROXYPI_COMMAND_INFO = Template("info $node_id")
 TIMEOUT_SCRAPER_HTTP_REQUEST = 4  # seconds
 TIMEOUT_SCRAPER_HTTP_REQUEST_NEW_INSTANCE = 10  # seconds
-REFRESH_PERIOD_SCRAPER = 1  # seconds
+REFRESH_PERIOD_SCRAPER = 0.1  # seconds
 BACKOFF_REFRESH_PERIOD_SCRAPER = 180  # seconds
-
-
-class ScraperImageModel(BaseModel):
-    online: bool
-    hostname: str
-    node_id: int
-    passport: NodeIdentifierModel
-    ram_specs: Optional[str]
-    ram_usage: Optional[str]
-    ipv6: IPv6Address
-    browsers: Dict[str, BrowserImageModel]
 
 
 class ScraperImage:
@@ -55,19 +46,17 @@ class ScraperImage:
     json.decoder.JSONDecodeError: Expecting value: line 2 column 1 (char 1)
     """
 
-    def __init__(self) -> None:
-        self.online: bool = None
-        self.passport: NodeIdentifier = None
-        self.hostname: str = None  # should be UNIQUE
-        self.ipv6: IPv6Address = None
-        self.ram_specs: str = None
-        self.ram_usage: str = None
-        self.available: bool = False
-        # self.electricity_consumption: ?
-        self.browsers: Dict[str, BrowserImage] = {}  # instance_id: browser
-        self.score: float = 0.0
-        self.__lock_updating: asyncio.Lock = asyncio.Lock()
-        self.__next_refresh_timestamp: float = None
+    online: bool
+    passport: NodeIdentifier
+    hostname: str
+    ipv6: IPv6Address
+    ram_specs: str
+    ram_usage: str
+    available: bool
+    # electricity_consumption: float  # what unit ? over what period ?
+    browsers: dict[str, BrowserImage]
+    # score: float  # score for the proxy ?
+    __next_refresh_timestamp: float
 
     def to_model(self) -> ScraperImageModel:
 
@@ -75,7 +64,7 @@ class ScraperImage:
             online=self.online,
             hostname=self.hostname,
             node_id=self.passport.node_id,
-            passport=self.passport.to_dict(),
+            passport=self.passport.to_model(),
             ram_specs=self.ram_specs,
             ram_usage=self.ram_usage,
             ipv6=self.ipv6,
@@ -97,67 +86,67 @@ class ScraperImage:
         return scraperImage
 
     async def __initialize(self, node_id: int) -> None:
-        self.online = True
-        self.passport = NodeIdentifier(node_id)
         response = await proxypi.run(
             PROXYPI_COMMAND_INFO.safe_substitute(node_id=node_id)
         )
         response_as_dict = json.loads(response)
+
+        self.online = True
+        self.passport = NodeIdentifier(node_id)
         self.hostname = response_as_dict["hostname"]
         self.ipv6 = IPv6Address(response_as_dict["ipv6"])
+        self.ram_specs = ""
+        self.ram_usage = ""
+        self.available = False
+        # for demo
         # import random
-
         # self.ipv6 = IPv6Address(random.getrandbits(128))
+        self.browsers = {}
         self.__next_refresh_timestamp = asyncio.get_event_loop().time()
 
     async def update(self) -> None:
         loop = asyncio.get_event_loop()
         if loop.time() < self.__next_refresh_timestamp:
             return
-
         try:
-            health_response, scraper_response = await asyncio.gather(
-                self.passport.client.get(
-                    f"http://{self.passport.vpn_address}:{Config.HTTP_PORT_SCRAPER}/health",
-                    timeout=TIMEOUT_SCRAPER_HTTP_REQUEST,
-                ),
-                self.passport.client.get(
-                    f"http://{self.passport.vpn_address}:{Config.HTTP_PORT_SCRAPER}/browsers",
-                    timeout=TIMEOUT_SCRAPER_HTTP_REQUEST,
-                ),
+            scraper_response = await self.passport.client.get(
+                f"http://{self.passport.vpn_address}:{Config.HTTP_PORT_SCRAPER}/get_scraper_state",
+                timeout=TIMEOUT_SCRAPER_HTTP_REQUEST,
+            )
+            scraper_response.raise_for_status()
+            scraper_model: ScraperModel = ScraperModel.model_validate(
+                scraper_response.json()
+            )
+            self.ram_specs = scraper_model.ram_specs
+            self.ram_usage = scraper_model.ram_usage
+            self.available = scraper_model.can_create_browser
+            self.browsers = {
+                instance_id: BrowserImage(instance_id, self.passport, browser_model)
+                for instance_id, browser_model in scraper_model.browsers.items()
+            }
+        except httpx.ReadTimeout:
+            print(
+                f"[{self.passport.vpn_address}:{Config.HTTP_PORT_SCRAPER}] Took too much time to response. "
+                "The remote scraper container must be busy. "
             )
         except httpx.ConnectError:
             print(
-                f"Unable to connect to {self.passport.vpn_address}. Will backoff for {BACKOFF_REFRESH_PERIOD_SCRAPER} seconds. Check for the scraper container running."
+                f"[{self.passport.vpn_address}:{Config.HTTP_PORT_SCRAPER}] Unable to connect. "
+                f"Will backoff for {BACKOFF_REFRESH_PERIOD_SCRAPER} seconds. "
+                "Check for the remote scraper container running. "
             )
             self.__next_refresh_timestamp = loop.time() + BACKOFF_REFRESH_PERIOD_SCRAPER
             return
         except Exception as e:
             print(f"[{self.passport.vpn_address}:{Config.HTTP_PORT_SCRAPER}] {e}")
-            return
-
-        if health_response.status_code == 200:
-            health_response_as_dict = json.loads(health_response.text)
-            self.available = health_response_as_dict["can_create_browser"]
-            self.ram_specs = health_response_as_dict["ram_specs"]
-            self.ram_usage = health_response_as_dict["ram_usage"]
-
-        if scraper_response.status_code == 200:
-            self.browsers = {}
-            for instance_id, browser_as_dict in json.loads(
-                scraper_response.text
-            ).items():
-                self.browsers[instance_id] = BrowserImage(
-                    instance_id, self.passport, browser_as_dict
-                )
-
+            print(traceback.format_exc())
         self.__next_refresh_timestamp = loop.time() + REFRESH_PERIOD_SCRAPER
 
     async def new_instance(
         self,
         instance_id: str,
-        lifespan_in_seconds: Optional[int] = None,
-        window_size: Optional[Union[List[int], Tuple[int, int]]] = None,
+        lifespan_in_seconds: int | None = None,
+        window_size: tuple[int, int] | None = None,
     ) -> bool:
         payload = {"instance_id": instance_id}
         if lifespan_in_seconds:

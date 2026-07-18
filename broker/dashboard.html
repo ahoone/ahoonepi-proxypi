@@ -30,9 +30,8 @@
                 <section class="card nodes">
                     <div class="card-header">
                         <span class="card-title">Nodes</span>
-                        <div class="card-timestamp-group">
-                            <!--                     <span class="live-dot">&nbsp;</span> -->
-                            <span id="ts-broker" class="timestamp">—</span>
+                        <div class="card-timestamp">
+                            <span id="ts-dashboard" class="timestamp">—</span>
                         </div>
                     </div>
 
@@ -63,20 +62,36 @@
                 <section class="card broker">
                     <div class="card-header">
                         <span class="card-title">Broker</span>
-                        <div class="card-timestamp-group">
-                            <!--                     <span class="live-dot">&nbsp;</span> -->
-                            <span id="ts-broker" class="timestamp">—</span>
-                        </div>
                     </div>
 
                     <table>
                         <thead>
                             <tr>
                                 <th>URL</th>
-                                <th>Antworzeit</th>
+                                <th>Antwortzeit</th>
                                 <th>Timestamp</th>
                                 <th>Tag</th>
                             </tr>
+                        </thead>
+                    </table>
+
+                    <table class="running_requests">
+                        <thead>
+                            <td colspan="4">Running requests</td>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>-</td>
+                                <td>-</td>
+                                <td>-</td>
+                                <td>-</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <table class="unscraped_targets">
+                        <thead>
+                            <td colspan="4">Unscraped Targets</td>
                         </thead>
                         <tbody>
                             <tr>
@@ -91,11 +106,7 @@
 
                 <section class="card logger">
                     <div class="card-header">
-                        <span class="card-title">Logger</span>
-                        <div class="card-timestamp-group">
-                            <!--                     <span class="live-dot">&nbsp;</span> -->
-                            <span id="ts-broker" class="timestamp">—</span>
-                        </div>
+                        <span class="card-title">Logs</span>
                     </div>
 
                     <table>
@@ -119,18 +130,13 @@
         </main>
 
         <script>
-            const NODES_SOCKET = "/nodes";
-            const NODES_REFRESH_PERIOD = 1_000;
-            const BROKER_SOCKET = "/get_unscraped_targets";
-            const BROKER_REFRESH_PERIOD = 1_000;
-            const LOGGER_SOCKET = "/logger";
-            const LOGGER_REFRESH_PERIOD = 1_000;
-            const SIZE_BUFFER_LOGGER = 13;
+            const SOCKET = "/get_broker_state";
+            const REFRESH_PERIOD = 100;
+            const SIZE_BUFFER_LOGS = 20;
 
-            function upsertTable(container, rows, rowKey, columns) {
-                let table = container.querySelector("table");
+            function upsertTable(table, rows, rowKey, columns) {
                 if (!table) {
-                    container.innerHTML =
+                    table.innerHTML =
                         "<table><thead><tr>" +
                         columns
                             .map(
@@ -143,7 +149,7 @@
                             )
                             .join("") +
                         "</tr></thead><tbody></tbody></table>";
-                    table = container.querySelector("table");
+                    table = table.querySelector("table");
                 }
                 const tbody = table.querySelector("tbody");
                 const seen = new Set();
@@ -259,9 +265,9 @@
                     },
                 },
                 {
-                    label: "Antwortzeit",
+                    label: "expected_response_time",
                     render: function (r) {
-                        return r.antwortzeit || "—";
+                        return r.expected_response_time || "—";
                     },
                 },
                 {
@@ -278,7 +284,7 @@
                 },
             ];
 
-            const LOGGER_COLUMNS = [
+            const LOGS_COLUMNS = [
                 {
                     label: "Timestamp",
                     render: function (r) {
@@ -307,7 +313,7 @@
             ];
 
             function renderNodes(rawRows) {
-                const container = document.querySelector(".card.nodes");
+                const table = document.querySelector(".card.nodes table");
                 const rows = Array.isArray(rawRows)
                     ? rawRows.filter(function (r) {
                           return r && typeof r.hostname === "string";
@@ -315,7 +321,7 @@
                     : [];
 
                 upsertTable(
-                    container,
+                    table,
                     rows,
                     function (r) {
                         return r.node_id || r.hostname;
@@ -324,7 +330,7 @@
                 );
 
                 if (!rows.length) {
-                    container.querySelector("tbody").innerHTML =
+                    table.querySelector("tbody").innerHTML =
                         '<tr><td colspan="5">No data available</td></tr>';
                     return;
                 }
@@ -339,43 +345,93 @@
                     statsCards[2].textContent = rows.reduce(function (sum, r) {
                         return sum + (r.rpm || 0);
                     }, 0);
-
-                document.getElementById("ts-broker").textContent =
-                    new Date().toLocaleTimeString();
             }
 
-            function renderBroker(rawRows) {
-                const container = document.querySelector(".card.broker");
-                const rows = Array.isArray(rawRows) ? rawRows : [];
-                upsertTable(
-                    container,
-                    rows,
-                    function (r, idx) {
-                        return r.id || idx;
-                    },
-                    BROKER_COLUMNS,
+            function renderBroker(json) {
+                function renderRunningRequests(rawRows) {
+                    const table = document.querySelector(
+                        "table.running_requests",
+                    );
+                    const rows = Array.isArray(rawRows) ? rawRows : [];
+                    upsertTable(
+                        table,
+                        rows,
+                        function (r, idx) {
+                            return r.uuid != null ? r.uuid : idx;
+                        },
+                        BROKER_COLUMNS,
+                    );
+
+                    if (!rows.length) {
+                        const tbody = table.querySelector("tbody");
+                        let placeholder = tbody.querySelector(
+                            '[data-key="__empty__"]',
+                        );
+                        if (!placeholder) {
+                            placeholder = document.createElement("tr");
+                            placeholder.dataset.key = "__empty__";
+                            placeholder.innerHTML =
+                                '<td colspan="4">No data available</td>';
+                            tbody.appendChild(placeholder);
+                        }
+                    }
+                }
+
+                function renderUnscrapedTargets(rawRows) {
+                    const table = document.querySelector(
+                        "table.unscraped_targets",
+                    );
+                    const rows = Array.isArray(rawRows) ? rawRows : [];
+                    upsertTable(
+                        table,
+                        rows,
+                        function (r, idx) {
+                            return r.uuid != null ? r.uuid : idx;
+                        },
+                        BROKER_COLUMNS,
+                    );
+
+                    if (!rows.length) {
+                        const tbody = table.querySelector("tbody");
+                        let placeholder = tbody.querySelector(
+                            '[data-key="__empty__"]',
+                        );
+                        if (!placeholder) {
+                            placeholder = document.createElement("tr");
+                            placeholder.dataset.key = "__empty__";
+                            placeholder.innerHTML =
+                                '<td colspan="4">No data available</td>';
+                            tbody.appendChild(placeholder);
+                        }
+                    }
+                }
+
+                renderRunningRequests(
+                    Array.isArray(json.running_requests)
+                        ? json.running_requests
+                        : json.running_requests.output || [],
                 );
-                container.querySelector("#ts-broker").textContent =
-                    new Date().toLocaleTimeString();
+                renderUnscrapedTargets(
+                    Array.isArray(json.unscraped_targets)
+                        ? json.unscraped_targets
+                        : json.unscraped_targets.output || [],
+                );
             }
 
-            function renderLogger(rawRows) {
-                const container = document.querySelector(".card.logger");
+            function renderLogs(rawRows) {
+                const table = document.querySelector(".card.logger table");
                 const rows = Array.isArray(rawRows) ? rawRows : [];
 
                 if (rows.length) {
                     upsertTable(
-                        container,
-                        rows.slice(0, SIZE_BUFFER_LOGGER),
+                        table,
+                        rows.slice(0, SIZE_BUFFER_LOGS),
                         function (r, idx) {
                             return r.timestamp || idx;
                         },
-                        LOGGER_COLUMNS,
+                        LOGS_COLUMNS,
                     );
                 }
-                container.querySelector("#ts-broker").textContent =
-                    new Date().toLocaleTimeString();
-
                 rows.sort(function (a, b) {
                     return (
                         new Date(b.timestamp || 0) - new Date(a.timestamp || 0)
@@ -383,55 +439,33 @@
                 });
             }
 
-            async function fetchNodes() {
+            async function fetchData() {
                 try {
-                    const res = await fetch(NODES_SOCKET);
+                    const res = await fetch(SOCKET);
                     if (!res.ok) throw new Error("HTTP " + res.status);
                     const json = await res.json();
-                    renderNodes(Array.isArray(json) ? json : json.output || []);
+                    renderNodes(
+                        Array.isArray(json.nodes)
+                            ? json.nodes
+                            : json.nodes.output || [],
+                    );
+                    renderBroker(json);
+                    renderLogs(
+                        Array.isArray(json.logs)
+                            ? json.logs
+                            : json.logs.output || [],
+                    );
+                    document.getElementById("ts-dashboard").textContent =
+                        new Date().toLocaleTimeString();
                 } catch (e) {
                     console.error("Failed to fetch nodes:", e);
                 }
             }
 
-            async function fetchBroker() {
-                try {
-                    const res = await fetch(BROKER_SOCKET);
-                    if (!res.ok) throw new Error("HTTP " + res.status);
-                    const json = await res.json();
-                    renderBroker(
-                        Array.isArray(json) ? json : json.output || [],
-                    );
-                } catch (e) {
-                    console.error("Failed to fetch broker:", e);
-                }
-            }
+            fetchData();
 
-            async function fetchLogger() {
-                try {
-                    const res = await fetch(LOGGER_SOCKET);
-                    if (!res.ok) throw new Error("HTTP " + res.status);
-                    const json = await res.json();
-                    renderLogger(
-                        Array.isArray(json) ? json : json.output || [],
-                    );
-                } catch (e) {
-                    console.error("Failed to fetch logger:", e);
-                }
-            }
-
-            fetchNodes();
-            fetchBroker();
-            fetchLogger();
-
-            if (NODES_REFRESH_PERIOD > 0) {
-                setInterval(fetchNodes, NODES_REFRESH_PERIOD);
-            }
-            if (BROKER_REFRESH_PERIOD > 0) {
-                setInterval(fetchBroker, BROKER_REFRESH_PERIOD);
-            }
-            if (LOGGER_REFRESH_PERIOD > 0) {
-                setInterval(fetchLogger, LOGGER_REFRESH_PERIOD);
+            if (REFRESH_PERIOD > 0) {
+                setInterval(fetchData, REFRESH_PERIOD);
             }
         </script>
     </body>

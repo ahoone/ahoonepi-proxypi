@@ -46,6 +46,6 @@ docker::restart() {
 #######################################
 docker::tests() {
     cd "$SCRIPT_DIR"
-    docker compose -f tests/docker-compose.yml --env-file config.env up --build -d
+    docker compose -f tests/docker-compose.yml --env-file .env --env-file config.env up --build -d
     echob "-> docker logs tests"
 }

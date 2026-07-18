@@ -1,19 +1,11 @@
-import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 from uuid import UUID
 
 import aiosqlite
-from Config import Config
-from pydantic import BaseModel, HttpUrl
+from contract.schemas.architecture import BrowsingRecord
 
-
-class RecordUnscrapedTarget(BaseModel):
-    id: UUID
-    url: HttpUrl
-    antwortzeit: datetime.datetime
-    created_at: datetime.datetime
-    tag: str
-    flag_lazy_loading: bool
+from broker.Config import Config
+from broker.core.models.DatabaseHandler import RecordTarget
 
 
 class DatabaseHandler:
@@ -42,9 +34,7 @@ class DatabaseHandler:
             cls.__connection = None
 
     @classmethod
-    async def execute(
-        cls, query: str, params: Optional[Tuple[Any, ...]] = None
-    ) -> None:
+    async def execute(cls, query: str, params: tuple[Any, ...] | None = None) -> None:
         """
         handlers not aiming for reuse (does not return a cursor)
         but here we only have just one type of fetch per query
@@ -54,22 +44,22 @@ class DatabaseHandler:
 
     @classmethod
     async def executemany(
-        cls, query: str, params: Optional[Tuple[Any, ...]] = None
+        cls, query: str, params: tuple[Any, ...] | None = None
     ) -> None:
         await cls.__connection.executemany(query, params)
         await cls.__connection.commit()
 
     @classmethod
     async def fetchone(
-        cls, query: str, params: Optional[Tuple[Any, ...]] = None
-    ) -> Dict[str, Any]:
+        cls, query: str, params: tuple[Any, ...] | None = None
+    ) -> dict[str, Any]:
         cursor = await cls.__connection.execute(query, params)
         return await cursor.fetchone()
 
     @classmethod
     async def fetchall(
-        cls, query: str, params: Optional[Tuple[Any, ...]] = None
-    ) -> List[Dict[str, Any]]:
+        cls, query: str, params: tuple[Any, ...] | None = None
+    ) -> list[dict[str, Any]]:
         cursor = await cls.__connection.execute(query, params)
         return await cursor.fetchall()
 
@@ -80,7 +70,7 @@ class DatabaseHandler:
                 DROP TABLE IF EXISTS {Config.DB_TABLE_TARGETS};
             """)
             await cls.__connection.execute(f"""
-                DROP TABLE IF EXISTS {Config.DB_TABLE_REQUESTS};
+                DROP TABLE IF EXISTS {Config.DB_TABLE_JOBS};
             """)
             await cls.__connection.execute(f"""
                 DROP TABLE IF EXISTS {Config.DB_TABLE_LOGS};
@@ -88,9 +78,9 @@ class DatabaseHandler:
 
         await cls.__connection.execute(f"""
             CREATE TABLE IF NOT EXISTS {Config.DB_TABLE_TARGETS} (
-                id TEXT PRIMARY KEY NOT NULL,
+                uuid TEXT PRIMARY KEY NOT NULL,
                 url TEXT NOT NULL,
-                antwortzeit DATETIME NOT NULL,
+                expected_response_time DATETIME NOT NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 tag TEXT NOT NULL,
                 flag_lazy_loading BOOLEAN NOT NULL,
@@ -99,14 +89,24 @@ class DatabaseHandler:
         """)
 
         await cls.__connection.execute(f"""
-            CREATE TABLE IF NOT EXISTS {Config.DB_TABLE_REQUESTS} (
+            CREATE TABLE IF NOT EXISTS {Config.DB_TABLE_JOBS} (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                {Config.DB_TABLE_TARGETS}_id TEXT NOT NULL,
-                request_timestamp DATETIME NOT NULL,
-                response_timestamp DATETIME,
-                success BOOLEAN,
-                content BLOB,
-                FOREIGN KEY ({Config.DB_TABLE_TARGETS}_id) REFERENCES {Config.DB_TABLE_TARGETS}(id)
+                {Config.DB_TABLE_TARGETS}_uuid TEXT NOT NULL,
+                success BOOLEAN NOT NULL,
+                status TEXT NOT NULL,
+                tab_state TEXT,
+                html TEXT,
+                timestamp DATETIME,
+                timedelta_driver_get FLOAT,
+                timedelta_smart_wait FLOAT,
+                timedelta_search_cf_challenge FLOAT,
+                timedelta_resolve_cf_challenge FLOAT,
+                timedelta_check_cf_blocking_content FLOAT,
+                timedelta_lazy_loading FLOAT,
+                timedelta_get_content FLOAT,
+                traceback TEXT,
+                http_error_code INT,
+                FOREIGN KEY ({Config.DB_TABLE_TARGETS}_uuid) REFERENCES {Config.DB_TABLE_TARGETS}(uuid)
             );
         """)
 
@@ -122,7 +122,43 @@ class DatabaseHandler:
         await cls.__connection.commit()
 
     @classmethod
-    async def clear_unassigned_targets(cls):
+    async def disable_successfull_targets(cls) -> None:
+        query = f"""
+            UPDATE {Config.DB_TABLE_TARGETS} AS l
+            SET enabled = FALSE
+            WHERE 1=1
+                AND l.enabled = 1
+                AND EXISTS (
+                    SELECT 1
+                    FROM {Config.DB_TABLE_JOBS} r
+                    WHERE 1=1
+                        AND r.{Config.DB_TABLE_TARGETS}_uuid = l.uuid
+                        AND r.success = TRUE
+                );
+        """
+        await cls.__connection.execute(query)
+        await cls.__connection.commit()
+
+    @classmethod
+    async def disable_unsuccesfull_targets(cls) -> None:
+        query = f"""
+            UPDATE {Config.DB_TABLE_TARGETS} AS l
+            SET enabled = FALSE
+            WHERE 1=1
+                AND l.enabled = 1
+                AND (
+                    SELECT COUNT(*)
+                    FROM {Config.DB_TABLE_JOBS} r
+                    WHERE 1=1
+                        AND r.{Config.DB_TABLE_TARGETS}_uuid = l.uuid
+                        AND r.success = FALSE
+                ) >= {Config.RETRIES};
+        """
+        await cls.__connection.execute(query)
+        await cls.__connection.commit()
+
+    @classmethod
+    async def disable_unassigned_targets(cls) -> None:
         """
         clear unassigned targets that have no reference in requests
         we cannot drop the rows as if a try has been make, there is a request record
@@ -130,45 +166,108 @@ class DatabaseHandler:
         """
         await cls.__connection.execute(f"""
             UPDATE {Config.DB_TABLE_TARGETS} AS l
-            SET enabled = 0;
+            SET enabled = FALSE;
         """)
+        await cls.__connection.commit()
 
     @classmethod
-    async def get_unscraped_targets(cls) -> List[RecordUnscrapedTarget]:
+    async def get_unscraped_targets(cls) -> list[RecordTarget]:
         query = f"""
             SELECT *
             FROM {Config.DB_TABLE_TARGETS} l
             WHERE 1=1
-                AND enabled = 1
+                AND enabled = TRUE
                 AND NOT EXISTS (
                     SELECT 1
-                    FROM {Config.DB_TABLE_REQUESTS} r
+                    FROM {Config.DB_TABLE_JOBS} r
                     WHERE 1=1
-                        AND r.{Config.DB_TABLE_TARGETS}_id = l.id
+                        AND r.{Config.DB_TABLE_TARGETS}_uuid = l.uuid
                         AND r.success = TRUE
                 )
-            ORDER BY antwortzeit ASC
+            ORDER BY expected_response_time ASC
             LIMIT {Config.LIMIT_SQL_QUERIES}
         """
         return [
-            RecordUnscrapedTarget(
-                id=record["id"],
-                url=record["url"],
-                antwortzeit=record["antwortzeit"],
-                created_at=record["created_at"],
-                tag=record["tag"],
-                flag_lazy_loading=record["flag_lazy_loading"],
-            )
+            RecordTarget.model_validate(dict(record))
             for record in await cls.fetchall(query)
         ]
 
     @classmethod
-    async def get_scraped_targets(cls) -> List[Dict[str, Any]]:
+    async def get_scraped_targets(cls) -> list[RecordTarget]:
         query = f"""
             SELECT *
-            FROM {Config.DB_TABLE_REQUESTS}
-            WHERE success = TRUE
-            ORDER BY id ASC
+            FROM {Config.DB_TABLE_TARGETS} l
+            WHERE EXISTS (
+                SELECT 1
+                FROM {Config.DB_TABLE_JOBS} r
+                WHERE 1=1
+                    AND r.{Config.DB_TABLE_TARGETS}_uuid = l.uuid
+                    AND r.success = TRUE
+                )
+            ORDER BY expected_response_time ASC
             LIMIT {Config.LIMIT_SQL_QUERIES}
         """
-        return await cls.fetchall(query)
+        return [
+            RecordTarget.model_validate(dict(record))
+            for record in await cls.fetchall(query)
+        ]
+
+    @classmethod
+    async def get_targets_from_uuids(cls, uuids: list[UUID]) -> list[RecordTarget]:
+        placeholder = ",".join("?" for _ in uuids)
+        query = f"""
+            SELECT *
+            FROM {Config.DB_TABLE_TARGETS}
+            WHERE uuid in ({placeholder});
+        """
+        return [
+            RecordTarget.model_validate(dict(record))
+            for record in await cls.fetchall(
+                query, params=tuple(str(uuid) for uuid in uuids)
+            )
+        ]
+
+    @classmethod
+    async def insert_job_records(cls, records: list[BrowsingRecord]):
+        query = f"""
+            INSERT INTO {Config.DB_TABLE_JOBS} (
+                {Config.DB_TABLE_TARGETS}_uuid,
+                success,
+                status,
+                tab_state,
+                html,
+                timestamp,
+                timedelta_driver_get,
+                timedelta_smart_wait,
+                timedelta_search_cf_challenge,
+                timedelta_resolve_cf_challenge,
+                timedelta_check_cf_blocking_content,
+                timedelta_lazy_loading,
+                timedelta_get_content,
+                traceback,
+                http_error_code
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """
+        rows = [
+            (
+                str(record.target_uuid),
+                record.success,
+                record.status,
+                record.tab_state,
+                record.html,
+                record.timestamp,
+                record.timedelta_driver_get,
+                record.timedelta_smart_wait,
+                record.timedelta_search_cf_challenge,
+                record.timedelta_resolve_cf_challenge,
+                record.timedelta_check_cf_blocking_content,
+                record.timedelta_lazy_loading,
+                record.timedelta_get_content,
+                record.traceback,
+                record.http_error_code,
+            )
+            for record in records
+        ]
+        await cls.__connection.executemany(query, rows)
+        await cls.__connection.commit()

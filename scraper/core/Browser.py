@@ -1,29 +1,33 @@
 import asyncio
 import datetime
-import os
-import subprocess
-import threading
-from typing import Any, AsyncGenerator, BinaryIO, Dict, List, Literal, Set, Tuple
+import traceback
+from typing import Literal
 
 import zendriver as uc
-from Config import Config
-from core.schemas import BotSpottedError, GetRequest
-from engine.detection import herobrine_is_here
-from engine.erholungszeit import erholungszeit
-from engine.score import score
+from contract.schemas.architecture import BrowserModel, BrowsingRecord
+from contract.schemas.get import ScraperGetRequest
+from contract.schemas.new_instance import NewInstanceRequest
+from zendriver.core.cloudflare import cf_is_interactive_challenge_present, verify_cf
 
-DISPLAY_DEPTH = 24
-JPEG_MARKER_START = b"\xff\xd8\xff"
-JPEG_MARKER_END = b"\xff\xd9"
-MAXIMUM_SIZE_ERROR_MESSAGE = 256
+from scraper.core.Display import Display
+from scraper.core.Driver import Driver
+from scraper.core.FrameUnpacker import FrameUnpacker
+from scraper.core.schemas import BotSpottedError
+from scraper.core.Streamer import Streamer
+from scraper.engine.detection import check_cf_blocking_content
+from scraper.engine.recovery_period import recovery_period
+from scraper.engine.score import score
+
 SETTLING_WAIT_TIME_COMPLETE = 1  # seconds
 SETTLING_WAIT_TIME_INTERACTIVE = 3  # seconds
-STREAM_CHUNK_SIZE = 2**14  # 16,384 bits
-STREAM_FPS = 12
-STREAM_QUALITY = 15  # 2=best 31=worst
-TIMEOUT_TERMINATE_DISPLAY = 6  # seconds
-TIMEOUT_TERMINATE_UNPACKING = 6  # seconds
-TIMEOUT_TERMINATE_STREAM = 6  # seconds
+GET_QUEUE_MAXSIZE = 6
+TIMEOUT_DETECTION_CF_CHALLENGE = 10  # seconds
+TIMEOUT_SEARCH_CF_CHALLENGE = 10  # seconds
+TIMEOUT_RESOLVE_CF_CHALLENGE = 10  # seconds
+TIMEOUT_GET = 60  # seconds
+TIMEOUT_GET_CONTENT = 4  # seconds
+TIMEOUT_LAZY_LOADING = 10  # seconds
+TIMEOUT_DRIVER_GET = 20  # seconds
 
 
 class Browser:
@@ -32,160 +36,68 @@ class Browser:
     are made to the get method
     """
 
-    display = 100  # First Xvfb (instead of 99)
+    __display: Display
+    __driver: Driver
+    __streamer: Streamer
+    __frame_unpacker: FrameUnpacker
 
-    def __init__(self) -> None:
-        self.window_size: Tuple[int, int] = None
-        self.display: str = None
-        self.__display_process = None
-        self.__driver = None
-        self.__streaming_process = None
-        self.__unpacking_frames_process = None
-        self.__latest_frame: bytes = b""
-        self.__new_frame_available: asyncio.Event = asyncio.Event()
-        self.__killing_event = asyncio.Event()
-        self.created_at: datetime.datetime = None
-        self.expires_at: datetime.datetime = None
-        self.browsing_history: List[Dict] = []
-        self.__get_lock: asyncio.Lock = asyncio.Lock()
-        self.spotted: bool = False
-        self.erholungszeit: datetime.datetime = None  # recovery period after a request
+    __killing_event: asyncio.Event
+    __get_lock: asyncio.Lock
+
+    instance_id: str
+    window_size: tuple[int, int]
+    created_at: datetime.datetime
+    expires_at: datetime.datetime
+    browsing_history: list[BrowsingRecord]
+    spotted: bool
+    recovery_period: datetime.datetime
 
     @classmethod
-    async def create(
-        cls,
-        lifespan_in_seconds: int,
-        window_size: Tuple[int, int],
-    ) -> "Browser":
+    async def create(cls, request: NewInstanceRequest) -> "Browser":
         instance = cls()
-        await instance.__initialize(
-            lifespan_in_seconds,
-            window_size,
-        )
+        await instance.__initialize(request)
         return instance
 
-    async def __initialize(
-        self,
-        lifespan_in_seconds: int,
-        window_size: Tuple[int, int],
-    ) -> None:
-        self.window_size = window_size
-        self.__create_display()
-        self.__driver = await self.__create_driver()
+    async def __initialize(self, request: NewInstanceRequest) -> None:
+        self.__display = await Display.create(window_size=request.window_size)
+        self.__driver = await Driver.create(display=self.__display)
+        self.__streamer = Streamer(display=self.__display)
+        self.__frame_unpacker = FrameUnpacker(streamer=self.__streamer)
+
+        self.__killing_event = asyncio.Event()
+        self.__get_lock = asyncio.Lock()
+
+        self.instance_id = request.instance_id
+        self.window_size = request.window_size
         self.created_at = datetime.datetime.now()
         self.expires_at = self.created_at + datetime.timedelta(
-            seconds=lifespan_in_seconds
+            seconds=request.lifespan_in_seconds
         )
-        self.__create_unpacking_frames_process()
-        self.erholungszeit = datetime.datetime.now()
+        self.browsing_history = []
+        self.spotted = False
+        self.recovery_period = datetime.datetime.now()
 
-    def __create_display(self) -> None:
-        self.display = f":{Browser.display}"
-        Browser.display += 1
-
-        command = [
-            "Xvfb",
-            self.display,
-            "-screen",
-            "0",
-            f"{self.window_size[0]}x{self.window_size[1]}x{DISPLAY_DEPTH}",
-        ]
-
-        self.__display_process = subprocess.Popen(
-            command,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
+    def to_model(self) -> BrowserModel:
+        return BrowserModel(
+            window_size=self.window_size,
+            display=self.__display.display,
+            created_at=self.created_at,
+            expires_at=self.expires_at,
+            remaining_lifespan=self.remaining_lifespan(),
+            status=self.status(),
+            score=self.score(),
+            browsing_history=[],  # self.browsing_history,
         )
 
-    async def __create_driver(self) -> None:
-        os.environ["DISPLAY"] = self.display
-        return await uc.start(
-            headless=False,  # If headerless, Cloudflare spots us.
-            browser_args=[
-                "--no-sandbox",
-                "--disable-setuid-sandbox",
-                "--disable-blink-features=AutomationControlled",
-                "--disable-features=IsolateOrigins,site-per-process",
-                f"--window-size={self.window_size[0]},{self.window_size[1]}",
-                "--window-position=0,0",
-            ],  # If images are blocked, Cloudflare spots us.
-            sandbox=False,
-            env={**os.environ},
-        )
-
-    def __create_streaming_process(self) -> None:
-        if self.__streaming_process:
-            return
-
-        command = [
-            "ffmpeg",
-            "-loglevel",
-            "quiet",
-            "-f",
-            "x11grab",
-            "-framerate",
-            str(STREAM_FPS),
-            "-video_size",
-            f"{self.window_size[0]}x{self.window_size[1]}",
-            "-i",
-            self.display,
-            "-f",
-            "mjpeg",
-            "-q:v",
-            str(STREAM_QUALITY),
-            "-flush_packets",
-            "1",
-            "pipe:1",
-        ]
-
-        self.__streaming_process = subprocess.Popen(
-            command,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            env={**os.environ, "DISPLAY": self.display},
-        )
-
-    @staticmethod
-    def __unpack_frames(stream: BinaryIO) -> bytes:
-        buffer = bytearray()
-        while chunk := stream.read(STREAM_CHUNK_SIZE):
-            buffer.extend(chunk)
-            while True:
-                start = buffer.find(JPEG_MARKER_START)
-                if start == -1:
-                    buffer.clear()
-                    break
-                end = buffer.find(JPEG_MARKER_END, start)
-                if end == -1:
-                    if start > 0:
-                        del buffer[:start]
-                    break
-                end += len(JPEG_MARKER_END)
-                frame = bytes(buffer[start:end])
-                yield frame
-                del buffer[:end]
-
-    def __create_unpacking_frames_process(self) -> None:
-        if not self.__streaming_process:
-            self.__create_streaming_process()
-
-        def __unpack_through_thread() -> None:
-            for frame in self.__unpack_frames(self.__streaming_process.stdout):
-                self.__latest_frame = frame
-                self.__new_frame_available.set()
-
-        self.__unpacking_frames_process = threading.Thread(
-            target=__unpack_through_thread,
-            daemon=True,
-        )
-        self.__unpacking_frames_process.start()
+    def stream(self):
+        return self.__frame_unpacker.stream()
 
     def status(self) -> Literal["idle", "requesting", "spotted", "waiting"]:
         if self.spotted:
             return "spotted"
         elif self.__get_lock.locked():
             return "requesting"
-        elif self.erholungszeit > datetime.datetime.now():
+        elif self.recovery_period > datetime.datetime.now():
             return "waiting"
         else:
             return "idle"
@@ -202,56 +114,50 @@ class Browser:
         """
         return self.expires_at < datetime.datetime.now()
 
-    async def stream(self) -> AsyncGenerator[bytes, Any]:
-        while True:
-            await self.__new_frame_available.wait()
-            if self.__latest_frame:
-                self.__new_frame_available.clear()
-                yield (
-                    b"--frame\r\n"
-                    b"Content-Type: image/jpeg\r\n\r\n" + self.__latest_frame + b"\r\n"
-                )
-
     @staticmethod
-    async def smart_wait(page) -> Literal["complete", "interactive", "loading"]:
+    async def smart_wait(tab) -> Literal["complete", "interactive", "loading"]:
         """
         tries to wait up for the complete status, but returns with any status after a certain waiting time
         """
-        current_state = await page.evaluate("document.readyState")
+        current_state = await tab.evaluate("document.readyState")
         if current_state == "complete":
             pass
         elif current_state == "interactive":
             try:
-                await page.wait_for_ready_state(
+                await tab.wait_for_ready_state(
                     until="complete", timeout=SETTLING_WAIT_TIME_COMPLETE
                 )
             except asyncio.TimeoutError:
                 pass
         else:
             try:
-                await page.wait_for_ready_state(
+                await tab.wait_for_ready_state(
                     until="interactive", timeout=SETTLING_WAIT_TIME_INTERACTIVE
                 )
             except asyncio.TimeoutError:
                 pass
-        current_state = await page.evaluate("document.readyState")
+        current_state = await tab.evaluate("document.readyState")
         return current_state
 
-    async def get_or_abort(self, request: GetRequest) -> str:
+    async def get_or_abort(self, request: ScraperGetRequest) -> BrowsingRecord:
+        browsing_record = BrowsingRecord(url=request.url)
         try:
             async with self.__get_lock:
-                return await self.get(request)
+                delta = (self.recovery_period - datetime.datetime.now()).total_seconds()
+                if delta > 0.0:
+                    await asyncio.sleep(delta)
+                await self.get(request, browsing_record)
+                self.recovery_period = datetime.datetime.now() + datetime.timedelta(
+                    milliseconds=recovery_period()
+                )
         except asyncio.CancelledError:
-            self.browsing_history.append(
-                {
-                    "url": request.url,
-                    "status": "aborted",
-                    "timestamp": datetime.datetime.now().isoformat(),
-                }
-            )
-            return ""
+            browsing_record.status = "aborted"
+        finally:
+            browsing_record.timestamp = datetime.datetime.now()
+            self.browsing_history.append(browsing_record)
+        return browsing_record
 
-    async def trigger_lazy_loading(self, page: uc.Tab) -> bool:
+    async def trigger_lazy_loading(self, tab: uc.Tab) -> None:
         """
         INCOMPLETE
         Should:
@@ -265,125 +171,106 @@ class Browser:
             bool: True if achieved network inactivity in given time.
         """
 
-        time_limit = datetime.datetime.now() + datetime.timedelta(
-            seconds=Config.TIME_LIMIT_LAZY_LOADING,
-        )
         # scroll_height = 0  # percentages of the screen height
-        while datetime.datetime.now() < time_limit:
-            await page.scroll_down(1000)
-            await asyncio.sleep(4)
-            return True
+        while True:
+            await tab.scroll_down(1000)
+            await asyncio.sleep(1)
 
-        return False
-
-    async def get(self, request: GetRequest) -> str:
+    async def get(
+        self, request: ScraperGetRequest, browsing_record: BrowsingRecord
+    ) -> None:
         """
-        Moves the current page and captures its html content.
+        Directly updatest the given `BrowsingRecord`.
 
-        Args:
-            request (GetRequest): .
-
-        Returns:
-            str: The html code.
-
-        Raises:
-            BotSpottedError: .
+        Moves the current tab and captures its html content
+        - moves the tab,
+        - waits for the page to load,
+        - checks for challenge (and then solves it),
+        - checks for cloudflare blocking the content (by getting first the html content),
+        - triggers lazy loading,
+        - gets the html content,
+        - returns.
         """
 
-        access_record = {}
+        loop = asyncio.get_running_loop()
 
-        delta = (self.erholungszeit - datetime.datetime.now()).total_seconds()
-        if delta > 0.0:
-            await asyncio.sleep(delta)
-
-        try:
-            page = await self.__driver.get(request.url, new_tab=False, new_window=False)
-            access_record["page_state"] = await self.smart_wait(page)
-            self.erholungszeit = datetime.datetime.now() + datetime.timedelta(
-                milliseconds=erholungszeit()
-            )
-            html = await page.get_content()
-
-            if herobrine_is_here(html):
-                self.spotted = True
-                raise BotSpottedError(html)
-                # should also raise a html error to the broker
-
-            if request.flag_lazy_loading:
-                access_record["success_lazy_loading"] = await self.trigger_lazy_loading(
-                    page
-                )
-                html = await page.get_content()
-
-        except BotSpottedError as e:
-            access_record.update(
-                {
-                    "url": request.url,
-                    "status": "blocked",
-                    "html": e.html,
-                    "timestamp": datetime.datetime.now().isoformat(),
-                }
-            )
-            self.browsing_history.append(access_record)
-            return ""
-
-        except Exception as e:
-            access_record.update(
-                {
-                    "url": request.url,
-                    "status": "failed",
-                    "error": str(e)[:MAXIMUM_SIZE_ERROR_MESSAGE],
-                    "timestamp": datetime.datetime.now().isoformat(),
-                }
-            )
-            self.browsing_history.append(access_record)
-            return ""
-
-        access_record.update(
-            {
-                "url": request.url,
-                "status": "success",
-                "content_length": len(html),
-                "timestamp": datetime.datetime.now().isoformat(),
-            }
+        start_time = loop.time()
+        awaitable = self.__driver.driver.get(
+            str(request.url), new_tab=False, new_window=False
         )
-        self.browsing_history.append(access_record)
-        return html
-
-    def __kill_streaming_process(self) -> None:
-        if not self.__streaming_process:
-            return
-        self.__streaming_process.terminate()
         try:
-            self.__streaming_process.wait(timeout=TIMEOUT_TERMINATE_STREAM)
-        except subprocess.TimeoutExpired:
-            self.__streaming_process.kill()
-            self.__streaming_process.wait()
-        self.__streaming_process = None
-
-    def __kill_unpacking_frames_process(self) -> None:
-        if not self.__unpacking_frames_process:
+            tab = await asyncio.wait_for(awaitable, TIMEOUT_DRIVER_GET)
+        except asyncio.TimeoutError:
+            browsing_record.status = "failed"
             return
-        self.__unpacking_frames_process.join(timeout=TIMEOUT_TERMINATE_UNPACKING)
+        browsing_record.timedelta_driver_get = loop.time() - start_time
 
-    def __close_display(self) -> None:
-        """
-        This version does not account for Xvfb creating its own child processes
-        """
-        if not self.__display_process:
-            return
-        self.__display_process.terminate()
+        # This operation is time self-constrainted
+        # (SETTLING_WAIT_TIME_COMPLETE + SETTLING_WAIT_TIME_INTERACTIVE)
+        # not counting `tab.evaluate("document.readyState")`
+        start_time = loop.time()
+        browsing_record.tab_state = await self.smart_wait(tab)
+        browsing_record.timedelta_smart_wait = loop.time() - start_time
+
+        awaitable = cf_is_interactive_challenge_present(tab)
+        start_time = loop.time()
         try:
-            self.__display_process.wait(timeout=TIMEOUT_TERMINATE_DISPLAY)
-        except subprocess.TimeoutExpired:
-            self.__display_process.kill()
-            self.__display_process.wait()
-        self.__display_process = None
+            found_challenge = await asyncio.wait_for(
+                awaitable, TIMEOUT_SEARCH_CF_CHALLENGE
+            )
+        except asyncio.TimeoutError:
+            found_challenge = False
+        browsing_record.timedelta_search_cf_challenge = loop.time() - start_time
+
+        if found_challenge:
+            print(f"{request.url} is protected by cloudflare challenge!")
+            awaitable = verify_cf(tab)
+            start_time = loop.time()
+            try:
+                await asyncio.wait_for(awaitable, TIMEOUT_RESOLVE_CF_CHALLENGE)
+            except asyncio.TimeoutError:
+                pass
+            browsing_record.timedelta_resolve_cf_challenge = loop.time() - start_time
+
+        start_time = loop.time()
+        try:
+            await check_cf_blocking_content(tab)
+        except BotSpottedError:
+            self.spotted = True
+            browsing_record.status = "blocked"
+            return
+        browsing_record.timedelta_check_cf_blocking_content = loop.time() - start_time
+
+        # This element can fail without causing problems
+        # We skip this phase is the browser was marked `spotted`
+        # at hte prvious step
+        if request.flag_lazy_loading and not self.spotted:
+            awaitable = self.trigger_lazy_loading(tab)
+            start_time = loop.time()
+            try:
+                await asyncio.wait_for(awaitable, TIMEOUT_LAZY_LOADING)
+            except asyncio.TimeoutError:
+                pass
+            browsing_record.timedelta_lazy_loading = loop.time() - start_time
+
+        awaitable = tab.get_content()
+        start_time = loop.time()
+        try:
+            browsing_record.html = await asyncio.wait_for(
+                awaitable, TIMEOUT_GET_CONTENT
+            )
+        except asyncio.TimeoutError:
+            browsing_record.status = "failed"
+            browsing_record.traceback = traceback.format_exc()
+            return
+        browsing_record.timedelta_get_content = loop.time() - start_time
+
+        browsing_record.status = "success"
 
     async def kill(self) -> None:
-        self.__kill_streaming_process()
-        self.__kill_unpacking_frames_process()
-        self.__close_display()
-        asyncio.create_task(self.__driver.stop())  # probably never stopping
-        # creates a zombie process
-        # 999      4088371  0.0  0.0      0     0 ?        Z    Apr20   0:00 [chrome_crashpad] <defunct>
+        await asyncio.gather(
+            self.__driver.kill(),
+            asyncio.to_thread(self.__frame_unpacker.kill),
+            asyncio.to_thread(self.__streamer.kill),
+            asyncio.to_thread(self.__display.kill),
+        )
