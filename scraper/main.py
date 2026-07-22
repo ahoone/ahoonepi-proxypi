@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import sys
 from contextlib import asynccontextmanager
 
@@ -12,6 +13,7 @@ from scraper.api.routes.new_instance import router as new_instance_router
 from scraper.api.routes.stream import router as stream_router
 from scraper.api.routes.terminate import router as terminate_router
 from scraper.Config import Config
+from scraper.core.DatabaseHandler import DatabaseHandler
 from scraper.core.Scraper import Scraper
 
 sys.path.insert(0, "/plugins")
@@ -20,9 +22,13 @@ from middleware import add_middleware
 # -------------------------------------------------------------------------------- #
 # -------------------------------------------------------------------------------- #
 
+logger = logging.getLogger(__name__)
+logging.basicConfig(filename="scraper.log", level=logging.INFO)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    await DatabaseHandler.initialize()
     app.state.scraper = Scraper()
     bg_task = asyncio.create_task(app.state.scraper.background_update())
     yield

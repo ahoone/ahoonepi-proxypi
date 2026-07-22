@@ -2,11 +2,13 @@ import asyncio
 import datetime
 import traceback
 from typing import Literal
+from uuid import UUID, uuid4
 
 import zendriver as uc
 from contract.schemas.architecture import BrowserModel, BrowsingRecord
 from contract.schemas.get import ScraperGetRequest
 from contract.schemas.new_instance import NewInstanceRequest
+from scraper.core.Profile import Profile
 from zendriver.core.cloudflare import cf_is_interactive_challenge_present, verify_cf
 
 from scraper.core.Display import Display
@@ -29,6 +31,9 @@ TIMEOUT_GET_CONTENT = 4  # seconds
 TIMEOUT_LAZY_LOADING = 10  # seconds
 TIMEOUT_DRIVER_GET = 20  # seconds
 
+BROWSER_DEFAULT_LIFESPAN = 3600  # 1 hour in seconds
+BROWSER_DEFAULT_WINDOW = (1920, 1080)
+
 
 class Browser:
     """
@@ -36,46 +41,65 @@ class Browser:
     are made to the get method
     """
 
+    initialized: bool
+    profile_uuid: UUID
+    profile_name: str
+    browsing_history: list[BrowsingRecord]
+    active_tasks: set[asyncio.Task]
+    killing_task: asyncio.Task
+
+    __profile: Profile
     __display: Display
     __driver: Driver
     __streamer: Streamer
     __frame_unpacker: FrameUnpacker
 
-    __killing_event: asyncio.Event
     __get_lock: asyncio.Lock
 
-    instance_id: str
     window_size: tuple[int, int]
     created_at: datetime.datetime
     expires_at: datetime.datetime
-    browsing_history: list[BrowsingRecord]
+
     spotted: bool
     recovery_period: datetime.datetime
 
+    def __init__(self) -> None:
+        """
+        Solely used for placeholders elements.
+        Like reserving UUIDs for a new instance request.
+        """
+        self.initialized = False
+
     @classmethod
-    async def create(cls, request: NewInstanceRequest) -> "Browser":
+    async def create(cls, profile_uuid: UUID) -> "Browser":
         instance = cls()
-        await instance.__initialize(request)
+        await instance.__initialize(profile_uuid)
         return instance
 
-    async def __initialize(self, request: NewInstanceRequest) -> None:
-        self.__display = await Display.create(window_size=request.window_size)
-        self.__driver = await Driver.create(display=self.__display)
+    async def __initialize(self, profile_uuid: UUID) -> None:
+        """checks here if the profile exists in the database and load it"""
+        self.profile_uuid = uuid4()
+
+        self.__display = await Display.create(window_size=BROWSER_DEFAULT_WINDOW)
+        self.__driver = await Driver.create(
+            display=self.__display, profile_uuid=self.__profile.uuid
+        )
         self.__streamer = Streamer(display=self.__display)
         self.__frame_unpacker = FrameUnpacker(streamer=self.__streamer)
 
-        self.__killing_event = asyncio.Event()
         self.__get_lock = asyncio.Lock()
 
-        self.instance_id = request.instance_id
-        self.window_size = request.window_size
+        self.profile_name = request.profile_name
+        self.window_size = BROWSER_DEFAULT_WINDOW
         self.created_at = datetime.datetime.now()
         self.expires_at = self.created_at + datetime.timedelta(
-            seconds=request.lifespan_in_seconds
+            seconds=BROWSER_DEFAULT_LIFESPAN
         )
         self.browsing_history = []
         self.spotted = False
         self.recovery_period = datetime.datetime.now()
+
+        self.initialized = True
 
     def to_model(self) -> BrowserModel:
         return BrowserModel(
@@ -115,7 +139,7 @@ class Browser:
         return self.expires_at < datetime.datetime.now()
 
     @staticmethod
-    async def smart_wait(tab) -> Literal["complete", "interactive", "loading"]:
+    async def __smart_wait(tab) -> Literal["complete", "interactive", "loading"]:
         """
         tries to wait up for the complete status, but returns with any status after a certain waiting time
         """
@@ -140,13 +164,22 @@ class Browser:
         return current_state
 
     async def get_or_abort(self, request: ScraperGetRequest) -> BrowsingRecord:
+        """
+        Thread safe.
+
+        Args:
+            request (ScraperGetRequest): Description.
+
+        Returns:
+            BrowsingRecord: Description.
+        """
         browsing_record = BrowsingRecord(url=request.url)
         try:
             async with self.__get_lock:
                 delta = (self.recovery_period - datetime.datetime.now()).total_seconds()
                 if delta > 0.0:
                     await asyncio.sleep(delta)
-                await self.get(request, browsing_record)
+                await self.__get(request, browsing_record)
                 self.recovery_period = datetime.datetime.now() + datetime.timedelta(
                     milliseconds=recovery_period()
                 )
@@ -157,7 +190,7 @@ class Browser:
             self.browsing_history.append(browsing_record)
         return browsing_record
 
-    async def trigger_lazy_loading(self, tab: uc.Tab) -> None:
+    async def __trigger_lazy_loading(self, tab: uc.Tab) -> None:
         """
         INCOMPLETE
         Should:
@@ -176,11 +209,12 @@ class Browser:
             await tab.scroll_down(1000)
             await asyncio.sleep(1)
 
-    async def get(
+    async def __get(
         self, request: ScraperGetRequest, browsing_record: BrowsingRecord
     ) -> None:
         """
-        Directly updatest the given `BrowsingRecord`.
+        Not thread safe.
+        Directly updates the given reference to a `BrowsingRecord`.
 
         Moves the current tab and captures its html content
         - moves the tab,
@@ -190,6 +224,10 @@ class Browser:
         - triggers lazy loading,
         - gets the html content,
         - returns.
+
+        Args:
+            request (ScraperGetRequest): Description.
+            browsing_record (BrowsingRecord): Description.
         """
 
         loop = asyncio.get_running_loop()
@@ -209,7 +247,7 @@ class Browser:
         # (SETTLING_WAIT_TIME_COMPLETE + SETTLING_WAIT_TIME_INTERACTIVE)
         # not counting `tab.evaluate("document.readyState")`
         start_time = loop.time()
-        browsing_record.tab_state = await self.smart_wait(tab)
+        browsing_record.tab_state = await self.__smart_wait(tab)
         browsing_record.timedelta_smart_wait = loop.time() - start_time
 
         awaitable = cf_is_interactive_challenge_present(tab)
@@ -245,7 +283,7 @@ class Browser:
         # We skip this phase is the browser was marked `spotted`
         # at hte prvious step
         if request.flag_lazy_loading and not self.spotted:
-            awaitable = self.trigger_lazy_loading(tab)
+            awaitable = self.__trigger_lazy_loading(tab)
             start_time = loop.time()
             try:
                 await asyncio.wait_for(awaitable, TIMEOUT_LAZY_LOADING)
@@ -268,9 +306,14 @@ class Browser:
         browsing_record.status = "success"
 
     async def kill(self) -> None:
+        """
+        Not thread safe.
+        Firstly, kill the driver, the frame unpacker, and the streamer.
+        Makes sure to kill the display after the driver to avoid ending in an unproper state prone to detection.
+        """
         await asyncio.gather(
             self.__driver.kill(),
             asyncio.to_thread(self.__frame_unpacker.kill),
             asyncio.to_thread(self.__streamer.kill),
-            asyncio.to_thread(self.__display.kill),
         )
+        await asyncio.to_thread(self.__display.kill)

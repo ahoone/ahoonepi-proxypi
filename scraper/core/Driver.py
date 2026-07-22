@@ -1,12 +1,12 @@
 import asyncio
 import os
-from uuid import UUID, uuid4
+from uuid import UUID
 
 import zendriver as uc
 
 from scraper.core.Display import Display
 
-TIMEOUT_DRIVER_STOP = 5  # seconds
+TIMEOUT_DRIVER_STOP = 60  # seconds
 
 
 class Driver:
@@ -14,13 +14,13 @@ class Driver:
     __profile_uuid: UUID
 
     @classmethod
-    async def create(cls, display: Display) -> "Driver":
+    async def create(cls, display: Display, profile_uuid: UUID) -> "Driver":
         instance = cls()
-        await instance.__initialize(display)
+        await instance.__initialize(display, profile_uuid)
         return instance
 
-    async def __initialize(self, display: Display) -> None:
-        self.__profile_uuid = uuid4()
+    async def __initialize(self, display: Display, profile_uuid: UUID) -> None:
+        self.__profile_uuid = profile_uuid
         os.environ["DISPLAY"] = display.display
         self.driver = await uc.start(
             headless=False,  # If headerless, Cloudflare spots us.
@@ -38,14 +38,9 @@ class Driver:
         )
 
     async def kill(self) -> None:
-        """
-        probably never stopping:
-        creates a zombie process
-        999      4088371  0.0  0.0      0     0 ?        Z    Apr20   0:00 [chrome_crashpad] <defunct>
-
-        The best option would be to track the chromium processn and manually kill it.
-        """
+        """Not thread safe."""
         try:
             await asyncio.wait_for(self.driver.stop(), timeout=TIMEOUT_DRIVER_STOP)
         except asyncio.TimeoutError:
             print(f"failed to close the driver {self.__profile_uuid}")
+        # finally:

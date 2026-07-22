@@ -24,7 +24,7 @@ class DatabaseHandler:
         # bug with this feature, extend the db infinitly
         await cls.__connection.commit()
 
-        await cls.initialize_database()
+        await cls.__initialize_database()
 
     @classmethod
     async def close(cls) -> None:
@@ -64,7 +64,7 @@ class DatabaseHandler:
         return await cursor.fetchall()
 
     @classmethod
-    async def initialize_database(cls) -> None:
+    async def __initialize_database(cls) -> None:
         if Config.BROKER_CLEAR_DB_ON_STARTUP:
             await cls.__connection.execute(f"""
                 DROP TABLE IF EXISTS {Config.DB_TABLE_TARGETS};
