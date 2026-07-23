@@ -8,12 +8,14 @@ import zendriver as uc
 from contract.schemas.architecture import BrowserModel, BrowsingRecord
 from contract.schemas.get import ScraperGetRequest
 from contract.schemas.new_instance import NewInstanceRequest
-from scraper.core.Profile import Profile
+from pydantic import BaseModel
 from zendriver.core.cloudflare import cf_is_interactive_challenge_present, verify_cf
 
+from scraper.core.DatabaseHandler import DatabaseHandler
 from scraper.core.Display import Display
 from scraper.core.Driver import Driver
 from scraper.core.FrameUnpacker import FrameUnpacker
+from scraper.core.Profile import Profile
 from scraper.core.schemas import BotSpottedError
 from scraper.core.Streamer import Streamer
 from scraper.engine.detection import check_cf_blocking_content
@@ -41,14 +43,11 @@ class Browser:
     are made to the get method
     """
 
+    profile: Profile
     initialized: bool
-    profile_uuid: UUID
-    profile_name: str
-    browsing_history: list[BrowsingRecord]
     active_tasks: set[asyncio.Task]
     killing_task: asyncio.Task
 
-    __profile: Profile
     __display: Display
     __driver: Driver
     __streamer: Streamer
@@ -71,18 +70,24 @@ class Browser:
         self.initialized = False
 
     @classmethod
-    async def create(cls, profile_uuid: UUID) -> "Browser":
+    async def create(cls, request: NewInstanceRequest) -> "Browser":
         instance = cls()
-        await instance.__initialize(profile_uuid)
+        await instance.__initialize(request)
         return instance
 
-    async def __initialize(self, profile_uuid: UUID) -> None:
-        """checks here if the profile exists in the database and load it"""
-        self.profile_uuid = uuid4()
+    async def __initialize(self, request: NewInstanceRequest) -> None:
+        """
+        Not thread safe.
+        Dangerous to have concurrent calls with the same UUID to this method.
 
+        Args:
+            profile_uuid (UUID): Description.
+        """
+        """checks here if the profile exists in the database and load it"""
+        self.profile = Profile.create(request)
         self.__display = await Display.create(window_size=BROWSER_DEFAULT_WINDOW)
         self.__driver = await Driver.create(
-            display=self.__display, profile_uuid=self.__profile.uuid
+            display=self.__display, profile_uuid=self.profile.uuid
         )
         self.__streamer = Streamer(display=self.__display)
         self.__frame_unpacker = FrameUnpacker(streamer=self.__streamer)

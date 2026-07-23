@@ -185,7 +185,7 @@ class DatabaseHandler:
                         AND r.success = TRUE
                 )
             ORDER BY expected_response_time ASC
-            LIMIT {Config.LIMIT_SQL_QUERIES}
+            LIMIT {Config.LIMIT_SQL_QUERIES};
         """
         return [
             RecordTarget.model_validate(dict(record))
@@ -205,7 +205,7 @@ class DatabaseHandler:
                     AND r.success = TRUE
                 )
             ORDER BY expected_response_time ASC
-            LIMIT {Config.LIMIT_SQL_QUERIES}
+            LIMIT {Config.LIMIT_SQL_QUERIES};
         """
         return [
             RecordTarget.model_validate(dict(record))
@@ -247,7 +247,7 @@ class DatabaseHandler:
                 traceback,
                 http_error_code
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
         """
         rows = [
             (

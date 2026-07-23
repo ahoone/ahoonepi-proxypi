@@ -6,6 +6,9 @@ from pydantic import BaseModel, Field, HttpUrl, computed_field
 
 
 class BrowsingRecord(BaseModel):
+    """Safe to be exported to SQLite."""
+
+    profile_uuid: UUID | None = None
     target_uuid: UUID | None = None
     url: HttpUrl
     status: (

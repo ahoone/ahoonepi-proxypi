@@ -22,6 +22,7 @@ class Config:
     ]
 
     SCRAPER_DATABASE = "/data/scraper.db"
+    DB_TABLE_PROFILES = "profiles"
 
     RECOVERY_PERIOD_MINIMUM = 2000  # milliseconds
     RECOVERY_PERIOD_MEAN = 5000  # milliseconds
