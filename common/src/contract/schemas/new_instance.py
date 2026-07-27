@@ -7,7 +7,11 @@ from contract.Config import Config
 
 class NewInstanceRequest(BaseModel):
     profile_uuid: UUID | None = Field(default=None)
-
-    instance_id: str = Field(default=Config.BROWSER_DEFAULT_ID)
     lifespan_in_seconds: int = Field(default=Config.BROWSER_DEFAULT_LIFESPAN)
-    window_size: tuple[int, int] = Field(default=Config.BROWSER_DEFAULT_WINDOW)
+    temporary_profile: bool = Field(
+        default=True,
+        description=(
+            "If set to `True`, a new UUID will be generated and use just one time. "
+            "However, if set to `True`, the field `profile_uuid` must be empty. "
+        ),
+    )

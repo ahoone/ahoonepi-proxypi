@@ -1,4 +1,4 @@
-import datetime
+from datetime import datetime
 from uuid import UUID
 
 from pydantic import BaseModel
@@ -9,6 +9,6 @@ class ProfileNotFoundError(Exception):
 
 
 class RecordProfile(BaseModel):
-    profile_uuid: UUID
-    profile_name: str
-    created_at: datetime.datetime
+    uuid: UUID
+    name: str
+    created_at: datetime

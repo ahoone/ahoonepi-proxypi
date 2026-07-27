@@ -8,22 +8,17 @@ from contract.Config import Config as ContractConfig
 from contract.schemas.architecture import BrowsingRecord, ScraperModel
 from contract.schemas.get import ScraperGetRequest
 from contract.schemas.new_instance import NewInstanceRequest
-from pydantic import BaseModel
 
 from scraper.Config import Config
 from scraper.core.Browser import Browser
 
 logger = logging.getLogger(__name__)
 
-TIMEOUT_KILL_CANCELLED_TASKS = (
-    2  # seconds (short, just accounts for the get_or_abort method)
-)
-
 
 class Scraper:
     def __init__(self) -> None:
         self.browsers: dict[UUID, Browser] = {}
-        self.busy: bool = False
+        self.restarting: bool = False
         self.__lock: asyncio.Lock = asyncio.Lock()
         self.__lock_terminate: asyncio.Lock = asyncio.Lock()
 
@@ -50,7 +45,7 @@ class Scraper:
         async with self.__lock:
             snapshot_browsers = list(self.browsers.items())
 
-        ram_total, ram_used, ram_free = self.__read_memory_info()
+        ram_total, ram_used, _ = self.__read_memory_info()
         return ScraperModel(
             is_running_as_root=os.getuid() == 0,
             can_create_browser=len(self.browsers)
@@ -66,6 +61,7 @@ class Scraper:
     async def browser_exists(self, profile_uuid: UUID) -> bool:
         """
         Thread safe.
+        Return `True` if and only if the browser with the given profile uuid is currently used.
 
         Args:
             profile_uuid (UUID): Description.
@@ -74,9 +70,9 @@ class Scraper:
             bool: Description.
         """
         async with self.__lock:
-            return profile_uuid in self.browsers.keys()
+            return profile_uuid in self.browsers
 
-    async def new_instance(self, profile_uuid: UUID) -> None:
+    async def new_instance(self, request: NewInstanceRequest) -> None:
         """
         Thread safe.
 
@@ -84,96 +80,38 @@ class Scraper:
             profile_uuid (UUID): Description.
         """
         async with self.__lock:
-            if profile_uuid in self.browsers.keys():
+            if request.profile_uuid in self.browsers:
                 logger.warning(
-                    f"Tried to create a browser instance with an existing uuid: {profile_uuid}"
+                    f"Tried to create a browser instance with a currentlu used uuid: {request.profile_uuid}"
                 )
                 return
-            self.browsers[profile_uuid] = Browser()
-        browser = await Browser.create(profile_uuid)
+            self.browsers[request.profile_uuid] = Browser()
+        browser = await Browser.create(request.profile_uuid)
         async with self.__lock:
-            self.browsers[profile_uuid] = browser
+            self.browsers[request.profile_uuid] = browser
 
-    async def get(self, request: ScraperGetRequest) -> BrowsingRecord:
-        """
-        Cannot be used with `asyncio.wait_for` because
-        the task is not really cancelled :
-        the error is swallowed inside `Browser.get_or_abort`
-        and a record is always returned.
+    async def scrape(self, request: ScraperGetRequest) -> BrowsingRecord:
+        return await self.browsers[request.profile_uuid].scrape(request)
 
-        The fix would be to have this function to pass the `BrowsingRecord` reference
-        and to have `Browser.get_or_abort` to raise after `asyncio.CancelledError`.
-        """
-        async with self.__lock:
-            task = asyncio.create_task(
-                self.browsers[request.profile_uuid].get_or_abort(request)
-            )
-            self.__browser_active_tasks[request.profile_uuid].add(task)
-        try:
-            result = await task
-        finally:
-            async with self.__lock:
-                # race condition:
-                # kill could have dropped the profile_uuid while we did not have the lock
-                # so we let kill discards the tasks
-                if request.profile_uuid in self.__browser_active_tasks:
-                    self.__browser_active_tasks[request.profile_uuid].discard(task)
-        return result
+    def __close_expired_instances(self) -> None:
+        [
+            browser.close()
+            for browser in self.browsers.values()
+            if browser.initialized and browser.expired()
+        ]
 
-    async def kill(self, profile_uuid: UUID) -> None:
+    async def __flush_stopped_instances(self) -> None:
         """
         Thread safe.
-        Firstly, removes logically the browser instance.
-        Then, proceeds to clean up and keeps a reference.
-
-        Args:
-            profile_uuid (UUID): Description.
         """
         async with self.__lock:
-            browser = self.browsers.pop(profile_uuid)
-            snapshot_tasks = self.__browser_active_tasks.pop(profile_uuid)
-
-        for task in snapshot_tasks:
-            # not a problem to cancel it even if it was done
-            task.cancel()
-
-        try:
-            await asyncio.wait_for(
-                asyncio.gather(*snapshot_tasks, return_exceptions=True),
-                timeout=TIMEOUT_KILL_CANCELLED_TASKS,
-            )
-        except asyncio.TimeoutError:
-            pass
-
-        async with self.__lock_browser_death_row:
-            # Not guaranteed to terminate quickly.
-            self.__browser_death_row[profile_uuid] = asyncio.create_task(browser.kill())
-
-    async def __kill_expired_instances(self) -> None:
-        async with self.__lock:
-            expired_instances = [
+            closed_browsers_uuids = [
                 profile_uuid
                 for profile_uuid, browser in self.browsers.items()
-                if browser.initialized and browser.expired()
+                if browser.initialized and browser.closed
             ]
-        to_kill = [self.kill(profile_uuid) for profile_uuid in expired_instances]
-        await asyncio.gather(*to_kill)
-
-    async def __check_on_death_row(self) -> None:
-        async with self.__lock_browser_death_row:
-            completed = [
-                profile_uuid
-                for profile_uuid, task in self.__browser_death_row.items()
-                if task.done()
-            ]
-            for profile_uuid in completed:
-                del self.__browser_death_row[profile_uuid]
-
-    async def __update(self) -> None:
-        await asyncio.gather(
-            self.__kill_expired_instances(),
-            self.__check_on_death_row(),
-        )
+            for profile_uuid in closed_browsers_uuids:
+                del self.browsers[profile_uuid]
 
     async def background_update(self) -> NoReturn:
         while True:
@@ -181,14 +119,20 @@ class Scraper:
                 await self.__update()
             await asyncio.sleep(Config.REFRESH_RATE_SCRAPER)
 
+    async def __update(self) -> None:
+        await asyncio.gather(
+            asyncio.to_thread(self.__close_expired_instances),
+            self.__flush_stopped_instances(),
+        )
+
     async def terminate(self) -> None:
         """
-        Use `scraper.busy: bool` in the api endpoints to check if the scraper can receive requests.
+        Use `scraper.restarting: bool` in the api endpoints to check if the scraper can receive requests.
         """
         async with self.__lock_terminate:
-            self.busy = True
+            self.restarting = True
             try:
-                kills = [self.kill(profile_uuid) for profile_uuid in self.browsers]
+                kills = [browser.close() for browser in self.browsers.values()]
                 await asyncio.gather(*kills)
             finally:
-                self.busy = False
+                self.restarting = False

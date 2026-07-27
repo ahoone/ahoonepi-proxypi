@@ -1,3 +1,4 @@
+import os
 from uuid import UUID
 
 import aiosqlite
@@ -11,6 +12,7 @@ class DatabaseHandler:
 
     @classmethod
     async def initialize(cls) -> None:
+        os.makedirs("/app/data", exist_ok=True)
         cls.__conn = await aiosqlite.connect(Config.SCRAPER_DATABASE)
         cls.__conn.row_factory = aiosqlite.Row
         await cls.__conn.commit()

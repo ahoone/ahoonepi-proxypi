@@ -1,4 +1,4 @@
-import datetime
+from datetime import datetime, timezone
 from typing import Literal
 from uuid import UUID
 
@@ -9,7 +9,7 @@ from broker.core.models.ScraperImage import ScraperImageModel
 
 
 class Event(BaseModel):
-    timestamp: datetime.datetime = Field(default_factory=datetime.datetime.now)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     detail: str
     level: Literal["DEBUG", "INFO", "WARNING"]
 

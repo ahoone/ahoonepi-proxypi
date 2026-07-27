@@ -166,7 +166,7 @@ td {
   border: 1px solid rgba(0,229,160,.25);
 }
 
-.browser-badge--waiting {
+.browser-badge--recovering {
   .browser-badge;
   background: rgba(0,229,160,.1);
   color: var(--green);
@@ -181,7 +181,7 @@ td {
   border: 1px solid rgba(0,212,255,.25);
 }
 
-.browser-badge--spotted {
+.browser-badge--closing {
   .browser-badge;
   background: rgba(255,90,126,.1);
   color: var(--red);

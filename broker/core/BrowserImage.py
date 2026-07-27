@@ -1,6 +1,6 @@
 import asyncio
-import datetime
 import traceback
+from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
@@ -26,10 +26,10 @@ class BrowserImage:
     ) -> None:
         self.instance_id: str = instance_id
         self.passport: NodeIdentifier = passport
-        self.created_at: datetime.datetime = browser_model.created_at
-        self.expires_at: datetime.datetime = browser_model.expires_at
+        self.created_at: datetime = browser_model.created_at
+        self.expires_at: datetime = browser_model.expires_at
         self.browsing_history: list[BrowsingRecord] = browser_model.browsing_history
-        self.status: Literal["idle", "requesting", "spotted", "waiting"] = (
+        self.status: Literal["idle", "requesting", "spotted", "recovering"] = (
             browser_model.status
         )
         self.score: float = browser_model.score

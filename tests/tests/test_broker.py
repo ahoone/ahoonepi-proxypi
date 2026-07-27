@@ -1,6 +1,6 @@
 import asyncio
-import datetime
 import json
+from datetime import datetime, timedelta, timezone
 from time import sleep
 
 import httpx
@@ -14,7 +14,7 @@ from tests.Config import Config
 from tests.URLGenerator import URLGenerator
 
 BASE = Config.ORIGIN_BROKER
-TIMEOUT_GET = 60  # in seconds (long, as we are waiting for either "complete" or "interactive" status)
+TIMEOUT_GET = 60  # in seconds (long, as we are recovering for either "complete" or "interactive" status)
 TIMEOUT_REQUESTS = 4  # seconds (small genetic)
 TIMEOUT_CLEAR = 20  # seconds (needs sometime to kill instances)
 LATENCY = 4  # seconds (time we give to the broker to handle requests)
@@ -82,14 +82,13 @@ class TestBrokerCore:
     def test_endpoint_collect(self):
         url = BASE + "/collect"
         payload = CollectRequest(uuid=self.shared_data["uuid"])
-        start_time = datetime.datetime.now()
+        start_time = datetime.now(timezone.utc)
         while True:
             response = requests.get(
                 url, json=payload.model_dump(mode="json"), timeout=TIMEOUT_REQUESTS
             )
             if (response.status_code != 425) or (
-                datetime.datetime.now() - start_time
-                > datetime.timedelta(seconds=TIMEOUT_GET)
+                datetime.now(timezone.utc) - start_time > timedelta(seconds=TIMEOUT_GET)
             ):
                 break
             sleep(2)
@@ -142,7 +141,7 @@ class TestBrokerCloudflare:
 
         url = BASE + "/collect"
         payload = CollectRequest(uuid=self.shared_data["uuid"])
-        start_time = datetime.datetime.now()
+        start_time = datetime.now(timezone.utc)
         while True:
             response = requests.get(
                 url, json=payload.model_dump(mode="json"), timeout=TIMEOUT_REQUESTS

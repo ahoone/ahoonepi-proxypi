@@ -1,0 +1,2 @@
+class RequestWhileClosingError(Exception):
+    pass

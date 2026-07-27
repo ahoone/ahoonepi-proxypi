@@ -27,7 +27,7 @@ router = APIRouter()
     },
 )
 async def get_scraper_state(scraper: Scraper = Depends(get_scraper)) -> ScraperModel:
-    if scraper.busy:
+    if scraper.restarting:
         raise HTTPException(
             status_code=423,
             detail="The scraper is busy",

@@ -1,6 +1,6 @@
 import asyncio
-import datetime
 import traceback
+from datetime import datetime, timedelta
 
 from contract.schemas.architecture import BrowsingRecord
 from contract.schemas.common import ErrorResponse
@@ -45,7 +45,7 @@ router = APIRouter()
 async def get(
     request: ScraperGetRequest, scraper: Scraper = Depends(get_scraper)
 ) -> BrowsingRecord:
-    if scraper.busy:
+    if scraper.restarting:
         raise HTTPException(
             status_code=423,
             detail="The scraper is busy",
@@ -59,9 +59,7 @@ async def get(
 
     browser = scraper.browsers[request.instance_id]
 
-    if browser.remaining_lifespan() < datetime.timedelta(
-        seconds=LIFESPAN_BUFFER_GET_REQUEST
-    ):
+    if browser.remaining_lifespan() < timedelta(seconds=LIFESPAN_BUFFER_GET_REQUEST):
         raise HTTPException(
             status_code=406,
             detail=f"The browser instance with id {request.instance_id} does not have sufficient lifespan",
@@ -75,7 +73,7 @@ async def get(
     #     )
 
     try:
-        return await scraper.get(request)
+        return await scraper.scrape(request)
     except asyncio.CancelledError:
         raise HTTPException(
             status_code=503, detail="The task was cancelled by the scraper."

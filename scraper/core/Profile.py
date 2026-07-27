@@ -1,7 +1,8 @@
-import datetime
 import random
+from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
+from contract.schemas.architecture import ProfileModel
 from contract.schemas.new_instance import NewInstanceRequest
 
 from scraper.core.DatabaseHandler import DatabaseHandler
@@ -214,15 +215,19 @@ SCRAPER_ADJECTIVES = (
 
 
 class Profile(RecordProfile):
-    profile_uuid: UUID
-    profile_name: str
-    created_at: datetime.datetime
+    """
+    Already inherits the pydantic `BaseModel`.
+    """
+
+    uuid: UUID
+    name: str
+    created_at: datetime
     # browsing_history: ...
 
     @classmethod
     async def create(cls, request: NewInstanceRequest) -> "Profile":
         if not request.profile_uuid:
-            instance = await cls.__create_profile()
+            instance = await cls.__create_new_profile()
             await DatabaseHandler.insert_record_profile(instance)
             return instance
         record_profile: RecordProfile = await DatabaseHandler.get_profile_from_uuid(
@@ -231,10 +236,17 @@ class Profile(RecordProfile):
         return cls.model_validate(record_profile.model_dump())
 
     @classmethod
-    async def __create_profile(cls) -> "Profile":
+    async def __create_new_profile(cls) -> "Profile":
         instance = cls(
-            profile_uuid=uuid4(),
-            profile_name=f"{random.choice(SCRAPER_ADJECTIVES)} {random.choice(SCRAPER_FIRST_NAMES)}",
-            created_at=datetime.datetime.now(),
+            uuid=uuid4(),
+            name=f"{random.choice(SCRAPER_ADJECTIVES)} {random.choice(SCRAPER_FIRST_NAMES)}",
+            created_at=datetime.now(timezone.utc),
         )
         return instance
+
+    def to_model(self) -> ProfileModel:
+        return ProfileModel(
+            uuid=self.uuid,
+            name=self.name,
+            created_at=self.created_at,
+        )

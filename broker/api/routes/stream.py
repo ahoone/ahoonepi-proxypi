@@ -18,7 +18,7 @@ async def stream(hostname: str, instance_id: str, broker: Broker = Depends(get_b
             status_code=409, detail=f"No scraper with hostname {hostname}"
         )
 
-    if instance_id not in scraper.browsers.keys():
+    if instance_id not in scraper.browsers:
         raise HTTPException(
             status_code=409,
             detail=f"No browser instance {instance_id} for scraper {hostname}",

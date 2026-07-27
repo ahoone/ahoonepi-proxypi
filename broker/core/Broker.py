@@ -1,8 +1,8 @@
 import asyncio
-import datetime
 import os
 import random
 import traceback
+from datetime import datetime
 from typing import Literal, NoReturn
 from uuid import UUID, uuid4
 
@@ -88,7 +88,7 @@ class Broker:
 
         async def scrape_url(request: ScrapeRequest) -> ScrapeResponse:
             uuid: UUID = uuid4()
-            data: list[tuple[str, str, datetime.datetime, str, bool]] = [
+            data: list[tuple[str, str, datetime, str, bool]] = [
                 (
                     str(uuid),
                     str(request.url),
@@ -102,7 +102,7 @@ class Broker:
 
         async def scrape_urls(request: ScrapeRequest) -> ScrapeResponse:
             uuids: list[UUID] = []
-            data: list[tuple[str, str, datetime.datetime, str, bool]] = []
+            data: list[tuple[str, str, datetime, str, bool]] = []
             for url in request.url:
                 uuid = uuid4()
                 uuids.append(uuid)
@@ -123,14 +123,14 @@ class Broker:
         elif isinstance(request.url, list):
             return await scrape_urls(request)
         else:
-            raise ValueError("The payload is malformed.")
+            raise TypeError("The payload is malformed.")
 
     async def __update_available_nodes(self) -> None:
         await NodeIdentifier.update_reachable_nodes()
         reachable_node_ids: set[int] = NodeIdentifier.reachable_nodes
 
         for node_id in reachable_node_ids:
-            if node_id not in self.scrapers.keys():
+            if node_id not in self.scrapers:
                 self.scrapers[node_id] = await ScraperImage.create(node_id)
 
         for scraper in self.scrapers.values():

@@ -21,7 +21,7 @@ class Config:
         ipaddress.ip_network("::1/128"),  # IPv6 localhost
     ]
 
-    SCRAPER_DATABASE = "/data/scraper.db"
+    SCRAPER_DATABASE = "/app/data/scraper.db"
     DB_TABLE_PROFILES = "profiles"
 
     RECOVERY_PERIOD_MINIMUM = 2000  # milliseconds
