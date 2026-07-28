@@ -110,7 +110,7 @@ class Browser:
         self.recovery_period = datetime.now(timezone.utc)
 
         try:
-            self.profile = Profile.create(request)
+            self.profile = await Profile.create(request)
             self.__display = await Display.create(window_size=BROWSER_DEFAULT_WINDOW)
             self.__driver = await Driver.create(
                 display=self.__display, profile_uuid=self.profile.uuid

@@ -25,6 +25,8 @@ docker::restart() {
 
     if [[ "$node_id" == "1" ]]; then
         cd "$SCRIPT_DIR"
+        export USER_UID=$(id -u)
+        export USER_GID=$(id -g)
         docker compose -f scraper/docker-compose.yml down
         docker compose -f scraper/docker-compose.yml --env-file .env --env-file config.env up --build -d
         docker compose -f broker/docker-compose.yml down

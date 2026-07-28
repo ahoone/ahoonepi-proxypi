@@ -30,10 +30,10 @@ async def new_instance(
     request: NewInstanceRequest = Body(default_factory=NewInstanceRequest),
     scraper: Scraper = Depends(get_scraper),
 ) -> None:
-    if scraper.busy:
+    if scraper.restarting:
         raise HTTPException(
             status_code=423,
-            detail="The scraper is busy",
+            detail="The scraper is restarting",
         )
 
     if await scraper.browser_exists(request.instance_id):

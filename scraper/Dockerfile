@@ -32,8 +32,15 @@ COPY common /app/common
 RUN pip install -e common
 
 COPY . /app
-RUN groupadd -r chrome && useradd -r -g chrome -m chrome
+
+ARG USER_UID
+ARG USER_GID
+RUN groupadd --gid ${USER_GID} chrome && \
+    useradd --uid ${USER_UID} --gid ${USER_GID} --create-home chrome
+
 RUN chown -R chrome:chrome /app
+RUN mkdir -p /data && \
+    chown -R chrome:chrome /data
 
 #######################################
 # Changing container running user,

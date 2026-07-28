@@ -1,4 +1,6 @@
+import logging
 import random
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
@@ -213,39 +215,65 @@ SCRAPER_ADJECTIVES = (
     "Supreme",
 )
 
+logger = logging.getLogger(__name__)
 
-class Profile(RecordProfile):
-    """
-    Already inherits the pydantic `BaseModel`.
-    """
 
+@dataclass
+class Profile:
     uuid: UUID
     name: str
     created_at: datetime
+    is_temporary: bool = False
     # browsing_history: ...
 
     @classmethod
     async def create(cls, request: NewInstanceRequest) -> "Profile":
         if not request.profile_uuid:
-            instance = await cls.__create_new_profile()
-            await DatabaseHandler.insert_record_profile(instance)
-            return instance
-        record_profile: RecordProfile = await DatabaseHandler.get_profile_from_uuid(
-            request.profile_uuid
-        )
-        return cls.model_validate(record_profile.model_dump())
+            instance = await cls.__create_new_profile(request)
+            if not instance.is_temporary:
+                await instance.__save_profile()
+        else:
+            record_profile: RecordProfile = await DatabaseHandler.get_profile_from_uuid(
+                request.profile_uuid
+            )
+            instance = cls.from_record(record_profile)
+        return instance
 
     @classmethod
-    async def __create_new_profile(cls) -> "Profile":
+    async def __create_new_profile(cls, request: NewInstanceRequest) -> "Profile":
         instance = cls(
             uuid=uuid4(),
             name=f"{random.choice(SCRAPER_ADJECTIVES)} {random.choice(SCRAPER_FIRST_NAMES)}",
             created_at=datetime.now(timezone.utc),
+            is_temporary=request.is_temporary,
         )
         return instance
 
+    async def __save_profile(self) -> None:
+        if self.is_temporary:
+            raise RuntimeError(f"Cannot save a temporary profile: {self.uuid}")
+        await DatabaseHandler.insert_record_profile(self.to_record())
+
     def to_model(self) -> ProfileModel:
         return ProfileModel(
+            uuid=self.uuid,
+            name=self.name,
+            created_at=self.created_at,
+            is_temporary=self.is_temporary,
+        )
+
+    @classmethod
+    def from_record(cls, record_profile: RecordProfile) -> "Profile":
+        # cls.model_validate(record_profile.model_dump())
+        instance = cls(
+            uuid=record_profile.uuid,
+            name=record_profile.name,
+            created_at=record_profile.created_at,
+        )
+        return instance
+
+    def to_record(self) -> RecordProfile:
+        return RecordProfile(
             uuid=self.uuid,
             name=self.name,
             created_at=self.created_at,
