@@ -1,82 +1,51 @@
-from typing import Any
-from uuid import UUID
+from collections.abc import Iterable
+from datetime import datetime
+from uuid import UUID, uuid4
 
 import aiosqlite
 from contract.schemas.architecture import BrowsingRecord
+from pydantic import HttpUrl
 
+from broker.api.schemas.scrape import ScrapeRequest, ScrapeResponse
 from broker.Config import Config
+from broker.core.models.common import Event
 from broker.core.models.DatabaseHandler import RecordTarget
 
 
 class DatabaseHandler:
-    """
-    the handlers should be dropped
-    """
-
-    __connection: aiosqlite.Connection = None
+    __conn: aiosqlite.Connection = None
 
     @classmethod
     async def initialize(cls) -> None:
 
-        cls.__connection = await aiosqlite.connect(Config.BROKER_DATABASE)
-        cls.__connection.row_factory = aiosqlite.Row
-        # await cls.__connection.execute("PRAGMA journal_mode=WAL;")
+        cls.__conn = await aiosqlite.connect(Config.BROKER_DATABASE)
+        cls.__conn.row_factory = aiosqlite.Row
+        # await cls.__conn.execute("PRAGMA journal_mode=WAL;")
         # bug with this feature, extend the db infinitly
-        await cls.__connection.commit()
+        await cls.__conn.commit()
 
         await cls.__initialize_database()
 
     @classmethod
     async def close(cls) -> None:
-
-        if cls.__connection:
-            await cls.__connection.close()
-            cls.__connection = None
-
-    @classmethod
-    async def execute(cls, query: str, params: tuple[Any, ...] | None = None) -> None:
-        """
-        handlers not aiming for reuse (does not return a cursor)
-        but here we only have just one type of fetch per query
-        """
-        await cls.__connection.execute(query, params)
-        await cls.__connection.commit()
-
-    @classmethod
-    async def executemany(
-        cls, query: str, params: tuple[Any, ...] | None = None
-    ) -> None:
-        await cls.__connection.executemany(query, params)
-        await cls.__connection.commit()
-
-    @classmethod
-    async def fetchone(
-        cls, query: str, params: tuple[Any, ...] | None = None
-    ) -> dict[str, Any]:
-        cursor = await cls.__connection.execute(query, params)
-        return await cursor.fetchone()
-
-    @classmethod
-    async def fetchall(
-        cls, query: str, params: tuple[Any, ...] | None = None
-    ) -> list[dict[str, Any]]:
-        cursor = await cls.__connection.execute(query, params)
-        return await cursor.fetchall()
+        if cls.__conn:
+            await cls.__conn.close()
+            cls.__conn = None
 
     @classmethod
     async def __initialize_database(cls) -> None:
         if Config.BROKER_CLEAR_DB_ON_STARTUP:
-            await cls.__connection.execute(f"""
+            await cls.__conn.execute(f"""
                 DROP TABLE IF EXISTS {Config.DB_TABLE_TARGETS};
             """)
-            await cls.__connection.execute(f"""
+            await cls.__conn.execute(f"""
                 DROP TABLE IF EXISTS {Config.DB_TABLE_JOBS};
             """)
-            await cls.__connection.execute(f"""
+            await cls.__conn.execute(f"""
                 DROP TABLE IF EXISTS {Config.DB_TABLE_LOGS};
             """)
 
-        await cls.__connection.execute(f"""
+        await cls.__conn.execute(f"""
             CREATE TABLE IF NOT EXISTS {Config.DB_TABLE_TARGETS} (
                 uuid TEXT PRIMARY KEY NOT NULL,
                 url TEXT NOT NULL,
@@ -88,7 +57,7 @@ class DatabaseHandler:
             );
         """)
 
-        await cls.__connection.execute(f"""
+        await cls.__conn.execute(f"""
             CREATE TABLE IF NOT EXISTS {Config.DB_TABLE_JOBS} (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 {Config.DB_TABLE_TARGETS}_uuid TEXT NOT NULL,
@@ -110,7 +79,7 @@ class DatabaseHandler:
             );
         """)
 
-        await cls.__connection.execute(f"""
+        await cls.__conn.execute(f"""
             CREATE TABLE IF NOT EXISTS {Config.DB_TABLE_LOGS} (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 timestamp DATETIME NOT NULL,
@@ -119,7 +88,7 @@ class DatabaseHandler:
             );
         """)
 
-        await cls.__connection.commit()
+        await cls.__conn.commit()
 
     @classmethod
     async def disable_successfull_targets(cls) -> None:
@@ -136,8 +105,8 @@ class DatabaseHandler:
                         AND r.success = TRUE
                 );
         """
-        await cls.__connection.execute(query)
-        await cls.__connection.commit()
+        await cls.__conn.execute(query)
+        await cls.__conn.commit()
 
     @classmethod
     async def disable_unsuccesfull_targets(cls) -> None:
@@ -154,8 +123,8 @@ class DatabaseHandler:
                         AND r.success = FALSE
                 ) >= {Config.RETRIES};
         """
-        await cls.__connection.execute(query)
-        await cls.__connection.commit()
+        await cls.__conn.execute(query)
+        await cls.__conn.commit()
 
     @classmethod
     async def disable_unassigned_targets(cls) -> None:
@@ -164,11 +133,30 @@ class DatabaseHandler:
         we cannot drop the rows as if a try has been make, there is a request record
         pointing to the target url (which we have to keep a reference to)
         """
-        await cls.__connection.execute(f"""
+        await cls.__conn.execute(f"""
             UPDATE {Config.DB_TABLE_TARGETS} AS l
             SET enabled = FALSE;
         """)
-        await cls.__connection.commit()
+        await cls.__conn.commit()
+
+    @classmethod
+    async def get_top_target_excluding_running_ones(
+        cls, uuids: Iterable[UUID]
+    ) -> RecordTarget | None:
+        current_tasks_ids_placeholder = "".join(
+            [f"AND l.uuid != '{uuid}' " for uuid in uuids]
+        )
+        query = f"""
+            SELECT *
+            FROM {Config.DB_TABLE_TARGETS} l
+            WHERE 1=1
+                {current_tasks_ids_placeholder}
+                AND l.enabled = 1
+            ORDER BY l.expected_response_time ASC
+        """
+        cursor = await cls.__conn.execute(query)
+        response = await cursor.fetchone()
+        return RecordTarget.model_validate(dict(response)) if response else None
 
     @classmethod
     async def get_unscraped_targets(cls) -> list[RecordTarget]:
@@ -187,9 +175,10 @@ class DatabaseHandler:
             ORDER BY expected_response_time ASC
             LIMIT {Config.LIMIT_SQL_QUERIES};
         """
+        cursor = await cls.__conn.execute(query)
         return [
             RecordTarget.model_validate(dict(record))
-            for record in await cls.fetchall(query)
+            for record in await cursor.fetchall()
         ]
 
     @classmethod
@@ -207,9 +196,10 @@ class DatabaseHandler:
             ORDER BY expected_response_time ASC
             LIMIT {Config.LIMIT_SQL_QUERIES};
         """
+        cursor = await cls.__conn.execute(query)
         return [
             RecordTarget.model_validate(dict(record))
-            for record in await cls.fetchall(query)
+            for record in await cursor.fetchall()
         ]
 
     @classmethod
@@ -220,11 +210,11 @@ class DatabaseHandler:
             FROM {Config.DB_TABLE_TARGETS}
             WHERE uuid in ({placeholder});
         """
+        params = tuple(str(uuid) for uuid in uuids)
+        cursor = await cls.__conn.execute(query, params)
         return [
             RecordTarget.model_validate(dict(record))
-            for record in await cls.fetchall(
-                query, params=tuple(str(uuid) for uuid in uuids)
-            )
+            for record in await cursor.fetchall()
         ]
 
     @classmethod
@@ -269,5 +259,38 @@ class DatabaseHandler:
             )
             for record in records
         ]
-        await cls.__connection.executemany(query, rows)
-        await cls.__connection.commit()
+        await cls.__conn.executemany(query, rows)
+        await cls.__conn.commit()
+
+    @classmethod
+    async def insert_log(cls, event: Event) -> None:
+        query = f"INSERT INTO {Config.DB_TABLE_LOGS} (timestamp, detail, level) VALUES (?, ?, ?)"
+        row = (event.timestamp, event.detail, event.level)
+        await cls.__conn.execute(query, row)
+        await cls.__conn.commit()
+
+    @classmethod
+    async def insert_scrape_request(cls, request: ScrapeRequest) -> ScrapeResponse:
+        uuids: list[UUID] = []
+        query = f"""
+            INSERT INTO {Config.DB_TABLE_TARGETS}
+            (uuid, url, expected_response_time, tag, flag_lazy_loading)
+            VALUES (?, ?, ?, ?, ?)
+        """
+        rows: list[tuple[str, str, datetime, str, bool]] = []
+        urls = [request.url] if isinstance(request.url, HttpUrl) else request.url
+        for url in urls:
+            uuid = uuid4()
+            uuids.append(uuid)
+            rows.append(
+                (
+                    str(uuid),
+                    str(url),
+                    request.expected_response_time,
+                    request.tag,
+                    request.flag_lazy_loading,
+                )
+            )
+        await cls.__conn.executemany(query, rows)
+        await cls.__conn.commit()
+        return ScrapeResponse(uuid=uuids if len(uuids) > 1 else uuids[0])

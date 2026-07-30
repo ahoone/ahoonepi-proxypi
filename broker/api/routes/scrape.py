@@ -1,11 +1,10 @@
 import traceback
 
 from contract.schemas.common import ErrorResponse
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, HTTPException
 
-from broker.api.common import get_broker
 from broker.api.schemas.scrape import ScrapeRequest, ScrapeResponse
-from broker.core.Broker import Broker
+from broker.core.DatabaseHandler import DatabaseHandler
 
 router = APIRouter()
 
@@ -21,11 +20,8 @@ router = APIRouter()
     status_code=202,
     responses={500: {"model": ErrorResponse, "description": "Internal server error"}},
 )
-async def scrape(
-    request: ScrapeRequest,
-    broker: Broker = Depends(get_broker),
-) -> ScrapeResponse:
+async def scrape(request: ScrapeRequest) -> ScrapeResponse:
     try:
-        return await broker.scrape(request)
+        return await DatabaseHandler.insert_scrape_request(request)
     except Exception:
         raise HTTPException(status_code=500, detail=traceback.format_exc())

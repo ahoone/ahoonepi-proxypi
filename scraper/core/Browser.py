@@ -112,9 +112,7 @@ class Browser:
         try:
             self.profile = await Profile.create(request)
             self.__display = await Display.create(window_size=BROWSER_DEFAULT_WINDOW)
-            self.__driver = await Driver.create(
-                display=self.__display, profile_uuid=self.profile.uuid
-            )
+            self.__driver = await Driver.create(self.__display, self.profile)
             self.__streamer = Streamer(display=self.__display)
             self.__frame_unpacker = FrameUnpacker(streamer=self.__streamer)
         except:
@@ -367,11 +365,14 @@ class Browser:
         """
         Not thread safe.
         Firstly, kill the driver, the frame unpacker, and the streamer.
-        Makes sure to kill the display after the driver to avoid ending in an unproper state prone to detection.
+        Makes sure to kill the display and the profile after the driver to avoid ending in an unproper state prone to detection.
         """
         await asyncio.gather(
             self.__driver.close(),
             asyncio.to_thread(self.__frame_unpacker.kill),
             asyncio.to_thread(self.__streamer.kill),
         )
-        await asyncio.to_thread(self.__display.kill)
+        await asyncio.gather(
+            self.profile.close(),
+            asyncio.to_thread(self.__display.kill),
+        )

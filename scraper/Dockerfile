@@ -40,6 +40,7 @@ RUN groupadd --gid ${USER_GID} chrome && \
 
 RUN chown -R chrome:chrome /app
 RUN mkdir -p /data && \
+    mkdir -p /data/profiles && \
     chown -R chrome:chrome /data
 
 #######################################

@@ -2,20 +2,18 @@ import asyncio
 import os
 import random
 import traceback
-from datetime import datetime
 from typing import Literal, NoReturn
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from contract.schemas.architecture import BrowsingRecord
 from contract.schemas.get import ScraperGetRequest
-from pydantic import HttpUrl
 
 from broker.api.schemas.clear import ClearRequest
-from broker.api.schemas.scrape import ScrapeRequest, ScrapeResponse
 from broker.Config import Config
 from broker.core.BrowserImage import BrowserImage
 from broker.core.DatabaseHandler import DatabaseHandler
-from broker.core.models.Broker import BrokerModel, Event
+from broker.core.models.Broker import BrokerModel
+from broker.core.models.common import Event
 from broker.core.models.DatabaseHandler import RecordTarget
 from broker.core.NodeIdentifier import NodeIdentifier
 from broker.core.ScraperImage import ScraperImage
@@ -73,57 +71,7 @@ class Broker:
             if level != "DEBUG":
                 self.logs.insert(0, event)
                 self.logs = self.logs[: Config.BUFFER_LOGGER_SIZE]
-        query = f"INSERT INTO {Config.DB_TABLE_LOGS} (timestamp, detail, level) VALUES (?, ?, ?)"
-        await DatabaseHandler.execute(
-            query,
-            (event.timestamp, event.detail, event.level),
-        )
-
-    async def scrape(self, request: ScrapeRequest) -> ScrapeResponse:
-        query = f"""
-            INSERT INTO {Config.DB_TABLE_TARGETS}
-            (uuid, url, expected_response_time, tag, flag_lazy_loading)
-            VALUES (?, ?, ?, ?, ?)
-        """
-
-        async def scrape_url(request: ScrapeRequest) -> ScrapeResponse:
-            uuid: UUID = uuid4()
-            data: list[tuple[str, str, datetime, str, bool]] = [
-                (
-                    str(uuid),
-                    str(request.url),
-                    request.expected_response_time,
-                    request.tag,
-                    request.flag_lazy_loading,
-                )
-            ]
-            await DatabaseHandler.executemany(query, data)
-            return ScrapeResponse(uuid=uuid)
-
-        async def scrape_urls(request: ScrapeRequest) -> ScrapeResponse:
-            uuids: list[UUID] = []
-            data: list[tuple[str, str, datetime, str, bool]] = []
-            for url in request.url:
-                uuid = uuid4()
-                uuids.append(uuid)
-                data.append(
-                    (
-                        str(uuid),
-                        str(url),
-                        request.expected_response_time,
-                        request.tag,
-                        request.flag_lazy_loading,
-                    )
-                )
-            await DatabaseHandler.executemany(query, data)
-            return ScrapeResponse(uuid=uuids)
-
-        if isinstance(request.url, HttpUrl):
-            return await scrape_url(request)
-        elif isinstance(request.url, list):
-            return await scrape_urls(request)
-        else:
-            raise TypeError("The payload is malformed.")
+        await DatabaseHandler.insert_log(event)
 
     async def __update_available_nodes(self) -> None:
         await NodeIdentifier.update_reachable_nodes()
@@ -190,24 +138,9 @@ class Broker:
 
     async def __get_target(self) -> RecordTarget | None:
         async with self.__lock_current_tasks:
-            current_tasks_ids_placeholder = "".join(
-                [
-                    f"AND l.uuid != '{current_id}' "
-                    for current_id in self.__current_tasks
-                ]
+            return await DatabaseHandler.get_top_target_excluding_running_ones(
+                self.__current_tasks.keys()
             )
-            query = f"""
-                SELECT *
-                FROM {Config.DB_TABLE_TARGETS} l
-                WHERE 1=1
-                    {current_tasks_ids_placeholder}
-                    AND l.enabled = 1
-                ORDER BY l.expected_response_time ASC
-            """
-            response = await DatabaseHandler.fetchone(query)
-            if response:
-                return RecordTarget.model_validate(dict(response))
-            return None
 
     async def __distribute_task(self) -> None:
         target: RecordTarget | None = await self.__get_target()

@@ -6,6 +6,7 @@ from uuid import UUID, uuid4
 
 from contract.schemas.architecture import ProfileModel
 from contract.schemas.new_instance import NewInstanceRequest
+from pydantic import FilePath, NewPath
 
 from scraper.core.DatabaseHandler import DatabaseHandler
 from scraper.core.models.DatabaseHandler import RecordProfile
@@ -223,6 +224,7 @@ class Profile:
     uuid: UUID
     name: str
     created_at: datetime
+    user_data_dir: FilePath | NewPath
     is_temporary: bool = False
     # browsing_history: ...
 
@@ -230,8 +232,9 @@ class Profile:
     async def create(cls, request: NewInstanceRequest) -> "Profile":
         if not request.profile_uuid:
             instance = await cls.__create_new_profile(request)
-            if not instance.is_temporary:
-                await instance.__save_profile()
+            # This part should be saved when the driver is correctly closed
+            # if not instance.is_temporary:
+            #     await instance.__save_profile()
         else:
             record_profile: RecordProfile = await DatabaseHandler.get_profile_from_uuid(
                 request.profile_uuid
@@ -241,10 +244,17 @@ class Profile:
 
     @classmethod
     async def __create_new_profile(cls, request: NewInstanceRequest) -> "Profile":
+        uuid = uuid4()
+        user_data_dir = NewPath(
+            f=f"/tmp/chrome-profile-{uuid}"
+            if request.is_temporary
+            else f"/data/profiles/chrome-profile-{uuid}"
+        )
         instance = cls(
-            uuid=uuid4(),
+            uuid=uuid,
             name=f"{random.choice(SCRAPER_ADJECTIVES)} {random.choice(SCRAPER_FIRST_NAMES)}",
             created_at=datetime.now(timezone.utc),
+            user_data_dir=user_data_dir,
             is_temporary=request.is_temporary,
         )
         return instance
@@ -259,6 +269,7 @@ class Profile:
             uuid=self.uuid,
             name=self.name,
             created_at=self.created_at,
+            user_data_dir=self.user_data_dir,
             is_temporary=self.is_temporary,
         )
 
@@ -269,6 +280,7 @@ class Profile:
             uuid=record_profile.uuid,
             name=record_profile.name,
             created_at=record_profile.created_at,
+            user_data_dir=record_profile.user_data_dir,
         )
         return instance
 
@@ -277,4 +289,9 @@ class Profile:
             uuid=self.uuid,
             name=self.name,
             created_at=self.created_at,
+            user_data_dir=FilePath(f=self.user_data_dir.f),
         )
+
+    async def close(self) -> None:
+        if not self.is_temporary:
+            await self.__save_profile()
