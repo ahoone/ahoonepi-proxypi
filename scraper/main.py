@@ -6,9 +6,9 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from scraper.api.routes.close_browser import router as close_browser_router
 from scraper.api.routes.get import router as get_router
 from scraper.api.routes.get_scraper_state import router as get_scraper_state_router
-from scraper.api.routes.kill import router as kill_router
 from scraper.api.routes.new_instance import router as new_instance_router
 from scraper.api.routes.stream import router as stream_router
 from scraper.api.routes.terminate import router as terminate_router
@@ -59,7 +59,7 @@ app.add_middleware(
 
 app.include_router(get_router)
 app.include_router(get_scraper_state_router)
-app.include_router(kill_router)
+app.include_router(close_browser_router)
 app.include_router(new_instance_router)
 app.include_router(stream_router)
 app.include_router(terminate_router)

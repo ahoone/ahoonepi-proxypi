@@ -6,10 +6,10 @@ from contract.Config import Config
 
 
 class NewInstanceRequest(BaseModel):
-    profile_uuid: UUID | None = None
+    profile_uuid: UUID | None = Field(default=None)
     lifespan_in_seconds: int = Field(default=Config.BROWSER_DEFAULT_LIFESPAN)
     is_temporary: bool = Field(
-        default=False,
+        default=True,
         description=(
             "If set to `True`, a new UUID will be generated and used just one time. "
             "In that case, the field `profile_uuid` must be empty. "
@@ -23,3 +23,7 @@ class NewInstanceRequest(BaseModel):
                 "`profile_uuid` must not be provided when `is_temporary=True`"
             )
         return self
+
+
+class NewInstanceResponse(BaseModel):
+    profile_uuid: UUID

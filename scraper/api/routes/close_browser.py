@@ -1,7 +1,7 @@
 import traceback
 
+from contract.schemas.close_browser import CloseBrowserRequest
 from contract.schemas.common import ErrorResponse
-from contract.schemas.kill import KillRequest
 from fastapi import APIRouter, Depends, HTTPException
 
 from scraper.api.common import get_scraper
@@ -11,11 +11,11 @@ router = APIRouter()
 
 
 @router.post(
-    "/kill",
+    "/close_browser",
     status_code=204,
     description=(
-        "Kill the target instance correctly cleaning its tasks and processes. "
-        "Does not return if the killing was successfull, as ending the chromedriver process may take some time. "
+        "Close the target instance correctly cleaning its tasks and processes. "
+        "Does not return if the closing was successfull, as ending the chromedriver process may take some time. "
     ),
     responses={
         423: {
@@ -25,21 +25,21 @@ router = APIRouter()
         500: {"model": ErrorResponse, "description": "Internal server error"},
     },
 )
-async def kill(request: KillRequest, scraper: Scraper = Depends(get_scraper)):
-    if scraper.busy:
+async def kill(request: CloseBrowserRequest, scraper: Scraper = Depends(get_scraper)):
+    if scraper.restarting:
         raise HTTPException(
             status_code=423,
             detail="The scraper is busy",
         )
 
-    if not await scraper.browser_exists(request.instance_id):
+    if not await scraper.browser_exists(request.profile_uuid):
         raise HTTPException(
             status_code=409,
-            detail=f"No browser instance with id {request.instance_id}",
+            detail=f"No browser instance with id {request.profile_uuid}",
         )
 
     try:
-        await scraper.kill(request.instance_id)
-    except Exception:
+        await scraper.close_browser(request.profile_uuid)
+    except:
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=traceback.format_exc())

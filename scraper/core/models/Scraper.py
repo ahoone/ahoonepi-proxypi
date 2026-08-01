@@ -1,0 +1,2 @@
+class IdentifierInUse(Exception):
+    pass

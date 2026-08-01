@@ -35,6 +35,6 @@ async def get_scraper_state(scraper: Scraper = Depends(get_scraper)) -> ScraperM
 
     try:
         return await scraper.to_model()
-    except Exception:
+    except:
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=traceback.format_exc())

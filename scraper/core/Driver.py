@@ -1,5 +1,6 @@
 import asyncio
 import os
+from uuid import UUID
 
 import zendriver as uc
 
@@ -11,6 +12,7 @@ TIMEOUT_DRIVER_STOP = 600  # seconds
 
 class Driver:
     driver: uc.Browser
+    __profile_uuid: UUID
 
     @classmethod
     async def create(cls, display: Display, profile: Profile) -> "Driver":
@@ -19,6 +21,8 @@ class Driver:
         return instance
 
     async def __initialize(self, display: Display, profile: Profile) -> None:
+        self.__profile_uuid = profile.uuid
+
         os.environ["DISPLAY"] = display.display
         self.driver = await uc.start(
             headless=False,  # If headerless, Cloudflare spots us.

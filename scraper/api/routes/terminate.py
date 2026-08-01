@@ -26,7 +26,7 @@ router = APIRouter()
     },
 )
 async def terminate(scraper: Scraper = Depends(get_scraper)):
-    if scraper.busy:
+    if scraper.restarting:
         raise HTTPException(
             status_code=423,
             detail="The scraper is busy",
@@ -34,6 +34,6 @@ async def terminate(scraper: Scraper = Depends(get_scraper)):
 
     try:
         await scraper.terminate()
-    except Exception:
+    except:
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=traceback.format_exc())

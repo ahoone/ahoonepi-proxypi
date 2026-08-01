@@ -2,6 +2,7 @@ import asyncio
 import logging
 import traceback
 from datetime import datetime, timedelta, timezone
+from uuid import UUID
 
 from contract.schemas.architecture import (
     BrowserModel,
@@ -127,6 +128,10 @@ class Browser:
 
         self.initialized = True
 
+    @property
+    def uuid(self) -> UUID:
+        return self.profile.uuid
+
     def to_model(self) -> BrowserModel:
         return BrowserModel(
             profile=self.profile.to_model(),
@@ -134,17 +139,19 @@ class Browser:
             display=self.__display.display,
             created_at=self.created_at,
             expires_at=self.expires_at,
-            remaining_lifespan=self.remaining_lifespan(),
-            status=self.status(),
+            remaining_lifespan=self.remaining_lifespan,
+            status=self.status,
             score=score(self.browsing_history),
         )
 
+    @property
     def get_browsing_history(self) -> list[BrowsingRecord]:
         return self.browsing_history
 
     def stream(self):
         return self.__frame_unpacker.stream()
 
+    @property
     def status(self) -> BrowserModelStatus:
         if self.closed:
             return "closed"
@@ -157,9 +164,11 @@ class Browser:
         else:
             return "idle"
 
+    @property
     def remaining_lifespan(self) -> timedelta:
         return self.expires_at - datetime.now(timezone.utc)
 
+    @property
     def expired(self) -> bool:
         """
         Returns `True` if and only if the browser is expired.

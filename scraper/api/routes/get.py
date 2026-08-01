@@ -51,18 +51,18 @@ async def get(
             detail="The scraper is busy",
         )
 
-    if not await scraper.browser_exists(request.instance_id):
+    if not await scraper.browser_exists(request.profile_uuid):
         raise HTTPException(
             status_code=409,
-            detail=f"No browser instance with id {request.instance_id}",
+            detail=f"No browser instance with id {request.profile_uuid}",
         )
 
-    browser = scraper.browsers[request.instance_id]
+    browser = scraper.browsers[request.profile_uuid]
 
-    if browser.remaining_lifespan() < timedelta(seconds=LIFESPAN_BUFFER_GET_REQUEST):
+    if browser.remaining_lifespan < timedelta(seconds=LIFESPAN_BUFFER_GET_REQUEST):
         raise HTTPException(
             status_code=406,
-            detail=f"The browser instance with id {request.instance_id} does not have sufficient lifespan",
+            detail=f"The browser instance with id {request.profile_uuid} does not have sufficient lifespan",
         )
 
     # browser_status = browser.status()
@@ -80,6 +80,6 @@ async def get(
         )
     except BotSpottedError as e:
         raise HTTPException(status_code=503, detail=e.detail)
-    except Exception:
+    except:
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=traceback.format_exc())

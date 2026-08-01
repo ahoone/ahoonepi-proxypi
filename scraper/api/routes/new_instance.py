@@ -2,10 +2,11 @@ import traceback
 
 from contract.Config import Config
 from contract.schemas.common import ErrorResponse
-from contract.schemas.new_instance import NewInstanceRequest
+from contract.schemas.new_instance import NewInstanceRequest, NewInstanceResponse
 from fastapi import APIRouter, Body, Depends, HTTPException
 
 from scraper.api.common import get_scraper
+from scraper.core.models.Scraper import IdentifierInUse
 from scraper.core.Scraper import Scraper
 
 router = APIRouter()
@@ -27,19 +28,14 @@ router = APIRouter()
     },
 )
 async def new_instance(
-    request: NewInstanceRequest = Body(default_factory=NewInstanceRequest),
+    request: NewInstanceRequest | None = Body(NewInstanceRequest()),
     scraper: Scraper = Depends(get_scraper),
-) -> None:
+) -> NewInstanceResponse:
+
     if scraper.restarting:
         raise HTTPException(
             status_code=423,
             detail="The scraper is restarting",
-        )
-
-    if await scraper.browser_exists(request.instance_id):
-        raise HTTPException(
-            status_code=409,
-            detail=f"Browser instance with id {request.instance_id} already exists",
         )
 
     if len(scraper.browsers) > Config.MAX_INSTANCES_PER_SCRAPER:
@@ -49,7 +45,13 @@ async def new_instance(
         )
 
     try:
-        await scraper.new_instance(request)
-    except Exception:
+        uuid = await scraper.new_instance(request)
+        return NewInstanceResponse(profile_uuid=uuid)
+    except IdentifierInUse:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Browser instance with id {request.profile_uuid} already exists",
+        )
+    except:
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=traceback.format_exc())

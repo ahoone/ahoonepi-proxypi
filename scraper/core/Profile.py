@@ -248,7 +248,7 @@ class Profile:
         user_data_dir = NewPath(
             f=f"/tmp/chrome-profile-{uuid}"
             if request.is_temporary
-            else f"/data/profiles/chrome-profile-{uuid}"
+            else f"/data/profile/chrome-profile-{uuid}"
         )
         instance = cls(
             uuid=uuid,
