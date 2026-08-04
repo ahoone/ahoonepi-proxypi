@@ -8,6 +8,7 @@ services:
         CHROMIUM_SNAPSHOT_DATE: ${CHROMIUM_SNAPSHOT_DATE}
         USER_UID: ${USER_UID}
         USER_GID: ${USER_GID}
+    init: true
     env_file:
       - path: ../config.env
         required: true

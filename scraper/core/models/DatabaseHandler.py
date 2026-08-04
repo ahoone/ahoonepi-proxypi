@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, FilePath
+from pydantic import BaseModel, DirectoryPath
 
 
 class ProfileNotFoundError(Exception):
@@ -11,5 +11,5 @@ class ProfileNotFoundError(Exception):
 class RecordProfile(BaseModel):
     uuid: UUID
     name: str
+    user_data_dir: DirectoryPath
     created_at: datetime
-    user_data_dir: FilePath

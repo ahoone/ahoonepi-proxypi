@@ -2,11 +2,11 @@ import logging
 import random
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from pathlib import Path
 from uuid import UUID, uuid4
 
 from contract.schemas.architecture import ProfileModel
 from contract.schemas.new_instance import NewInstanceRequest
-from pydantic import FilePath, NewPath
 
 from scraper.core.DatabaseHandler import DatabaseHandler
 from scraper.core.models.DatabaseHandler import RecordProfile
@@ -224,7 +224,7 @@ class Profile:
     uuid: UUID
     name: str
     created_at: datetime
-    user_data_dir: FilePath | NewPath
+    user_data_dir: Path
     is_temporary: bool = False
     # browsing_history: ...
 
@@ -245,14 +245,19 @@ class Profile:
     @classmethod
     async def __create_new_profile(cls, request: NewInstanceRequest) -> "Profile":
         uuid = uuid4()
-        user_data_dir = NewPath(
-            f=f"/tmp/chrome-profile-{uuid}"
+        user_data_dir = Path(
+            f"/tmp/chrome-profile-{uuid}"
             if request.is_temporary
-            else f"/data/profile/chrome-profile-{uuid}"
+            else f"/data/profiles/chrome-profile-{uuid}"
+        )
+        name = (
+            request.profile_name
+            if request.profile_name
+            else f"{random.choice(SCRAPER_ADJECTIVES)} {random.choice(SCRAPER_FIRST_NAMES)}"
         )
         instance = cls(
             uuid=uuid,
-            name=f"{random.choice(SCRAPER_ADJECTIVES)} {random.choice(SCRAPER_FIRST_NAMES)}",
+            name=name,
             created_at=datetime.now(timezone.utc),
             user_data_dir=user_data_dir,
             is_temporary=request.is_temporary,
@@ -289,7 +294,7 @@ class Profile:
             uuid=self.uuid,
             name=self.name,
             created_at=self.created_at,
-            user_data_dir=FilePath(f=self.user_data_dir.f),
+            user_data_dir=self.user_data_dir,
         )
 
     async def close(self) -> None:

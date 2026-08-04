@@ -7,6 +7,13 @@ from contract.Config import Config
 
 class NewInstanceRequest(BaseModel):
     profile_uuid: UUID | None = Field(default=None)
+    profile_name: str | None = Field(
+        default=None,
+        description=(
+            "This field will be omitted if the given `profile_uuid` already has a name in the database. "
+            "Used primarly to give names to instances in tests. "
+        ),
+    )
     lifespan_in_seconds: int = Field(default=Config.BROWSER_DEFAULT_LIFESPAN)
     is_temporary: bool = Field(
         default=True,

@@ -7,7 +7,7 @@ import zendriver as uc
 from scraper.core.Display import Display
 from scraper.core.Profile import Profile
 
-TIMEOUT_DRIVER_STOP = 600  # seconds
+TIMEOUT_DRIVER_STOP = 20  # seconds
 
 
 class Driver:
@@ -44,6 +44,12 @@ class Driver:
         try:
             await asyncio.wait_for(self.driver.stop(), timeout=TIMEOUT_DRIVER_STOP)
         except asyncio.TimeoutError:
-            print(
-                f"failed to close the driver {self.__profile_uuid} within {TIMEOUT_DRIVER_STOP} seconds"
-            )
+            print(f"driver.stop() timed out for {self.__profile_uuid}, forcing kill")
+        finally:
+            proc = getattr(self.driver, "_process", None)
+            if proc is not None and proc.returncode is None:
+                try:
+                    proc.kill()
+                except ProcessLookupError:
+                    pass
+                await asyncio.to_thread(proc.wait)

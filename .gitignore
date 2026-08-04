@@ -14,6 +14,7 @@ keys.json
 *.db
 *.db-shm
 *.db-wal
+scraper/data/profiles/*
 
 .Trash-1000/
 

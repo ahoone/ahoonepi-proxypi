@@ -373,15 +373,23 @@ class Browser:
     async def __close_components(self) -> None:
         """
         Not thread safe.
-        Firstly, kill the driver, the frame unpacker, and the streamer.
+        Firstly, kill the driver because it is picky.
+        Then the frame unpacker, and the streamer.
         Makes sure to kill the display and the profile after the driver to avoid ending in an unproper state prone to detection.
         """
+        start_time = datetime.now(timezone.utc)
+        logger.info(
+            f"Started closing instance {self.profile.uuid} ({self.profile.name})"
+        )
+        await self.__driver.close()
         await asyncio.gather(
-            self.__driver.close(),
             asyncio.to_thread(self.__frame_unpacker.kill),
             asyncio.to_thread(self.__streamer.kill),
         )
         await asyncio.gather(
             self.profile.close(),
             asyncio.to_thread(self.__display.kill),
+        )
+        logger.info(
+            f"Closed instance {self.profile.uuid} ({self.profile.name}) in {datetime.now(timezone.utc) - start_time}"
         )

@@ -25,6 +25,7 @@ class DatabaseHandler:
             CREATE TABLE IF NOT EXISTS {Config.DB_TABLE_PROFILES} (
                 profile_uuid TEXT PRIMARY KEY NOT NULL,
                 profile_name TEXT NOT NULL,
+                user_data_dir TEXT NOT NULL,
                 created_at DATETIME NOT NULL
             )
         """)
@@ -48,7 +49,8 @@ class DatabaseHandler:
             FROM {Config.DB_TABLE_PROFILES}
             WHERE profile_uuid = ?;
         """
-        row = await cls.__conn.fetchone(query, params=(str(profile_uuid),))
+        cursor = await cls.__conn.execute(query)
+        row = await cursor.fetchone(query, params=(str(profile_uuid),))
         if not row:
             raise ProfileNotFoundError(f"No record of profile {profile_uuid} found.")
         return RecordProfile.model_validate(dict(row))
@@ -59,13 +61,15 @@ class DatabaseHandler:
             INSERT INTO {Config.DB_TABLE_PROFILES} (
                 profile_uuid,
                 profile_name,
+                user_data_dir,
                 created_at
             )
-            VALUES (?, ?, ?);
+            VALUES (?, ?, ?, ?);
         """
         row = (
-            record_profile.profile_uuid,
-            record_profile.profile_name,
+            str(record_profile.uuid),
+            record_profile.name,
+            str(record_profile.user_data_dir),
             record_profile.created_at,
         )
         await cls.__conn.execute(query, row)

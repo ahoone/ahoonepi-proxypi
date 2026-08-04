@@ -23,7 +23,7 @@ from middleware import add_middleware
 # -------------------------------------------------------------------------------- #
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(filename="scraper.log", level=logging.INFO)
+logging.basicConfig(filename="/data/scraper.log", level=logging.INFO)
 
 
 @asynccontextmanager

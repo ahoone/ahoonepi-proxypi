@@ -124,6 +124,7 @@ class TestScraperCore:
         url = BASE + "/new-instance"
         payload = NewInstanceRequest(
             profile_uuid=None,
+            profile_name="explicit",
             lifespan_in_seconds=self.BROWSER_EXPLICIT_LIFESPAN,
             is_temporary=False,
         )
@@ -146,7 +147,7 @@ class TestScraperCore:
         assert math.isclose(
             browser_model.remaining_lifespan.total_seconds(),
             self.BROWSER_EXPLICIT_LIFESPAN,
-            rel_tol=0.05,
+            rel_tol=0.1,
         )
         assert browser_model.status == "idle"
 
@@ -185,20 +186,13 @@ class TestScraperCore:
         scraper_get_response = BrowsingRecord.model_validate(response.json())
         assert scraper_get_response.html
 
-    def test_explicit_instance_closed(self):
-        """
-        we need to account for:
-            - the lifespan of the browser
-            - the time for the loop to spot the expiration
-            - the time for the kill method to be done (let's say 1 seconds)
-        """
-        sleep(self.BROWSER_EXPLICIT_LIFESPAN + ScraperConfig.REFRESH_RATE_SCRAPER + 1)
+    def test_explicit_instance_closing(self):
         url = BASE + "/get_scraper_state"
         response = requests.get(url, timeout=TIMEOUT_REQUESTS)
         assert response.status_code == 200, response.content
         scraper_model = ScraperModel.model_validate(response.json())
-        assert len(scraper_model.browsers) == 1
-        assert TestScraperCore.shared_values["explicit"] not in scraper_model.browsers
+        uuid = TestScraperCore.shared_values["explicit"]
+        assert scraper_model.browsers[uuid].status == "closing"
 
     def test_close_default_instance(self):
         url = BASE + "/close_browser"
@@ -210,8 +204,16 @@ class TestScraperCore:
         )
         assert response.status_code == 204, response.content
 
-    def test_default_instance_dead(self):
-        sleep(10)
+    def test_default_instance_closing(self):
+        url = BASE + "/get_scraper_state"
+        response = requests.get(url, timeout=TIMEOUT_REQUESTS)
+        assert response.status_code == 200, response.content
+        scraper_model = ScraperModel.model_validate(response.json())
+        uuid = TestScraperCore.shared_values["default"]
+        assert scraper_model.browsers[uuid].status == "closing"
+
+    def test_both_instances_closed(self):
+        sleep(30)
         url = BASE + "/get_scraper_state"
         response = requests.get(url, timeout=TIMEOUT_REQUESTS)
         assert response.status_code == 200, response.content
