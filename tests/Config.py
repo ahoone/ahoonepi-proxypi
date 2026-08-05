@@ -9,3 +9,7 @@ class Config:
 
     ORIGIN_BROKER = f"http://{WIREGUARD_NETWORK_PREFIX}.{NODE_ID}:{HTTP_PORT_BROKER}"
     ORIGIN_SCRAPER = f"http://{WIREGUARD_NETWORK_PREFIX}.{NODE_ID}:{HTTP_PORT_SCRAPER}"
+
+    TIMEOUT_GET = 60  # in seconds (long, as we are waiting for either "complete" or "interactive" status)
+    TIMEOUT_REQUESTS = 4  # seconds (small generic)
+    TIMEOUT_TERMINATE = 8  # seconds (medium)
