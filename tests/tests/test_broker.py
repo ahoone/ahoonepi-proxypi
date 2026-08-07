@@ -147,8 +147,7 @@
 #                 url, json=payload.model_dump(mode="json"), timeout=TIMEOUT_REQUESTS
 #             )
 #             if (response.status_code != 425) or (
-#                 datetime.datetime.now() - start_time
-#                 > datetime.timedelta(seconds=TIMEOUT_GET)
+#                 datetime.now(timezone.utc) - start_time > timedelta(seconds=TIMEOUT_GET)
 #             ):
 #                 break
 #             sleep(2)

@@ -1,5 +1,5 @@
 import ipaddress
-from typing import Awaitable, Callable, List, Union
+from typing import Awaitable, Callable
 
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 
 def add_middleware(
     app: FastAPI,
-    allowed_networks: List[Union[ipaddress.IPv4Network, ipaddress.IPv6Network]],
+    allowed_networks: list[ipaddress.IPv4Network | ipaddress.IPv6Network],
 ) -> None:
 
     @app.get("/check-ip", include_in_schema=False)

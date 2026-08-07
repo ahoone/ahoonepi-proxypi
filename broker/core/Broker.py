@@ -6,7 +6,7 @@ from typing import Literal, NoReturn
 from uuid import UUID
 
 from contract.schemas.architecture import BrowsingRecord
-from contract.schemas.get import ScraperGetRequest
+from contract.schemas.scrape import ScraperScrapeRequest
 
 from broker.api.schemas.clear import ClearRequest
 from broker.Config import Config
@@ -105,9 +105,8 @@ class Broker:
         if not len(availables):
             await self.log("unable to create a new instance", level="WARNING")
             return False
-        random_id = f"{random.choice(Config.SCRAPER_ADJECTIVES)} {random.choice(Config.SCRAPER_FIRST_NAMES)}"
-        await self.scrapers[random.choice(availables)].new_instance(random_id)
-        await self.log(f"created browser {random_id}")
+        uuid = await self.scrapers[random.choice(availables)].new_instance()
+        await self.log(f"created browser {uuid}")
         return True
 
     async def get_available_browser(self) -> BrowserImage | None:
@@ -152,15 +151,15 @@ class Broker:
         if not browser:
             await self.log(f"no browser available for {target.uuid}", level="WARNING")
             return
-        await self.log(f"browser {browser.instance_id} selected for {target.uuid}")
-        payload = ScraperGetRequest(
-            instance_id=browser.instance_id,
+        await self.log(f"browser {browser.uuid} selected for {target.uuid}")
+        payload = ScraperScrapeRequest(
+            profile_uuid=browser.uuid,
             url=target.url,
             flag_lazy_loading=target.flag_lazy_loading,
         )
         async with self.__lock_current_tasks:
             self.__current_tasks[target.uuid] = asyncio.create_task(
-                browser.get(target.uuid, payload)
+                browser.scrape(target.uuid, payload)
             )
 
     async def __unwrap_task(
@@ -293,10 +292,10 @@ class Broker:
                 await DatabaseHandler.insert_job_records(completed)
             self.__current_tasks = {}
 
-    async def kill_browsers(self) -> None:
+    async def close_browsers(self) -> None:
         await asyncio.gather(
             *[
-                scraper.kill_browsers()
+                scraper.close_browsers()
                 for scraper in self.scrapers.values()
                 if scraper.online
             ]
@@ -307,6 +306,6 @@ class Broker:
             if request.flag_cancel_running_tasks:
                 await self.cancel_running_tasks()
             if request.flag_kill_browsers:
-                await self.kill_browsers()
+                await self.close_browsers()
             if request.flag_clear_unassigned_targets:
                 await DatabaseHandler.disable_unassigned_targets()

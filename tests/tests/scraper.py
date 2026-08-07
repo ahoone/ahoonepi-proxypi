@@ -4,7 +4,7 @@ from uuid import UUID
 import requests
 from contract.schemas.architecture import BrowsingRecord, ScraperModel
 from contract.schemas.close_browser import CloseBrowserRequest
-from contract.schemas.get import ScraperGetRequest
+from contract.schemas.scrape import ScraperScrapeRequest
 
 from tests.Config import Config
 
@@ -49,8 +49,8 @@ def assert_instance_health(instance_uuid: UUID, lifespan_in_seconds: int):
     assert browser_model.status == "idle"
 
 
-def assert_get_page(payload: ScraperGetRequest):
-    url = Config.ORIGIN_SCRAPER + "/get"
+def assert_get_page(payload: ScraperScrapeRequest):
+    url = Config.ORIGIN_SCRAPER + "/scrape"
     response = requests.post(
         url, json=payload.model_dump(mode="json"), timeout=Config.TIMEOUT_GET
     )

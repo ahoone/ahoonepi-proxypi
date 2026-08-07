@@ -8,7 +8,7 @@ class ProfileNotFoundError(Exception):
     pass
 
 
-class RecordProfile(BaseModel):
+class ProfileRecord(BaseModel):
     uuid: UUID
     name: str
     user_data_dir: DirectoryPath

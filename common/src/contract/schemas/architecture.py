@@ -6,10 +6,14 @@ from pydantic import BaseModel, Field, HttpUrl, computed_field
 
 
 class BrowsingRecord(BaseModel):
-    """Safe to be exported to SQLite."""
+    """
+    Safe to be exported to SQLite.
+    Structure used by both the Scraper and the Broker for the `scrape` endpoint.
+    Only saved by the Broker.
+    """
 
-    profile_uuid: UUID | None = None
     target_uuid: UUID | None = None
+    profile_uuid: UUID
     url: HttpUrl
     status: (
         Literal[
@@ -75,6 +79,16 @@ class BrowserModel(BaseModel):
     remaining_lifespan: timedelta
     status: BrowserModelStatus
     score: float
+
+    @computed_field
+    @property
+    def uuid(self) -> UUID:
+        return self.profile.uuid
+
+    @computed_field
+    @property
+    def name(self) -> str:
+        return self.profile.name
 
 
 class ScraperModel(BaseModel):

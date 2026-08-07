@@ -64,7 +64,7 @@ async def collect(
         FROM {Config.DB_TABLE_JOBS}
         WHERE 1=1
             AND success = TRUE
-            AND {Config.DB_TABLE_TARGETS}_uuid = '{request.uuid}'
+            AND target_uuid = '{request.uuid}'
         ORDER BY id ASC
     """
     try:

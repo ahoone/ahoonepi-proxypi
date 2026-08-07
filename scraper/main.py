@@ -1,29 +1,26 @@
 import asyncio
 import logging
-import sys
 from contextlib import asynccontextmanager
 
+from common.middleware import add_middleware
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from scraper.api.routes.close_browser import router as close_browser_router
-from scraper.api.routes.get import router as get_router
 from scraper.api.routes.get_scraper_state import router as get_scraper_state_router
 from scraper.api.routes.new_instance import router as new_instance_router
+from scraper.api.routes.scrape import router as get_router
 from scraper.api.routes.stream import router as stream_router
 from scraper.api.routes.terminate import router as terminate_router
 from scraper.Config import Config
 from scraper.core.DatabaseHandler import DatabaseHandler
 from scraper.core.Scraper import Scraper
 
-sys.path.insert(0, "/plugins")
-from middleware import add_middleware
-
 # -------------------------------------------------------------------------------- #
 # -------------------------------------------------------------------------------- #
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(filename="/data/scraper.log", level=logging.INFO)
+logging.basicConfig(filename=Config.SCRAPER_LOGS, level=logging.INFO)
 
 
 @asynccontextmanager

@@ -1,10 +1,10 @@
 import asyncio
 import traceback
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 from contract.schemas.architecture import BrowsingRecord
 from contract.schemas.common import ErrorResponse
-from contract.schemas.get import ScraperGetRequest
+from contract.schemas.scrape import ScraperScrapeRequest
 from fastapi import APIRouter, Depends, HTTPException
 
 from scraper.api.common import get_scraper
@@ -17,7 +17,7 @@ router = APIRouter()
 
 
 @router.post(
-    "/get",
+    "/scrape",
     description=(
         "Core function to scrape a web page. "
         "Can support spam calls and execute the requests sequentially, with no guarantee on the first one to resolve. "
@@ -42,8 +42,8 @@ router = APIRouter()
         },
     },
 )
-async def get(
-    request: ScraperGetRequest, scraper: Scraper = Depends(get_scraper)
+async def scrape(
+    request: ScraperScrapeRequest, scraper: Scraper = Depends(get_scraper)
 ) -> BrowsingRecord:
     if scraper.restarting:
         raise HTTPException(

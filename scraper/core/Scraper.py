@@ -6,8 +6,8 @@ from uuid import UUID
 
 from contract.Config import Config as ContractConfig
 from contract.schemas.architecture import BrowsingRecord, ScraperModel
-from contract.schemas.get import ScraperGetRequest
 from contract.schemas.new_instance import NewInstanceRequest
+from contract.schemas.scrape import ScraperScrapeRequest
 
 from scraper.Config import Config
 from scraper.core.Browser import Browser
@@ -135,7 +135,7 @@ class Scraper:
             self.browsers[browser.uuid] = browser
         return browser.uuid
 
-    async def scrape(self, request: ScraperGetRequest) -> BrowsingRecord:
+    async def scrape(self, request: ScraperScrapeRequest) -> BrowsingRecord:
         return await self.browsers[request.profile_uuid].scrape(request)
 
     def __close_expired_instances(self) -> None:

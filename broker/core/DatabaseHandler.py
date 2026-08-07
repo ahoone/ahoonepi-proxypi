@@ -60,7 +60,8 @@ class DatabaseHandler:
         await cls.__conn.execute(f"""
             CREATE TABLE IF NOT EXISTS {Config.DB_TABLE_JOBS} (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                {Config.DB_TABLE_TARGETS}_uuid TEXT NOT NULL,
+                target_uuid TEXT NOT NULL,
+                profile_uuid TEXT NOT NULL,
                 success BOOLEAN NOT NULL,
                 status TEXT NOT NULL,
                 tab_state TEXT,
@@ -75,7 +76,7 @@ class DatabaseHandler:
                 timedelta_get_content FLOAT,
                 traceback TEXT,
                 http_error_code INT,
-                FOREIGN KEY ({Config.DB_TABLE_TARGETS}_uuid) REFERENCES {Config.DB_TABLE_TARGETS}(uuid)
+                FOREIGN KEY (target_uuid) REFERENCES {Config.DB_TABLE_TARGETS}(uuid)
             );
         """)
 
@@ -101,7 +102,7 @@ class DatabaseHandler:
                     SELECT 1
                     FROM {Config.DB_TABLE_JOBS} r
                     WHERE 1=1
-                        AND r.{Config.DB_TABLE_TARGETS}_uuid = l.uuid
+                        AND r.target_uuid = l.uuid
                         AND r.success = TRUE
                 );
         """
@@ -119,7 +120,7 @@ class DatabaseHandler:
                     SELECT COUNT(*)
                     FROM {Config.DB_TABLE_JOBS} r
                     WHERE 1=1
-                        AND r.{Config.DB_TABLE_TARGETS}_uuid = l.uuid
+                        AND r.target_uuid = l.uuid
                         AND r.success = FALSE
                 ) >= {Config.RETRIES};
         """
@@ -169,7 +170,7 @@ class DatabaseHandler:
                     SELECT 1
                     FROM {Config.DB_TABLE_JOBS} r
                     WHERE 1=1
-                        AND r.{Config.DB_TABLE_TARGETS}_uuid = l.uuid
+                        AND r.target_uuid = l.uuid
                         AND r.success = TRUE
                 )
             ORDER BY expected_response_time ASC
@@ -190,7 +191,7 @@ class DatabaseHandler:
                 SELECT 1
                 FROM {Config.DB_TABLE_JOBS} r
                 WHERE 1=1
-                    AND r.{Config.DB_TABLE_TARGETS}_uuid = l.uuid
+                    AND r.target_uuid = l.uuid
                     AND r.success = TRUE
                 )
             ORDER BY expected_response_time ASC
@@ -221,7 +222,8 @@ class DatabaseHandler:
     async def insert_job_records(cls, records: list[BrowsingRecord]):
         query = f"""
             INSERT INTO {Config.DB_TABLE_JOBS} (
-                {Config.DB_TABLE_TARGETS}_uuid,
+                target_uuid,
+                profile_uuid,
                 success,
                 status,
                 tab_state,
@@ -242,6 +244,7 @@ class DatabaseHandler:
         rows = [
             (
                 str(record.target_uuid),
+                str(record.profile_uuid),
                 record.success,
                 record.status,
                 record.tab_state,
@@ -261,6 +264,19 @@ class DatabaseHandler:
         ]
         await cls.__conn.executemany(query, rows)
         await cls.__conn.commit()
+
+    @classmethod
+    async def get_job_records_from_profile_uuid(
+        cls, profile_uuid: UUID
+    ) -> list[BrowsingRecord]:
+        query = f"""
+            SELECT *
+            FROM {Config.DB_TABLE_JOBS}
+            WHERE profile_uuid = {profile_uuid}
+        """
+        cursor = await cls.__conn.execute(query)
+        rows = await cursor.fetchall()
+        return [BrowsingRecord.model_validate(row) for row in rows]
 
     @classmethod
     async def insert_log(cls, event: Event) -> None:

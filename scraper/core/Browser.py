@@ -9,12 +9,11 @@ from contract.schemas.architecture import (
     BrowserModelStatus,
     BrowsingRecord,
 )
-from contract.schemas.get import ScraperGetRequest
 from contract.schemas.new_instance import NewInstanceRequest
+from contract.schemas.scrape import ScraperScrapeRequest
 from zendriver.core.cloudflare import cf_is_interactive_challenge_present, verify_cf
 from zendriver_ext.Tab import TabExt
 
-from scraper.core.DatabaseHandler import DatabaseHandler
 from scraper.core.Display import Display
 from scraper.core.Driver import Driver
 from scraper.core.FrameUnpacker import FrameUnpacker
@@ -128,10 +127,6 @@ class Browser:
 
         self.initialized = True
 
-    @property
-    def uuid(self) -> UUID:
-        return self.profile.uuid
-
     def to_model(self) -> BrowserModel:
         return BrowserModel(
             profile=self.profile.to_model(),
@@ -145,11 +140,8 @@ class Browser:
         )
 
     @property
-    def get_browsing_history(self) -> list[BrowsingRecord]:
-        return self.browsing_history
-
-    def stream(self):
-        return self.__frame_unpacker.stream()
+    def uuid(self) -> UUID:
+        return self.profile.uuid
 
     @property
     def status(self) -> BrowserModelStatus:
@@ -178,7 +170,10 @@ class Browser:
         """
         return self.expires_at < datetime.now(timezone.utc)
 
-    async def scrape(self, request: ScraperGetRequest) -> BrowsingRecord:
+    def stream(self):
+        return self.__frame_unpacker.stream()
+
+    async def scrape(self, request: ScraperScrapeRequest) -> BrowsingRecord:
         """
         Thread safe.
         Cannot be used with `asyncio.wait_for` because
@@ -190,7 +185,7 @@ class Browser:
         and to have `Browser.get_or_abort` to raise after `asyncio.CancelledError`.
 
         Args:
-            request (ScraperGetRequest): Description.
+            request (ScraperScrapeRequest): Description.
 
         Returns:
             BrowsingRecord: Description.
@@ -209,17 +204,17 @@ class Browser:
             async with self.__lock_active_tasks:
                 self.active_tasks.discard(task)
 
-    async def __get_or_abort(self, request: ScraperGetRequest) -> BrowsingRecord:
+    async def __get_or_abort(self, request: ScraperScrapeRequest) -> BrowsingRecord:
         """
         Thread safe.
 
         Args:
-            request (ScraperGetRequest): Description.
+            request (ScraperScrapeRequest): Description.
 
         Returns:
             BrowsingRecord: Description.
         """
-        browsing_record = BrowsingRecord(url=request.url)
+        browsing_record = BrowsingRecord(profile_uuid=self.uuid, url=request.url)
         try:
             async with self.__lock_get:
                 delta = (
@@ -239,7 +234,7 @@ class Browser:
         return browsing_record
 
     async def __get(
-        self, request: ScraperGetRequest, browsing_record: BrowsingRecord
+        self, request: ScraperScrapeRequest, browsing_record: BrowsingRecord
     ) -> None:
         """
         Not thread safe.
@@ -255,7 +250,7 @@ class Browser:
         - returns.
 
         Args:
-            request (ScraperGetRequest): Description.
+            request (ScraperScrapeRequest): Description.
             browsing_record (BrowsingRecord): Description.
         """
 

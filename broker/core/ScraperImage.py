@@ -1,26 +1,28 @@
 import asyncio
 import json
-import sys
+import logging
 import traceback
 from ipaddress import IPv6Address
 from string import Template
+from uuid import UUID
 
 import httpx
 from contract.schemas.architecture import ScraperModel
+from contract.schemas.new_instance import NewInstanceRequest, NewInstanceResponse
+from proxypi_socket import proxypi
 
 from broker.Config import Config
 from broker.core.BrowserImage import BrowserImage
 from broker.core.models.ScraperImage import ScraperImageModel
 from broker.core.NodeIdentifier import NodeIdentifier
 
-sys.path.insert(0, "/plugins")
-import proxypi
-
 PROXYPI_COMMAND_INFO = Template("info $node_id")
 TIMEOUT_SCRAPER_HTTP_REQUEST = 4  # seconds
 TIMEOUT_SCRAPER_HTTP_REQUEST_NEW_INSTANCE = 10  # seconds
 REFRESH_PERIOD_SCRAPER = 0.1  # seconds
 BACKOFF_REFRESH_PERIOD_SCRAPER = 180  # seconds
+
+logger = logging.getLogger(__name__)
 
 
 class ScraperImage:
@@ -54,7 +56,7 @@ class ScraperImage:
     ram_usage: str
     available: bool
     # electricity_consumption: float  # what unit ? over what period ?
-    browsers: dict[str, BrowserImage]
+    browsers: dict[UUID, BrowserImage]
     # score: float  # score for the proxy ?
     __next_refresh_timestamp: float
 
@@ -71,7 +73,7 @@ class ScraperImage:
             browsers=dict(
                 sorted(
                     [
-                        (browser.instance_id, browser.to_model())
+                        (browser.uuid, browser.to_model())
                         for browser in self.browsers.values()
                     ],
                     key=lambda browser: browser[1].created_at,
@@ -120,17 +122,21 @@ class ScraperImage:
             self.ram_specs = scraper_model.ram_specs
             self.ram_usage = scraper_model.ram_usage
             self.available = scraper_model.can_create_browser
-            self.browsers = {
-                instance_id: BrowserImage(instance_id, self.passport, browser_model)
-                for instance_id, browser_model in scraper_model.browsers.items()
-            }
+            for profile_uuid, browser_model in scraper_model.browsers.items():
+                if profile_uuid not in self.browsers:
+                    self.browsers[profile_uuid] = await BrowserImage.create(
+                        self.passport, browser_model
+                    )
+            for profile_uuid in self.browsers:
+                if profile_uuid not in scraper_model.browsers:
+                    del profile_uuid
         except httpx.ReadTimeout:
-            print(
+            logger.warning(
                 f"[{self.passport.vpn_address}:{Config.HTTP_PORT_SCRAPER}] Took too much time to response. "
                 "The remote scraper container must be busy. "
             )
         except httpx.ConnectError:
-            print(
+            logger.warning(
                 f"[{self.passport.vpn_address}:{Config.HTTP_PORT_SCRAPER}] Unable to connect. "
                 f"Will backoff for {BACKOFF_REFRESH_PERIOD_SCRAPER} seconds. "
                 "Check for the remote scraper container running. "
@@ -138,27 +144,26 @@ class ScraperImage:
             self.__next_refresh_timestamp = loop.time() + BACKOFF_REFRESH_PERIOD_SCRAPER
             return
         except Exception as e:
-            print(f"[{self.passport.vpn_address}:{Config.HTTP_PORT_SCRAPER}] {e}")
-            print(traceback.format_exc())
+            logger.error(
+                f"[{self.passport.vpn_address}:{Config.HTTP_PORT_SCRAPER}] {e}"
+            )
+            logger.error(traceback.format_exc())
         self.__next_refresh_timestamp = loop.time() + REFRESH_PERIOD_SCRAPER
 
     async def new_instance(
         self,
-        instance_id: str,
-        lifespan_in_seconds: int | None = None,
-        window_size: tuple[int, int] | None = None,
-    ) -> bool:
-        payload = {"instance_id": instance_id}
-        if lifespan_in_seconds:
-            payload["lifespan_in_seconds"] = lifespan_in_seconds
-        if window_size:
-            payload["window_size"] = window_size
+        payload: NewInstanceRequest | None = None,
+    ) -> UUID:
+        if not payload:
+            payload = NewInstanceRequest()
         response = await self.passport.client.post(
             f"http://{self.passport.vpn_address}:{Config.HTTP_PORT_SCRAPER}/new-instance",
             json=payload,
             timeout=TIMEOUT_SCRAPER_HTTP_REQUEST_NEW_INSTANCE,
         )
-        return response.status_code == 201
+        response.raise_for_status()
+        response_model = NewInstanceResponse.model_validate(response.json())
+        return response_model.profile_uuid
 
-    async def kill_browsers(self) -> None:
-        await asyncio.gather(*[browser.kill() for browser in self.browsers.values()])
+    async def close_browsers(self) -> None:
+        await asyncio.gather(*[browser.close() for browser in self.browsers.values()])

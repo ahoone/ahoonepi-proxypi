@@ -23,6 +23,7 @@ class Config:
         ipaddress.ip_network("::1/128"),  # IPv6 localhost
     ]
 
+    BROKER_LOGS = "/data/broker.log"
     BROKER_DATABASE = "/data/broker.db"
     BROKER_CLEAR_DB_ON_STARTUP = True
     DB_TABLE_TARGETS = "targets"

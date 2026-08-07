@@ -4,7 +4,7 @@ from uuid import UUID
 import aiosqlite
 
 from scraper.Config import Config
-from scraper.core.models.DatabaseHandler import ProfileNotFoundError, RecordProfile
+from scraper.core.models.DatabaseHandler import ProfileNotFoundError, ProfileRecord
 
 
 class DatabaseHandler:
@@ -31,7 +31,7 @@ class DatabaseHandler:
         """)
 
     @classmethod
-    async def get_profile_from_uuid(cls, profile_uuid: UUID) -> RecordProfile:
+    async def get_profile_from_uuid(cls, profile_uuid: UUID) -> ProfileRecord:
         """
         Summary.
 
@@ -39,7 +39,7 @@ class DatabaseHandler:
             profile_uuid (UUID): Description.
 
         Returns:
-            RecordProfile: Description.
+            ProfileRecord: Description.
 
         Raises:
             ValueError: If the target `UUID` is not found.
@@ -53,10 +53,10 @@ class DatabaseHandler:
         row = await cursor.fetchone(query, params=(str(profile_uuid),))
         if not row:
             raise ProfileNotFoundError(f"No record of profile {profile_uuid} found.")
-        return RecordProfile.model_validate(dict(row))
+        return ProfileRecord.model_validate(dict(row))
 
     @classmethod
-    async def insert_record_profile(cls, record_profile: RecordProfile):
+    async def insert_profile_record(cls, profile_record: ProfileRecord) -> None:
         query = f"""
             INSERT INTO {Config.DB_TABLE_PROFILES} (
                 profile_uuid,
@@ -67,10 +67,10 @@ class DatabaseHandler:
             VALUES (?, ?, ?, ?);
         """
         row = (
-            str(record_profile.uuid),
-            record_profile.name,
-            str(record_profile.user_data_dir),
-            record_profile.created_at,
+            str(profile_record.uuid),
+            profile_record.name,
+            str(profile_record.user_data_dir),
+            profile_record.created_at,
         )
         await cls.__conn.execute(query, row)
         await cls.__conn.commit()

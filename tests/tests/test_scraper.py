@@ -1,15 +1,12 @@
-import math
 import threading
 from time import sleep
-from uuid import UUID
 
 import pytest
 import requests
 from contract.Config import Config as ContractConfig
-from contract.schemas.architecture import BrowsingRecord, ScraperModel
 from contract.schemas.close_browser import CloseBrowserRequest
-from contract.schemas.get import ScraperGetRequest
 from contract.schemas.new_instance import NewInstanceRequest, NewInstanceResponse
+from contract.schemas.scrape import ScraperScrapeRequest
 from tests.scraper import (
     assert_get_page,
     assert_health,
@@ -82,7 +79,7 @@ class TestScraperCore:
         assert_instances_count(2)
 
     def test_get_page_explicit_instance(self):
-        payload = ScraperGetRequest(
+        payload = ScraperScrapeRequest(
             profile_uuid=TestScraperCore.shared_values["explicit"],
             url=URLGenerator.next(),
             flag_lazy_loading=False,
@@ -90,7 +87,7 @@ class TestScraperCore:
         assert_get_page(payload)
 
     def test_get_page_default_instance(self):
-        payload = ScraperGetRequest(
+        payload = ScraperScrapeRequest(
             profile_uuid=TestScraperCore.shared_values["default"],
             url=URLGenerator.next(),
             flag_lazy_loading=False,
@@ -132,7 +129,7 @@ class TestScraperCore:
         )
 
     def test_get_page_recreated_explicit_instance(self):
-        payload = ScraperGetRequest(
+        payload = ScraperScrapeRequest(
             profile_uuid=TestScraperCore.shared_values["explicit"],
             url=URLGenerator.next(),
             flag_lazy_loading=False,
@@ -172,8 +169,8 @@ class TestScraperIntense:
     def test_simultaneous_get_page(self):
 
         def get_one_page():
-            url = BASE + "/get"
-            payload = ScraperGetRequest(
+            url = BASE + "/scrape"
+            payload = ScraperScrapeRequest(
                 profile_uuid=TestScraperIntense.shared_values["default"],
                 url=URLGenerator.next(),
                 flag_lazy_loading=False,
@@ -210,8 +207,8 @@ class TestScraperIntense:
         assert_instances_count(0)
 
     def test_get_page_after_instance_dead(self):
-        url = BASE + "/get"
-        payload = ScraperGetRequest(
+        url = BASE + "/scrape"
+        payload = ScraperScrapeRequest(
             profile_uuid=TestScraperIntense.shared_values["default"],
             url=URLGenerator.next(),
             flag_lazy_loading=False,

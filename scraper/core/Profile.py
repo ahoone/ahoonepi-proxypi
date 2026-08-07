@@ -9,7 +9,7 @@ from contract.schemas.architecture import ProfileModel
 from contract.schemas.new_instance import NewInstanceRequest
 
 from scraper.core.DatabaseHandler import DatabaseHandler
-from scraper.core.models.DatabaseHandler import RecordProfile
+from scraper.core.models.DatabaseHandler import ProfileRecord
 
 SCRAPER_FIRST_NAMES = (
     "Noah",
@@ -226,20 +226,17 @@ class Profile:
     created_at: datetime
     user_data_dir: Path
     is_temporary: bool = False
-    # browsing_history: ...
 
     @classmethod
     async def create(cls, request: NewInstanceRequest) -> "Profile":
         if not request.profile_uuid:
             instance = await cls.__create_new_profile(request)
-            # This part should be saved when the driver is correctly closed
-            # if not instance.is_temporary:
-            #     await instance.__save_profile()
+            # await instance.__save_profile()
         else:
-            record_profile: RecordProfile = await DatabaseHandler.get_profile_from_uuid(
+            profile_record: ProfileRecord = await DatabaseHandler.get_profile_from_uuid(
                 request.profile_uuid
             )
-            instance = cls.from_record(record_profile)
+            instance = cls.from_record(profile_record)
         return instance
 
     @classmethod
@@ -267,7 +264,7 @@ class Profile:
     async def __save_profile(self) -> None:
         if self.is_temporary:
             raise RuntimeError(f"Cannot save a temporary profile: {self.uuid}")
-        await DatabaseHandler.insert_record_profile(self.to_record())
+        await DatabaseHandler.insert_profile_record(self.to_record())
 
     def to_model(self) -> ProfileModel:
         return ProfileModel(
@@ -279,18 +276,17 @@ class Profile:
         )
 
     @classmethod
-    def from_record(cls, record_profile: RecordProfile) -> "Profile":
-        # cls.model_validate(record_profile.model_dump())
+    def from_record(cls, profile_record: ProfileRecord) -> "Profile":
         instance = cls(
-            uuid=record_profile.uuid,
-            name=record_profile.name,
-            created_at=record_profile.created_at,
-            user_data_dir=record_profile.user_data_dir,
+            uuid=profile_record.uuid,
+            name=profile_record.name,
+            created_at=profile_record.created_at,
+            user_data_dir=profile_record.user_data_dir,
         )
         return instance
 
-    def to_record(self) -> RecordProfile:
-        return RecordProfile(
+    def to_record(self) -> ProfileRecord:
+        return ProfileRecord(
             uuid=self.uuid,
             name=self.name,
             created_at=self.created_at,
