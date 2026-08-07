@@ -64,7 +64,7 @@ class Broker:
     async def log(
         self,
         detail: str,
-        level: Literal["DEBUG", "INFO", "WARNING"] | None = "INFO",
+        level: Literal["DEBUG", "INFO", "WARNING"] = "INFO",
     ) -> None:
         async with self.__lock_logs:
             event = Event(detail=detail, level=level)

@@ -7,7 +7,9 @@ from contract.Config import Config as ContractConfig
 from contract.schemas.close_browser import CloseBrowserRequest
 from contract.schemas.new_instance import NewInstanceRequest, NewInstanceResponse
 from contract.schemas.scrape import ScraperScrapeRequest
-from tests.scraper import (
+
+from tests.Config import Config
+from tests.tests.scraper import (
     assert_get_page,
     assert_health,
     assert_instance_closing,
@@ -16,8 +18,6 @@ from tests.scraper import (
     close_instance,
     terminate_scraper,
 )
-
-from tests.Config import Config
 from tests.URLGenerator import URLGenerator
 
 BASE = Config.ORIGIN_SCRAPER

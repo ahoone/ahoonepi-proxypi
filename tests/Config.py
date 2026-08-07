@@ -13,3 +13,5 @@ class Config:
     TIMEOUT_GET = 60  # in seconds (long, as we are waiting for either "complete" or "interactive" status)
     TIMEOUT_REQUESTS = 4  # seconds (small generic)
     TIMEOUT_TERMINATE = 8  # seconds (medium)
+    TIMEOUT_CLEAR = 20  # seconds (needs sometime to kill instances)
+    LATENCY = 4  # seconds (time we give to the broker to handle requests)
