@@ -9,7 +9,7 @@ from contract.schemas.new_instance import NewInstanceRequest, NewInstanceRespons
 from contract.schemas.scrape import ScraperScrapeRequest
 
 from tests.Config import Config
-from tests.tests.scraper import (
+from tests.tests.helper_scraper import (
     assert_get_page,
     assert_health,
     assert_instance_closing,

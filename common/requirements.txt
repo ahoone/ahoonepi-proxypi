@@ -1,4 +1,0 @@
-pydantic==2.12.5
-pydantic_core==2.41.5
-zendriver==0.15.3
-fastapi==0.122.0

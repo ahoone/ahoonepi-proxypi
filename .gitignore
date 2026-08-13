@@ -1,65 +1,41 @@
-scraper/issues.md
-test.py
+# Python
+**/__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.python_history
+py_envs/
 
-*.egg-info
-/.env
+# Environment / secrets
+.env
 *.key
 keys.json
-
 *.conf
+
+# Logs
 *.log
 *.log.[0-9]*
 *.log.[0-9]*.gz
+
+# Databases
 *.sqlite
 *.db
 *.db-shm
-*.db-wal
-scraper/data/profiles/*
+*.db-wal*
 
-.Trash-1000/
+# Data
+**/data/*
 
-# npm
-.npm/
-node_modules/
-package-lock.json
-package.json
-
-# Python
-py_envs/
-.python_history
-__pycache__/
-
-# DDNS data
-ddns/*.txt
-ddns/*.log
-
-# NPM data
-nginx-proxy-manager/data/
-nginx-proxy-manager/letsencrypt/
-
-# Editor directories and files
+# IDEs / editors
 .vscode/*
 !.vscode/extensions.json
-.idea
-.DS_Store
+.idea/
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
 
-# Admin panel
-.bash_history
-.bash_logout
-.bashrc
-.config/
-.gitconfig
-.lesshst
-.profile
-.selected_editor
-.ssh/
-.sudo_as_admin_successful
-.viminfo
-.docker/
-.local/
-.cache
+# OS
+.DS_Store
+.Trash-1000/

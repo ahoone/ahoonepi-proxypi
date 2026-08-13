@@ -1,17 +1,22 @@
 [project]
-name = "common"
+name = "ahoonepi-internal-interface"
 version = "0.1.0"
-dynamic = ["dependencies"]
+requires-python = ">=3.10"
+dependencies = [
+    "pydantic==2.12.5",
+    "pydantic_core==2.41.5",
+    "zendriver==0.15.3",
+    "fastapi==0.122.0",
+]
 
 [build-system]
-requires = ["setuptools>=61", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
-[tool.setuptools]
-package-dir = {"" = "src"}
-
-[tool.setuptools.dynamic]
-dependencies = { file = ["requirements.txt"] }
-
-[tool.setuptools.packages.find]
-where = ["src"]
+[tool.hatch.build.targets.wheel]
+packages = [
+    "src/common",
+    "src/contract",
+    "src/proxypi_socket",
+    "src/zendriver_ext",
+]

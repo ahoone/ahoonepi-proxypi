@@ -10,7 +10,10 @@ from broker.api.schemas.collect import CollectRequest, CollectResponse
 from broker.api.schemas.scrape import ScrapeRequest, ScrapeResponse
 from broker.core.models.Broker import BrokerModel
 from tests.Config import Config
-from tests.tests.broker import assert_one_scraper_no_requests_no_targets, clear_broker
+from tests.tests.helper_broker import (
+    assert_one_scraper_no_requests_no_targets,
+    clear_broker,
+)
 from tests.URLGenerator import URLGenerator
 
 
