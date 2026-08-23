@@ -1,26 +1,19 @@
+import asyncio
+
 from typer import Typer
 
-from proxypi.Config import config
+import proxypi.commands.ssh
+from proxypi.common.core import listen
 
 app = Typer()
 
 
 @app.command()
-def hello(name: str):
-    print(f"hello {name}")
+def test_listen():
+    print(listen())
 
 
-@app.command()
-def goodbye(name: str, formal: bool = False):
-    if formal:
-        print(f"bye mister {name}")
-    else:
-        print(f"bye {name}")
-
-
-@app.command()
-def print_config():
-    print(config)
+app.add_typer(proxypi.commands.ssh.app, name="ssh")
 
 
 if __name__ == "__main__":

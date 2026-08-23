@@ -1,0 +1,57 @@
+import asyncio
+from datetime import timedelta
+
+import typer
+
+from proxypi.common.core import execute_command, listen
+from proxypi.common.types import Port, SSHPingResponse
+from proxypi.common.utils import print_table, to_table
+
+app = typer.Typer()
+
+TIMEOUT_PING = 60  # seconds
+
+
+async def ping_one(port: Port) -> SSHPingResponse:
+    instructions = [
+        "printf",
+        "'%s|%s|%s|%s|%s'",
+        "$(hostname)",
+        "$(. ahoonepi-proxypi/.env && echo $PROXY_ID)",
+        "$(date +%s%6N)",
+        "$(curl ifconfig.me 2>/dev/null || echo 'N/A')",
+        "$(date +%s%6N)",
+    ]
+
+    stdout, timedelta_ssh = await execute_command(port, instructions, TIMEOUT_PING)
+
+    stdout = stdout.strip().split("|")
+    start_internet_beacon = timedelta(microseconds=int(stdout[2]))
+    end_internet_beacon = timedelta(microseconds=int(stdout[4]))
+
+    return SSHPingResponse(
+        hostname=stdout[0],
+        node_id=stdout[1],
+        port=port,
+        ipv6_address=stdout[3],
+        timedelta_ssh_rtt=timedelta_ssh - start_internet_beacon + end_internet_beacon,
+        timedelta_internet=end_internet_beacon - start_internet_beacon,
+    )
+
+
+async def ping_all() -> list[SSHPingResponse]:
+    ports = listen()
+
+    rows: list[SSHPingResponse] = await asyncio.gather(
+        *[ping_one(port) for port in ports],
+        return_exceptions=True,
+    )
+
+    return rows
+
+
+@app.command()
+def ping():
+    rows = asyncio.run(ping_all())
+    table = to_table(rows)
+    print_table(table)
