@@ -18,9 +18,14 @@ def to_table(array: list[T]) -> Table:
     for field in model_type.model_fields:
         table.add_column(field)
 
-    for response in array:
+    for object in array:
         table.add_row(
-            *(str(getattr(response, field)) for field in model_type.model_fields)
+            *[
+                str(getattr(object, field))
+                if getattr(object, field) is not None
+                else ""
+                for field in model_type.model_fields
+            ]
         )
 
     return table

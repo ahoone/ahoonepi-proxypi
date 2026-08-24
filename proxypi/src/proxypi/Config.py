@@ -6,11 +6,13 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from proxypi.common.types import Port
 
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+
 
 class Config(BaseSettings):
     model_config = SettingsConfigDict(
         extra="ignore",
-        env_file="config.env",
+        env_file=PROJECT_ROOT / "config.env",
         env_file_encoding="utf-8",
     )
 

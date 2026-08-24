@@ -3,9 +3,13 @@ from datetime import timedelta
 
 import typer
 
-from proxypi.common.core import execute_command, listen
+from proxypi.common.core import (
+    execute_command,
+    listen,
+)
 from proxypi.common.types import Port, SSHPingResponse
 from proxypi.common.utils import print_table, to_table
+from proxypi.Config import PROJECT_ROOT
 
 app = typer.Typer()
 
@@ -17,13 +21,13 @@ async def ping_one(port: Port) -> SSHPingResponse:
         "printf",
         "'%s|%s|%s|%s|%s'",
         "$(hostname)",
-        "$(. ahoonepi-proxypi/.env && echo $PROXY_ID)",
+        f"$(. {PROJECT_ROOT}/.env && echo $PROXY_ID)",
         "$(date +%s%6N)",
         "$(curl ifconfig.me 2>/dev/null || echo 'N/A')",
         "$(date +%s%6N)",
     ]
 
-    stdout, timedelta_ssh = await execute_command(port, instructions, TIMEOUT_PING)
+    stdout, timedelta_exec = await execute_command(port, instructions, TIMEOUT_PING)
 
     stdout = stdout.strip().split("|")
     start_internet_beacon = timedelta(microseconds=int(stdout[2]))
@@ -34,7 +38,30 @@ async def ping_one(port: Port) -> SSHPingResponse:
         node_id=stdout[1],
         port=port,
         ipv6_address=stdout[3],
-        timedelta_ssh_rtt=timedelta_ssh - start_internet_beacon + end_internet_beacon,
+        timedelta_ssh_rtt=timedelta_exec - start_internet_beacon + end_internet_beacon,
+        timedelta_internet=end_internet_beacon - start_internet_beacon,
+    )
+
+
+async def ping_lighthouse() -> SSHPingResponse:
+    instructions = [
+        "printf",
+        "'%s|%s|%s|%s'",
+        "$(hostname)",
+        "$(date +%s%6N)",
+        "$(curl ifconfig.me 2>/dev/null || echo 'N/A')",
+        "$(date +%s%6N)",
+    ]
+
+    stdout, _ = await execute_command(None, instructions, TIMEOUT_PING)
+
+    stdout = stdout.strip().split("|")
+    start_internet_beacon = timedelta(microseconds=int(stdout[1]))
+    end_internet_beacon = timedelta(microseconds=int(stdout[3]))
+
+    return SSHPingResponse(
+        hostname=stdout[0],
+        ipv6_address=stdout[2],
         timedelta_internet=end_internet_beacon - start_internet_beacon,
     )
 
@@ -43,8 +70,9 @@ async def ping_all() -> list[SSHPingResponse]:
     ports = listen()
 
     rows: list[SSHPingResponse] = await asyncio.gather(
+        ping_lighthouse(),
         *[ping_one(port) for port in ports],
-        return_exceptions=True,
+        return_exceptions=False,
     )
 
     return rows

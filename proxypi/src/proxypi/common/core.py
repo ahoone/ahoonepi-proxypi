@@ -1,5 +1,8 @@
 import asyncio
+import sys
+from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta, timezone
+from typing import Any, Literal, TextIO, TypeAlias
 
 from pydantic import FilePath
 
@@ -44,78 +47,130 @@ def listen(
     return found
 
 
+async def __read_stream(
+    stream: asyncio.StreamReader,
+    output: TextIO,
+    chunks: list[bytes],
+) -> None:
+    while chunk := await stream.read(4096):
+        chunks.append(chunk)
+        output.buffer.write(chunk)
+        output.buffer.flush()
+
+
 async def execute_command(
-    port: Port,
+    port: Port | None,
     command: list[str],
     timeout: float,
+    mode: Literal["hold", "flush_duplicate", "flush_main"] = "hold",
     lighthouse_private_key_path: FilePath = config.lighthouse_private_key_path,
     tcp_connection_timeout: int = config.tcp_connection_timeout,
     proxypi_user: str = config.proxypi_user,
 ) -> tuple[str, timedelta]:
-    """
-    Executes a command on ONE node.
 
-    Args:
-        port (Port): Description.
-        command (list[str]): Description.
-        timeout (float): Description.
-        lighthouse_private_key_path (FilePath): Description, optional (default: config.lighthouse_private_key_path).
-        tcp_connection_timeout (int): Description, optional (default: config.tcp_connection_timeout).
-        proxypi_user (str): Description, optional (default: config.proxypi_user).
+    if mode in ["hold", "flush_duplicate"]:
+        stdout = asyncio.subprocess.PIPE
+        stderr = asyncio.subprocess.PIPE
+    elif mode == "flush_main":
+        stdout = None
+        stderr = None
+    else:
+        raise ValueError(f"invalid mode: {mode!r}")
 
-    Returns:
-        str: std_out of the subprocess.
-
-    Raises:
-        RuntimeError: Description.
-    """
-    proc: asyncio.subprocess.Process | None = None
-
-    conn = [
-        "ssh",
-        "-i",
-        str(lighthouse_private_key_path),
-        "-o",
-        "StrictHostKeyChecking=no",
-        "-o",
-        f"ConnectTimeout={tcp_connection_timeout}",
-        "-p",
-        str(port),
-        f"{proxypi_user}@localhost",
-        *command,
-    ]
-
-    try:
-        start_beacon = datetime.now(timezone.utc)
+    if port is not None:
+        if port not in listen():
+            raise KeyError(f"given {port} is not currently in use") from None
+        conn = [
+            "ssh",
+            "-i",
+            str(lighthouse_private_key_path),
+            "-o",
+            "StrictHostKeyChecking=no",
+            "-o",
+            f"ConnectTimeout={tcp_connection_timeout}",
+            "-p",
+            str(port),
+            f"{proxypi_user}@localhost",
+        ]
         proc = await asyncio.create_subprocess_exec(
             *conn,
+            *command,
             stdin=asyncio.subprocess.DEVNULL,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
+            stdout=stdout,
+            stderr=stderr,
+        )
+    else:
+        proc = await asyncio.create_subprocess_shell(
+            " ".join(command),
+            stdin=asyncio.subprocess.DEVNULL,
+            stdout=stdout,
+            stderr=stderr,
         )
 
-        stdout, stderr = await asyncio.wait_for(
-            proc.communicate(),
-            timeout=timeout,
-        )
+    command_stdout: str
+    command_stderr: str
 
-        end_beacon = datetime.now(timezone.utc)
+    start_beacon = datetime.now(timezone.utc)
+    end_beacon: datetime
+
+    try:
+        if mode == "hold":
+            command_stdout, command_stderr = await asyncio.wait_for(
+                proc.communicate(),
+                timeout=timeout,
+            )
+            end_beacon = datetime.now(timezone.utc)
+
+            command_stdout = command_stdout.decode()
+            command_stderr = command_stderr.decode()
+
+        if mode == "flush_duplicate":
+            stdout_chunks: list[bytes] = []
+            stderr_chunks: list[bytes] = []
+            await asyncio.wait_for(
+                asyncio.gather(
+                    __read_stream(proc.stdout, sys.stdout, stdout_chunks),
+                    __read_stream(proc.stderr, sys.stderr, stderr_chunks),
+                    proc.wait(),
+                ),
+                timeout=timeout,
+            )
+
+            end_beacon = datetime.now(timezone.utc)
+
+            command_stdout = b"".join(stdout_chunks).decode()
+            command_stderr = b"".join(stderr_chunks).decode()
+        elif mode == "flush_main":
+            await asyncio.wait_for(
+                proc.wait(),
+                timeout=timeout,
+            )
+
+            end_beacon = datetime.now(timezone.utc)
+
+            command_stdout = ""
+            command_stderr = ""
 
         if proc.returncode != 0:
             raise RuntimeError(
                 f"`{' '.join(command)}` failed with "
-                + f"`{proc.returncode}` at `{port}@localhost`: "
-                + f"{stderr.decode().strip()}"
+                + f"`{proc.returncode}` on host: "
+                + f"{command_stderr.strip()}"
             )
 
-        return (stdout.decode(), end_beacon - start_beacon)
+        return (
+            command_stdout,
+            end_beacon - start_beacon,
+        )
 
     except asyncio.TimeoutError:
-        raise RuntimeError(
-            f"`{' '.join(command)}` timed out after {timeout}s at `{port}@localhost`"
+        proc.terminate()
+        await proc.wait()
+        raise TimeoutError(
+            f"`{' '.join(command)}` timed out after {timeout}s on host`"
         ) from None
 
     finally:
-        if proc and proc.returncode is None:
+        if proc.returncode is None:
             proc.terminate()
             await proc.wait()
