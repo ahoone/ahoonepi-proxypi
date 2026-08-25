@@ -1,13 +1,13 @@
 import asyncio
 import sys
-from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta, timezone
-from typing import Any, Literal, TextIO, TypeAlias
+from shlex import quote
+from typing import Literal, TextIO
 
 from pydantic import FilePath
 
 from proxypi.common.types import Port
-from proxypi.Config import config
+from proxypi.config import config
 
 
 def listen(
@@ -58,15 +58,39 @@ async def __read_stream(
         output.buffer.flush()
 
 
+ExecuteCommandMode = Literal["hold", "flush_duplicate", "flush_main"]
+
+
 async def execute_command(
     port: Port | None,
-    command: list[str],
+    bash_command: str,
     timeout: float,
-    mode: Literal["hold", "flush_duplicate", "flush_main"] = "hold",
+    mode: ExecuteCommandMode = "hold",
     lighthouse_private_key_path: FilePath = config.lighthouse_private_key_path,
     tcp_connection_timeout: int = config.tcp_connection_timeout,
     proxypi_user: str = config.proxypi_user,
 ) -> tuple[str, timedelta]:
+    """
+    Summary.
+
+    Args:
+        port (Port | None): If None, runs on the host.
+        bash_command (str): To give as ready to use, the function encapsulates in `bash -lc '...'`.
+        timeout (float): Description.
+        mode (ExecuteCommandMode): Description, optional (default: "hold").
+        lighthouse_private_key_path (FilePath): Description, optional (default: config.lighthouse_private_key_path).
+        tcp_connection_timeout (int): Description, optional (default: config.tcp_connection_timeout).
+        proxypi_user (str): Description, optional (default: config.proxypi_user).
+
+    Returns:
+        tuple[str, timedelta]: Description.
+
+    Raises:
+        ValueError: Description.
+        KeyError: Description.
+        RuntimeError: Description.
+        TimeoutError: Description.
+    """
 
     if mode in ["hold", "flush_duplicate"]:
         stdout = asyncio.subprocess.PIPE
@@ -77,11 +101,14 @@ async def execute_command(
     else:
         raise ValueError(f"invalid mode: {mode!r}")
 
+    bash_command = f"bash -lc {quote(bash_command)}"
+
     if port is not None:
         if port not in listen():
             raise KeyError(f"given {port} is not currently in use") from None
         conn = [
             "ssh",
+            "-tt",
             "-i",
             str(lighthouse_private_key_path),
             "-o",
@@ -94,21 +121,21 @@ async def execute_command(
         ]
         proc = await asyncio.create_subprocess_exec(
             *conn,
-            *command,
+            bash_command,
             stdin=asyncio.subprocess.DEVNULL,
             stdout=stdout,
             stderr=stderr,
         )
     else:
         proc = await asyncio.create_subprocess_shell(
-            " ".join(command),
+            bash_command,
             stdin=asyncio.subprocess.DEVNULL,
             stdout=stdout,
             stderr=stderr,
         )
 
-    command_stdout: str
-    command_stderr: str
+    command_stdout: str | bytes
+    command_stderr: str | bytes
 
     start_beacon = datetime.now(timezone.utc)
     end_beacon: datetime
@@ -153,7 +180,7 @@ async def execute_command(
 
         if proc.returncode != 0:
             raise RuntimeError(
-                f"`{' '.join(command)}` failed with "
+                f"`{bash_command}` failed with "
                 + f"`{proc.returncode}` on host: "
                 + f"{command_stderr.strip()}"
             )
@@ -167,7 +194,7 @@ async def execute_command(
         proc.terminate()
         await proc.wait()
         raise TimeoutError(
-            f"`{' '.join(command)}` timed out after {timeout}s on host`"
+            f"`{bash_command}` timed out after {timeout}s on host`"
         ) from None
 
     finally:

@@ -9,7 +9,7 @@ from proxypi.common.core import (
 )
 from proxypi.common.types import Port, SSHPingResponse
 from proxypi.common.utils import print_table, to_table
-from proxypi.Config import PROJECT_ROOT
+from proxypi.config import PROJECT_ROOT
 
 app = typer.Typer()
 
@@ -27,7 +27,9 @@ async def ping_one(port: Port) -> SSHPingResponse:
         "$(date +%s%6N)",
     ]
 
-    stdout, timedelta_exec = await execute_command(port, instructions, TIMEOUT_PING)
+    bash_command = " ".join(instructions)
+
+    stdout, timedelta_exec = await execute_command(port, bash_command, TIMEOUT_PING)
 
     stdout = stdout.strip().split("|")
     start_internet_beacon = timedelta(microseconds=int(stdout[2]))
@@ -53,7 +55,9 @@ async def ping_lighthouse() -> SSHPingResponse:
         "$(date +%s%6N)",
     ]
 
-    stdout, _ = await execute_command(None, instructions, TIMEOUT_PING)
+    bash_command = " ".join(instructions)
+
+    stdout, _ = await execute_command(None, bash_command, TIMEOUT_PING)
 
     stdout = stdout.strip().split("|")
     start_internet_beacon = timedelta(microseconds=int(stdout[1]))

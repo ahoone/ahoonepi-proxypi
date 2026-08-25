@@ -5,6 +5,7 @@ from typer import Typer
 import proxypi.commands.docker
 import proxypi.commands.ssh
 from proxypi.common.core import listen
+from proxypi.config import PROJECT_ROOT, config
 
 app = Typer()
 
@@ -16,6 +17,13 @@ app = Typer()
 
 app.add_typer(proxypi.commands.ssh.app, name="ssh")
 app.add_typer(proxypi.commands.docker.app, name="docker")
+
+
+@app.command()
+def display_config():
+    print(
+        f"project-dir: {PROJECT_ROOT}",
+    )
 
 
 if __name__ == "__main__":

@@ -1,42 +1,133 @@
 import asyncio
 from datetime import timedelta
-from pathlib import Path
-from shlex import quote
+from typing import Literal
 
 import typer
+from pydantic import BaseModel
 
-from proxypi.common.core import execute_command, listen
-from proxypi.common.types import Port, SSHPingResponse
+from proxypi.common.core import ExecuteCommandMode, execute_command, listen
+from proxypi.common.typer import PortOption
+from proxypi.common.types import Port
 from proxypi.common.utils import print_table, to_table
-from proxypi.Config import PROJECT_ROOT
+from proxypi.config import config
 
 app = typer.Typer()
 
-TIMEOUT_BUILD_SCRAPER = 120  # seconds
+TIMEOUT_RESTART = 200  # seconds
 
 
-async def restart_scraper_service(
+class RestartServiceResponse(BaseModel):
+    port: Port | None
+    returncode: Literal["success", "failed", "skipped", "timeout"]
+    duration: timedelta | None
+
+
+async def coroutine_restart_services(
     port: Port | None = None,
-) -> tuple[bool, timedelta | None]:
+    scraper: bool = False,
+    broker: bool = False,
+    timeout_in_seconds: int = TIMEOUT_RESTART,
+    mode: ExecuteCommandMode = "hold",
+) -> RestartServiceResponse:
     instructions = [
-        f"cd {quote(str(PROJECT_ROOT))} &&",
-        "export USER_UID=$(id -u) &&",
-        "export USER_GID=$(id -g) &&",
-        "docker compose -f scraper/docker-compose.yml down &&",
-        "docker compose -f scraper/docker-compose.yml --env-file .env --env-file config.env up --build -d",
+        f"cd /home/{config.proxypi_user}/{config.git_repository}",
+        "source .env",
     ]
 
-    try:
-        _, timedelta_exec = await execute_command(
-            None, instructions, TIMEOUT_BUILD_SCRAPER, mode="flush_duplicate"
+    if scraper:
+        instructions.extend(
+            [
+                '[[ "${NODE_ROLE:-}" == *"SCRAPER"* ]] || { echo "ERROR: NODE_ROLE must be SCRAPER (got: ${NODE_ROLE:-unset})" >&2; exit 0; }',
+                "export USER_UID=$(id -u)",
+                "export USER_GID=$(id -g)",
+                "docker compose -f scraper/docker-compose.yml down",
+                "docker compose -f scraper/docker-compose.yml --env-file .env --env-file config.env up --build -d",
+            ]
         )
-        return (True, timedelta_exec)
+
+    if broker:
+        instructions.extend(
+            [
+                '[[ "${NODE_ROLE:-}" == *"LIGHTHOUSE"* ]] || { echo "ERROR: NODE_ROLE must be LIGHTHOUSE (got: ${NODE_ROLE:-unset})" >&2; exit 0; }',
+                "docker compose -f broker/docker-compose.yml down",
+                "docker compose -f broker/docker-compose.yml --env-file .env --env-file config.env up --build -d",
+            ]
+        )
+
+    bash_command = " && ".join(instructions)
+
+    try:
+        response, duration = await execute_command(
+            port, bash_command, timeout_in_seconds, mode=mode
+        )
+        if "ERROR: NODE_ROLE must be" in response:
+            return RestartServiceResponse(
+                port=port, returncode="skipped", duration=duration
+            )
+
+        return RestartServiceResponse(
+            port=port, returncode="success", duration=duration
+        )
     except RuntimeError:
-        return (False, None)
+        return RestartServiceResponse(port=port, returncode="failed", duration=None)
     except TimeoutError:
-        return (False, timedelta(seconds=TIMEOUT_BUILD_SCRAPER))
+        return RestartServiceResponse(
+            port=port,
+            returncode="timeout",
+            duration=timedelta(seconds=timeout_in_seconds),
+        )
+
+
+async def restart_services_on_all(
+    scraper: bool = False,
+    broker: bool = False,
+    timeout_in_seconds: int = TIMEOUT_RESTART,
+) -> list[RestartServiceResponse]:
+
+    return await asyncio.gather(
+        *[
+            coroutine_restart_services(
+                port=port,
+                scraper=scraper,
+                broker=broker,
+                timeout_in_seconds=timeout_in_seconds,
+                mode="hold",
+            )
+            for port in [None, *listen()]
+        ]
+    )
 
 
 @app.command()
-def test_restart_host_scraper():
-    print(asyncio.run(restart_scraper_service()))
+def restart_services(
+    all: bool = False,
+    port: PortOption = None,
+    scraper: bool = False,
+    broker: bool = False,
+    timeout_in_seconds: int = TIMEOUT_RESTART,
+):
+
+    if all and port:
+        raise ValueError("if you want to restart on all Pis, do not provide a port")
+
+    if not (scraper or broker):
+        raise ValueError("you must at least provide one service to restart")
+
+    if all:
+        rows: list[RestartServiceResponse] = asyncio.run(
+            restart_services_on_all(
+                scraper=scraper, broker=broker, timeout_in_seconds=timeout_in_seconds
+            )
+        )
+        table = to_table(rows)
+        print_table(table)
+    else:
+        _ = asyncio.run(
+            coroutine_restart_services(
+                port=port,
+                scraper=scraper,
+                broker=broker,
+                timeout_in_seconds=timeout_in_seconds,
+                mode="flush_main",
+            )
+        )

@@ -19,6 +19,7 @@ class Config(BaseSettings):
     ssh_network_base: Port
     wireguard_network: IPv4Network
     proxypi_user: str
+    git_repository: str
 
     lighthouse_private_key_path: FilePath = Path.home() / ".ssh" / "id_proxy_access"
     tcp_connection_timeout: int = 8  # seconds
