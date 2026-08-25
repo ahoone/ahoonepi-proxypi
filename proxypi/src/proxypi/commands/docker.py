@@ -4,11 +4,12 @@ from typing import Literal
 
 import typer
 from pydantic import BaseModel
+from rich.progress import track
 
 from proxypi.common.core import ExecuteCommandMode, execute_command, listen
 from proxypi.common.typer import PortOption
 from proxypi.common.types import Port
-from proxypi.common.utils import print_table, to_table
+from proxypi.common.utils import print_table, run_with_spinner, to_table
 from proxypi.config import config
 
 app = typer.Typer()
@@ -115,9 +116,15 @@ def restart_services(
 
     if all:
         rows: list[RestartServiceResponse] = asyncio.run(
-            restart_services_on_all(
-                scraper=scraper, broker=broker, timeout_in_seconds=timeout_in_seconds
-            )
+            run_with_spinner(
+                restart_services_on_all(
+                    scraper=scraper,
+                    broker=broker,
+                    timeout_in_seconds=timeout_in_seconds,
+                ),
+                "Restarting services...",
+                timeout_in_seconds,
+            ),
         )
         table = to_table(rows)
         print_table(table)

@@ -8,7 +8,7 @@ from proxypi.common.core import (
     listen,
 )
 from proxypi.common.types import Port, SSHPingResponse
-from proxypi.common.utils import print_table, to_table
+from proxypi.common.utils import print_table, run_with_spinner, to_table
 from proxypi.config import PROJECT_ROOT
 
 app = typer.Typer()
@@ -84,6 +84,6 @@ async def ping_all() -> list[SSHPingResponse]:
 
 @app.command()
 def ping():
-    rows = asyncio.run(ping_all())
+    rows = asyncio.run(run_with_spinner(ping_all(), "Pinging...", TIMEOUT_PING))
     table = to_table(rows)
     print_table(table)
