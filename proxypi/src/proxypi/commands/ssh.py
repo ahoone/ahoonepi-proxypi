@@ -1,13 +1,12 @@
 import asyncio
 from datetime import timedelta
+from ipaddress import IPv6Address
 
 import typer
+from pydantic import BaseModel
 
-from proxypi.common.core import (
-    execute_command,
-    listen,
-)
-from proxypi.common.types import Port, SSHPingResponse
+from proxypi.common.core import execute_command, listen
+from proxypi.common.types import Port
 from proxypi.common.utils import print_table, run_with_spinner, to_table
 from proxypi.config import PROJECT_ROOT
 
@@ -16,7 +15,19 @@ app = typer.Typer()
 TIMEOUT_PING = 60  # seconds
 
 
-async def ping_one(port: Port) -> SSHPingResponse:
+class SSHPingResponse(BaseModel):
+    hostname: str
+    node_id: int | None = None
+    port: Port | None = None
+    ipv6_address: IPv6Address
+    timedelta_ssh_rtt: timedelta | None = None
+    timedelta_internet: timedelta
+
+
+async def ping_one(
+    port: Port,
+    timeout: int,
+) -> SSHPingResponse:
     instructions = [
         "printf",
         "'%s|%s|%s|%s|%s'",
@@ -29,7 +40,7 @@ async def ping_one(port: Port) -> SSHPingResponse:
 
     bash_command = " ".join(instructions)
 
-    stdout, timedelta_exec = await execute_command(port, bash_command, TIMEOUT_PING)
+    stdout, timedelta_exec = await execute_command(port, bash_command, timeout)
 
     stdout = stdout.strip().split("|")
     start_internet_beacon = timedelta(microseconds=int(stdout[2]))
@@ -45,7 +56,7 @@ async def ping_one(port: Port) -> SSHPingResponse:
     )
 
 
-async def ping_lighthouse() -> SSHPingResponse:
+async def ping_lighthouse(timeout: int) -> SSHPingResponse:
     instructions = [
         "printf",
         "'%s|%s|%s|%s'",
@@ -57,7 +68,7 @@ async def ping_lighthouse() -> SSHPingResponse:
 
     bash_command = " ".join(instructions)
 
-    stdout, _ = await execute_command(None, bash_command, TIMEOUT_PING)
+    stdout, _ = await execute_command(None, bash_command, timeout)
 
     stdout = stdout.strip().split("|")
     start_internet_beacon = timedelta(microseconds=int(stdout[1]))
@@ -70,12 +81,13 @@ async def ping_lighthouse() -> SSHPingResponse:
     )
 
 
-async def ping_all() -> list[SSHPingResponse]:
+@run_with_spinner("Pinging...")
+async def ping_all(timeout: int) -> list[SSHPingResponse]:
     ports = listen()
 
     rows: list[SSHPingResponse] = await asyncio.gather(
-        ping_lighthouse(),
-        *[ping_one(port) for port in ports],
+        ping_lighthouse(timeout),
+        *[ping_one(port, timeout) for port in ports],
         return_exceptions=False,
     )
 
@@ -84,6 +96,6 @@ async def ping_all() -> list[SSHPingResponse]:
 
 @app.command()
 def ping():
-    rows = asyncio.run(run_with_spinner(ping_all(), "Pinging...", TIMEOUT_PING))
+    rows = asyncio.run(ping_all(TIMEOUT_PING))
     table = to_table(rows)
     print_table(table)

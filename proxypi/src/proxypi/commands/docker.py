@@ -27,7 +27,7 @@ async def coroutine_restart_services(
     port: Port | None = None,
     scraper: bool = False,
     broker: bool = False,
-    timeout_in_seconds: int = TIMEOUT_RESTART,
+    timeout: int = TIMEOUT_RESTART,
     mode: ExecuteCommandMode = "hold",
 ) -> RestartServiceResponse:
     instructions = [
@@ -59,7 +59,7 @@ async def coroutine_restart_services(
 
     try:
         response, duration = await execute_command(
-            port, bash_command, timeout_in_seconds, mode=mode
+            port, bash_command, timeout, mode=mode
         )
         if "ERROR: NODE_ROLE must be" in response:
             return RestartServiceResponse(
@@ -75,14 +75,15 @@ async def coroutine_restart_services(
         return RestartServiceResponse(
             port=port,
             returncode="timeout",
-            duration=timedelta(seconds=timeout_in_seconds),
+            duration=timedelta(seconds=timeout),
         )
 
 
+@run_with_spinner("Restarting services...")
 async def restart_services_on_all(
     scraper: bool = False,
     broker: bool = False,
-    timeout_in_seconds: int = TIMEOUT_RESTART,
+    timeout: int = TIMEOUT_RESTART,
 ) -> list[RestartServiceResponse]:
 
     return await asyncio.gather(
@@ -91,7 +92,7 @@ async def restart_services_on_all(
                 port=port,
                 scraper=scraper,
                 broker=broker,
-                timeout_in_seconds=timeout_in_seconds,
+                timeout=timeout,
                 mode="hold",
             )
             for port in [None, *listen()]
@@ -105,7 +106,7 @@ def restart_services(
     port: PortOption = None,
     scraper: bool = False,
     broker: bool = False,
-    timeout_in_seconds: int = TIMEOUT_RESTART,
+    timeout: int = TIMEOUT_RESTART,
 ):
 
     if all and port:
@@ -116,14 +117,10 @@ def restart_services(
 
     if all:
         rows: list[RestartServiceResponse] = asyncio.run(
-            run_with_spinner(
-                restart_services_on_all(
-                    scraper=scraper,
-                    broker=broker,
-                    timeout_in_seconds=timeout_in_seconds,
-                ),
-                "Restarting services...",
-                timeout_in_seconds,
+            restart_services_on_all(
+                scraper=scraper,
+                broker=broker,
+                timeout=timeout,
             ),
         )
         table = to_table(rows)
@@ -134,7 +131,7 @@ def restart_services(
                 port=port,
                 scraper=scraper,
                 broker=broker,
-                timeout_in_seconds=timeout_in_seconds,
+                timeout=timeout,
                 mode="flush_main",
             )
         )
