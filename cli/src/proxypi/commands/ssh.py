@@ -40,7 +40,9 @@ async def ping_one(
 
     bash_command = " ".join(instructions)
 
-    stdout, timedelta_exec = await execute_command(bash_command, port=port, timeout=timeout)
+    stdout, timedelta_exec = await execute_command(
+        bash_command, port=port, timeout=timeout
+    )
 
     stdout = stdout.strip().split("|")
     start_internet_beacon = timedelta(microseconds=int(stdout[2]))

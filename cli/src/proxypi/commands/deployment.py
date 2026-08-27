@@ -5,12 +5,13 @@ from shlex import quote
 from typing import Literal
 
 import typer
+from pydantic import BaseModel
+
 from proxypi.common.core import ExecuteCommandMode, execute_command, listen
 from proxypi.common.options import PortOption
 from proxypi.common.types import Port
 from proxypi.common.utils import print_table, run_with_spinner, to_table
 from proxypi.config import config
-from pydantic import BaseModel
 
 app = typer.Typer()
 

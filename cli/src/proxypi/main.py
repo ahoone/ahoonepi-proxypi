@@ -1,5 +1,3 @@
-import asyncio
-
 from typer import Typer
 
 import proxypi.commands.deployment
