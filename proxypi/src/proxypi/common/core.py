@@ -1,13 +1,16 @@
 import asyncio
 import sys
+from collections.abc import Awaitable
 from datetime import datetime, timedelta, timezone
 from shlex import quote
-from typing import Literal, TextIO
+from typing import Literal, TextIO, TypeVar
 
 from pydantic import FilePath
 
 from proxypi.common.types import Port
 from proxypi.config import config
+
+T = TypeVar("T")
 
 
 def listen(
@@ -54,7 +57,7 @@ async def __read_stream(
 ) -> None:
     while chunk := await stream.read(4096):
         chunks.append(chunk)
-        output.buffer.write(chunk)
+        _ = output.buffer.write(chunk)
         output.buffer.flush()
 
 
@@ -62,21 +65,21 @@ ExecuteCommandMode = Literal["hold", "flush_duplicate", "flush_main"]
 
 
 async def execute_command(
-    port: Port | None,
     bash_command: str,
-    timeout: float,
+    port: Port | None = None,
+    timeout: float | int | None = None,
     mode: ExecuteCommandMode = "hold",
     lighthouse_private_key_path: FilePath = config.lighthouse_private_key_path,
     tcp_connection_timeout: int = config.tcp_connection_timeout,
     proxypi_user: str = config.proxypi_user,
-) -> tuple[str, timedelta]:
+) -> tuple[str, timedelta] | tuple[None, None]:
     """
     Summary.
 
     Args:
-        port (Port | None): If None, runs on the host.
         bash_command (str): To give as ready to use, the function encapsulates in `bash -lc '...'`.
-        timeout (float): Description.
+        port (Port | None): If None, runs on the host.
+        timeout (float | None): If None, runs without timeout. In seconds.
         mode (ExecuteCommandMode): Description, optional (default: "hold").
         lighthouse_private_key_path (FilePath): Description, optional (default: config.lighthouse_private_key_path).
         tcp_connection_timeout (int): Description, optional (default: config.tcp_connection_timeout).
@@ -91,6 +94,11 @@ async def execute_command(
         RuntimeError: Description.
         TimeoutError: Description.
     """
+
+    async def wait_for(coro: Awaitable[T]) -> T:
+        if timeout is None:
+            return await coro
+        return await asyncio.wait_for(coro, timeout)
 
     if mode in ["hold", "flush_duplicate"]:
         stdout = asyncio.subprocess.PIPE
@@ -142,25 +150,21 @@ async def execute_command(
 
     try:
         if mode == "hold":
-            command_stdout, command_stderr = await asyncio.wait_for(
-                proc.communicate(),
-                timeout=timeout,
-            )
+            command_stdout, command_stderr = await wait_for(proc.communicate())
             end_beacon = datetime.now(timezone.utc)
 
             command_stdout = command_stdout.decode()
             command_stderr = command_stderr.decode()
 
-        if mode == "flush_duplicate":
+        elif mode == "flush_duplicate":
             stdout_chunks: list[bytes] = []
             stderr_chunks: list[bytes] = []
-            await asyncio.wait_for(
+            _ = await wait_for(
                 asyncio.gather(
                     __read_stream(proc.stdout, sys.stdout, stdout_chunks),
                     __read_stream(proc.stderr, sys.stderr, stderr_chunks),
                     proc.wait(),
-                ),
-                timeout=timeout,
+                )
             )
 
             end_beacon = datetime.now(timezone.utc)
@@ -168,10 +172,7 @@ async def execute_command(
             command_stdout = b"".join(stdout_chunks).decode()
             command_stderr = b"".join(stderr_chunks).decode()
         elif mode == "flush_main":
-            await asyncio.wait_for(
-                proc.wait(),
-                timeout=timeout,
-            )
+            _ = await wait_for(proc.wait())
 
             end_beacon = datetime.now(timezone.utc)
 
@@ -192,7 +193,7 @@ async def execute_command(
 
     except asyncio.TimeoutError:
         proc.terminate()
-        await proc.wait()
+        _ = await proc.wait()
         raise TimeoutError(
             f"`{bash_command}` timed out after {timeout}s on host`"
         ) from None
@@ -200,4 +201,4 @@ async def execute_command(
     finally:
         if proc.returncode is None:
             proc.terminate()
-            await proc.wait()
+            _ = await proc.wait()

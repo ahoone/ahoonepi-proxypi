@@ -40,7 +40,7 @@ async def ping_one(
 
     bash_command = " ".join(instructions)
 
-    stdout, timedelta_exec = await execute_command(port, bash_command, timeout)
+    stdout, timedelta_exec = await execute_command(bash_command, port=port, timeout=timeout)
 
     stdout = stdout.strip().split("|")
     start_internet_beacon = timedelta(microseconds=int(stdout[2]))
@@ -68,7 +68,7 @@ async def ping_lighthouse(timeout: int) -> SSHPingResponse:
 
     bash_command = " ".join(instructions)
 
-    stdout, _ = await execute_command(None, bash_command, timeout)
+    stdout, _ = await execute_command(bash_command, timeout=timeout)
 
     stdout = stdout.strip().split("|")
     start_internet_beacon = timedelta(microseconds=int(stdout[1]))

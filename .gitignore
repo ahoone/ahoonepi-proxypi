@@ -5,6 +5,7 @@
 .pytest_cache/
 .python_history
 py_envs/
+**/uv.lock
 
 # Environment / secrets
 .env
