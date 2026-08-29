@@ -110,6 +110,14 @@ async def restart_services_on_all(
 
 
 @app.command()
+def status():
+    """
+    Displays the status of the services on all nodes.
+    """
+    raise NotImplementedError
+
+
+@app.command()
 def run_tests(
     scraper: bool = False,
     broker: bool = False,
@@ -145,7 +153,7 @@ def run_tests(
 
 
 @app.command()
-def restart_services(
+def manage_services(
     action: Literal["stop", "restart"] = "restart",
     a: bool = False,
     port: PortOrHostOption = None,

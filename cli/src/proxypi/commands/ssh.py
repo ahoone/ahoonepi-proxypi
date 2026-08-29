@@ -106,6 +106,11 @@ def ping():
 
 
 @app.command()
+def copy_keys():
+    raise NotImplementedError
+
+
+@app.command()
 def connect(
     proxy_id: ProxyIDArgument,
     lighthouse_private_key_path: FilePath = config.lighthouse_private_key_path,
