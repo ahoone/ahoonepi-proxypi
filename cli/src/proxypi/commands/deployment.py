@@ -7,8 +7,8 @@ from typing import Literal
 import typer
 from pydantic import BaseModel
 
-from proxypi.common.core import ExecuteCommandMode, execute_command, listen
-from proxypi.common.options import PortOption
+from proxypi.common.core import ExecuteCommandMode, execute_command, listen_ports
+from proxypi.common.options import PortOrHostOption
 from proxypi.common.types import Port
 from proxypi.common.utils import print_table, run_with_spinner, to_table
 from proxypi.config import config
@@ -104,7 +104,7 @@ async def restart_services_on_all(
                 timeout=timeout,
                 mode="hold",
             )
-            for port in [None, *listen()]
+            for port in [None, *listen_ports()]
         ]
     )
 
@@ -148,7 +148,7 @@ def run_tests(
 def restart_services(
     action: Literal["stop", "restart"] = "restart",
     a: bool = False,
-    port: PortOption = None,
+    port: PortOrHostOption = None,
     scraper: bool = False,
     broker: bool = False,
     timeout: int | None = None,

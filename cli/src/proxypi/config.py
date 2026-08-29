@@ -4,19 +4,23 @@ from pathlib import Path
 from pydantic import FilePath, computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from proxypi.common.types import Port
-
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
 
 class Config(BaseSettings):
+    """
+    Should use Python generic types, because specific types
+    defined in `proxypi.common.types` relies on values
+    retrieved through configuration.
+    """
+
     model_config = SettingsConfigDict(
         extra="ignore",
         env_file=PROJECT_ROOT / "config.env",
         env_file_encoding="utf-8",
     )
 
-    ssh_network_base: Port
+    ssh_network_base: int
     wireguard_network: IPv4Network
     proxypi_user: str
     git_repository: str

@@ -1,14 +1,16 @@
 import asyncio
+import os
 from datetime import timedelta
 from ipaddress import IPv6Address
 
 import typer
-from pydantic import BaseModel
+from pydantic import BaseModel, FilePath
 
-from proxypi.common.core import execute_command, listen
+from proxypi.common.core import execute_command, listen_ports
+from proxypi.common.options import ProxyIDArgument
 from proxypi.common.types import Port
 from proxypi.common.utils import print_table, run_with_spinner, to_table
-from proxypi.config import PROJECT_ROOT
+from proxypi.config import PROJECT_ROOT, config
 
 app = typer.Typer()
 
@@ -85,7 +87,7 @@ async def ping_lighthouse(timeout: int) -> SSHPingResponse:
 
 @run_with_spinner("Pinging...")
 async def ping_all(timeout: int) -> list[SSHPingResponse]:
-    ports = listen()
+    ports = listen_ports()
 
     rows: list[SSHPingResponse] = await asyncio.gather(
         ping_lighthouse(timeout),
@@ -101,3 +103,23 @@ def ping():
     rows = asyncio.run(ping_all(TIMEOUT_PING))
     table = to_table(rows)
     print_table(table)
+
+
+@app.command()
+def connect(
+    proxy_id: ProxyIDArgument,
+    lighthouse_private_key_path: FilePath = config.lighthouse_private_key_path,
+):
+    """
+    Replaces the current CLI process with the SSH connection.
+    """
+    args = [
+        "ssh",
+        "-i",
+        str(lighthouse_private_key_path),
+        "-p",
+        str(proxy_id + config.ssh_network_base - 2),
+        f"{config.proxypi_user}@localhost",
+    ]
+
+    os.execvp(args[0], args)

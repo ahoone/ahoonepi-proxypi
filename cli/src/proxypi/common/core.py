@@ -7,13 +7,13 @@ from typing import Literal, TextIO, TypeVar
 
 from pydantic import FilePath
 
-from proxypi.common.types import Port
+from proxypi.common.types import Port, ProxyID
 from proxypi.config import config
 
 T = TypeVar("T")
 
 
-def listen(
+def listen_ports(
     ssh_network_base: Port = config.ssh_network_base,
     network_size: int = config.network_size,
 ) -> list[Port]:
@@ -48,6 +48,11 @@ def listen(
         found.append(port)
 
     return found
+
+
+def listen_proxyids() -> list[ProxyID]:
+    ports: list[Port] = listen_ports()
+    return [port - config.ssh_network_base + 2 for port in ports]
 
 
 async def __read_stream(
@@ -112,7 +117,7 @@ async def execute_command(
     bash_command = f"bash -lc {quote(bash_command)}"
 
     if port is not None:
-        if port not in listen():
+        if port not in listen_ports():
             raise KeyError(f"given {port} is not currently in use") from None
         conn = [
             "ssh",
