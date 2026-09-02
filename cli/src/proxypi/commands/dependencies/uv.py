@@ -39,7 +39,7 @@ class UV(Dependency):
     def install(url: str = INSTALL_URL) -> None:
         response = requests.get(url)
         response.raise_for_status()
-        installer = response.text
+        installer = response.content
 
         _ = subprocess.run(
             ["sh"],
@@ -49,11 +49,11 @@ class UV(Dependency):
 
     @staticmethod
     @override
-    def upgrade() -> None:
+    def _upgrade() -> None:
         _ = subprocess.run(
             ["uv", "self", "update"],
             check=True,
         )
 
 
-uv = UV()
+uv = UV("uv")

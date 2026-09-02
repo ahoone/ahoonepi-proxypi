@@ -1,6 +1,7 @@
-from typing import Annotated, Callable, Literal
+from collections.abc import Callable
+from typing import Annotated, Literal
 
-from typer import Argument, Typer
+from typer import Argument, Context, Option, Typer
 
 from proxypi.commands.dependencies.uv import uv
 from proxypi.common.types import Dependency
@@ -12,21 +13,27 @@ DEPENDENCIES: list[Dependency] = [
 ]
 
 
-def _autocompletion(
-    incomplete: str, dependencies: list[Dependency] = DEPENDENCIES
-) -> list[str]:
-    return [
-        str(dependency)
-        for dependency in dependencies
-        if str(dependency).startswith(incomplete)
+def _autocompletion(ctx: Context, incomplete: str) -> list[str]:
+    selected: list[str] = ctx.params.get("dependencies") or []
+
+    matches = [
+        dependency
+        for dependency in [d.name for d in DEPENDENCIES]
+        if dependency.startswith(incomplete)
+        and dependency not in selected
+        and "all" not in selected
     ]
+    if selected == []:
+        matches.append("all")
+
+    return matches
 
 
-@app.command()
+@app.command(context_settings={})
 def manage_dependencies(
     dependencies: Annotated[list[str], Argument(autocompletion=_autocompletion)],
-    mode: Literal["install", "upgrade"],
+    mode: Annotated[Literal["install", "upgrade"], Option("--mode", "-m")],
 ):
     for dependency in dependencies:
         func: Callable[[], bool | None] = getattr(globals()[dependency], mode)
-        print(func())
+        _ = func()

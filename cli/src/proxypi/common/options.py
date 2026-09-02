@@ -1,6 +1,6 @@
 from typing import Annotated
 
-import typer
+from typer import Argument, Option
 
 from proxypi.common.config import config
 from proxypi.common.constants import RANGE_PORTS
@@ -11,7 +11,7 @@ def complete_port(incomplete: str) -> list[str]:
     return [str(port) for port in listen_ports() if str(port).startswith(incomplete)]
 
 
-port_option: typer.Option = typer.Option(
+port_option = Option(
     min=RANGE_PORTS[0],
     max=RANGE_PORTS[1],
     autocompletion=complete_port,
@@ -39,5 +39,5 @@ def complete_proxy_id(incomplete: str) -> list[str]:
 
 ProxyIDArgument = Annotated[
     int,
-    typer.Argument(min=2, max=config.network_size, autocompletion=complete_proxy_id),
+    Argument(min=2, max=config.network_size, autocompletion=complete_proxy_id),
 ]
