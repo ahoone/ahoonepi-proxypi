@@ -1,14 +1,13 @@
 import asyncio
 import sys
 from collections.abc import Awaitable
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from shlex import quote
 from typing import Literal, TextIO, TypeVar
 
-from pydantic import FilePath
-
 from proxypi.common.types import Port, ProxyID
 from proxypi.config import config
+from pydantic import FilePath
 
 T = TypeVar("T")
 
@@ -150,13 +149,13 @@ async def execute_command(
     command_stdout: str | bytes
     command_stderr: str | bytes
 
-    start_beacon = datetime.now(timezone.utc)
+    start_beacon = datetime.now(UTC)
     end_beacon: datetime
 
     try:
         if mode == "hold":
             command_stdout, command_stderr = await wait_for(proc.communicate())
-            end_beacon = datetime.now(timezone.utc)
+            end_beacon = datetime.now(UTC)
 
             command_stdout = command_stdout.decode()
             command_stderr = command_stderr.decode()
@@ -172,14 +171,14 @@ async def execute_command(
                 )
             )
 
-            end_beacon = datetime.now(timezone.utc)
+            end_beacon = datetime.now(UTC)
 
             command_stdout = b"".join(stdout_chunks).decode()
             command_stderr = b"".join(stderr_chunks).decode()
         elif mode == "flush_main":
             _ = await wait_for(proc.wait())
 
-            end_beacon = datetime.now(timezone.utc)
+            end_beacon = datetime.now(UTC)
 
             command_stdout = ""
             command_stderr = ""
@@ -196,7 +195,7 @@ async def execute_command(
             end_beacon - start_beacon,
         )
 
-    except asyncio.TimeoutError:
+    except TimeoutError:
         proc.terminate()
         _ = await proc.wait()
         raise TimeoutError(

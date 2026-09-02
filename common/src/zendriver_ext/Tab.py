@@ -21,14 +21,14 @@ class TabExt:
                 await tab.wait_for_ready_state(
                     until="complete", timeout=SETTLING_WAIT_TIME_COMPLETE
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 pass
         else:
             try:
                 await tab.wait_for_ready_state(
                     until="interactive", timeout=SETTLING_WAIT_TIME_INTERACTIVE
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 pass
         current_state = await tab.evaluate("document.readyState")
         return current_state

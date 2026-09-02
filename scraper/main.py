@@ -12,7 +12,7 @@ from scraper.api.routes.new_instance import router as new_instance_router
 from scraper.api.routes.scrape import router as get_router
 from scraper.api.routes.stream import router as stream_router
 from scraper.api.routes.terminate import router as terminate_router
-from scraper.Config import Config
+from scraper.config import config
 from scraper.core.DatabaseHandler import DatabaseHandler
 from scraper.core.Scraper import Scraper
 
@@ -20,7 +20,7 @@ from scraper.core.Scraper import Scraper
 # -------------------------------------------------------------------------------- #
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(filename=Config.SCRAPER_LOGS, level=logging.INFO)
+logging.basicConfig(filename=config.SCRAPER_LOGS, level=logging.INFO)
 
 
 @asynccontextmanager
@@ -44,7 +44,7 @@ app = FastAPI(
     redoc_url="/docs",
 )
 
-add_middleware(app, Config.ALLOWED_NETWORKS)
+add_middleware(app, config.ALLOWED_NETWORKS)
 
 app.add_middleware(
     CORSMiddleware,

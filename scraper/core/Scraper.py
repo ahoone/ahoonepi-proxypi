@@ -4,12 +4,12 @@ import os
 from typing import NoReturn
 from uuid import UUID
 
-from contract.Config import Config as ContractConfig
+from contract.config import config as contract_config
 from contract.schemas.architecture import BrowsingRecord, ScraperModel
 from contract.schemas.new_instance import NewInstanceRequest
 from contract.schemas.scrape import ScraperScrapeRequest
 
-from scraper.Config import Config
+from scraper.config import config
 from scraper.core.Browser import Browser
 from scraper.core.models.Scraper import IdentifierInUse
 
@@ -50,7 +50,7 @@ class Scraper:
         return ScraperModel(
             is_running_as_root=os.getuid() == 0,
             can_create_browser=len(self.browsers)
-            < ContractConfig.MAX_INSTANCES_PER_SCRAPER,
+            < Contractconfig.MAX_INSTANCES_PER_SCRAPER,
             ram_specs=f"{ram_total // 1024**3}GiB",
             ram_usage=f"{(100 * ram_used) // ram_total}%",
             browsers={
@@ -162,7 +162,7 @@ class Scraper:
         while True:
             async with self.__lock_update:
                 await self.__update()
-            await asyncio.sleep(Config.REFRESH_RATE_SCRAPER)
+            await asyncio.sleep(config.REFRESH_RATE_SCRAPER)
 
     async def __update(self) -> None:
         await asyncio.gather(

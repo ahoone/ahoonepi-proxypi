@@ -16,6 +16,7 @@ mss==10.1.0
 ping3==5.1.5
 pydantic==2.12.5
 pydantic_core==2.41.5
+pydantic-settings==2.15.0
 requests==2.32.5
 starlette==0.50.0
 typing-inspection==0.4.2

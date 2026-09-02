@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from math import exp
 
 from contract.schemas.architecture import BrowsingRecord
@@ -14,9 +14,7 @@ def score(browsing_history: list[BrowsingRecord]) -> float:
         """
         if not access_record.timestamp:
             return 0.0
-        time_elapsed = (
-            datetime.now(timezone.utc) - access_record.timestamp
-        ).total_seconds()
+        time_elapsed = (datetime.now(UTC) - access_record.timestamp).total_seconds()
         return SCORE_PARAMETER_LAMBDA * exp(-time_elapsed * SCORE_PARAMETER_LAMBDA)
 
     return sum([cost_function(access_record) for access_record in browsing_history])

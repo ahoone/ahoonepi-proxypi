@@ -3,7 +3,7 @@ from time import sleep
 
 import pytest
 import requests
-from contract.Config import Config as ContractConfig
+from contract.config import config as contract_config
 from contract.schemas.close_browser import CloseBrowserRequest
 from contract.schemas.new_instance import NewInstanceRequest, NewInstanceResponse
 from contract.schemas.scrape import ScraperScrapeRequest
@@ -47,7 +47,7 @@ class TestScraperCore:
     def test_default_instance(self):
         assert_instance_health(
             TestScraperCore.shared_values["default"],
-            ContractConfig.BROWSER_DEFAULT_LIFESPAN,
+            contract_config.BROWSER_DEFAULT_LIFESPAN,
         )
 
     def test_just_one_instance(self):
@@ -163,7 +163,7 @@ class TestScraperIntense:
     def test_default_instance(self):
         assert_instance_health(
             TestScraperIntense.shared_values["default"],
-            ContractConfig.BROWSER_DEFAULT_LIFESPAN,
+            contract_config.BROWSER_DEFAULT_LIFESPAN,
         )
 
     def test_simultaneous_get_page(self):

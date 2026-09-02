@@ -3,7 +3,7 @@ from uuid import UUID
 
 import aiosqlite
 
-from scraper.Config import Config
+from scraper.config import config
 from scraper.core.models.DatabaseHandler import ProfileNotFoundError, ProfileRecord
 
 
@@ -13,7 +13,7 @@ class DatabaseHandler:
     @classmethod
     async def initialize(cls) -> None:
         os.makedirs("/app/data", exist_ok=True)
-        cls.__conn = await aiosqlite.connect(Config.SCRAPER_DATABASE)
+        cls.__conn = await aiosqlite.connect(config.SCRAPER_DATABASE)
         cls.__conn.row_factory = aiosqlite.Row
         await cls.__conn.commit()
 
@@ -22,7 +22,7 @@ class DatabaseHandler:
     @classmethod
     async def __initialize_database(cls) -> None:
         await cls.__conn.execute(f"""
-            CREATE TABLE IF NOT EXISTS {Config.DB_TABLE_PROFILES} (
+            CREATE TABLE IF NOT EXISTS {config.DB_TABLE_PROFILES} (
                 profile_uuid TEXT PRIMARY KEY NOT NULL,
                 profile_name TEXT NOT NULL,
                 user_data_dir TEXT NOT NULL,
@@ -46,7 +46,7 @@ class DatabaseHandler:
         """
         query = f"""
             SELECT *
-            FROM {Config.DB_TABLE_PROFILES}
+            FROM {config.DB_TABLE_PROFILES}
             WHERE profile_uuid = ?;
         """
         cursor = await cls.__conn.execute(query)
@@ -58,7 +58,7 @@ class DatabaseHandler:
     @classmethod
     async def insert_profile_record(cls, profile_record: ProfileRecord) -> None:
         query = f"""
-            INSERT INTO {Config.DB_TABLE_PROFILES} (
+            INSERT INTO {config.DB_TABLE_PROFILES} (
                 profile_uuid,
                 profile_name,
                 user_data_dir,

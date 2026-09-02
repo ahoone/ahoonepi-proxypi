@@ -9,7 +9,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
 class Config(BaseSettings):
     """
-    Should use Python generic types, because specific types
+    Should use generic types, because specific types
     defined in `proxypi.common.types` relies on values
     retrieved through configuration.
     """

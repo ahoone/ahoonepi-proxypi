@@ -1,5 +1,5 @@
 import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from time import sleep
 
 import httpx
@@ -62,7 +62,7 @@ class TestBrokerCore:
     def test_endpoint_collect(self):
         url = Config.ORIGIN_BROKER + "/collect"
         payload = CollectRequest(uuid=self.shared_data["uuid"])
-        start_time = datetime.now(timezone.utc)
+        start_time = datetime.now(UTC)
         while True:
             response = requests.get(
                 url,
@@ -70,8 +70,7 @@ class TestBrokerCore:
                 timeout=Config.TIMEOUT_REQUESTS,
             )
             if (response.status_code != 425) or (
-                datetime.now(timezone.utc) - start_time
-                > timedelta(seconds=Config.TIMEOUT_GET)
+                datetime.now(UTC) - start_time > timedelta(seconds=Config.TIMEOUT_GET)
             ):
                 break
             sleep(2)
@@ -124,7 +123,7 @@ class TestBrokerCloudflare:
 
         url = Config.ORIGIN_BROKER + "/collect"
         payload = CollectRequest(uuid=self.shared_data["uuid"])
-        start_time = datetime.now(timezone.utc)
+        start_time = datetime.now(UTC)
         while True:
             response = requests.get(
                 url,
@@ -132,8 +131,7 @@ class TestBrokerCloudflare:
                 timeout=Config.TIMEOUT_REQUESTS,
             )
             if (response.status_code != 425) or (
-                datetime.now(timezone.utc) - start_time
-                > timedelta(seconds=Config.TIMEOUT_GET)
+                datetime.now(UTC) - start_time > timedelta(seconds=Config.TIMEOUT_GET)
             ):
                 break
             sleep(2)

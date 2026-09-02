@@ -1,7 +1,9 @@
+from __future__ import annotations
+
 import asyncio
 import logging
 import traceback
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from contract.schemas.architecture import (
@@ -75,7 +77,7 @@ class Browser:
         self.initialized = False
 
     @classmethod
-    async def create(cls, request: NewInstanceRequest) -> "Browser":
+    async def create(cls, request: NewInstanceRequest) -> Browser:
         """
         Not thread safe.
         Dangerous to have concurrent calls with the same profile UUIDs to this method.
@@ -90,7 +92,11 @@ class Browser:
         await instance.__initialize(request)
         return instance
 
-    async def __initialize(self, request: NewInstanceRequest) -> None:
+    async def __initialize(
+        self,
+        request: NewInstanceRequest,
+        windows_size: tuple[int, int] = BROWSER_DEFAULT_WINDOW,
+    ) -> None:
         """
         Not thread safe.
         Dangerous to have concurrent calls with the same profile UUIDs to this method.
@@ -101,17 +107,17 @@ class Browser:
 
         self.__event_closing = asyncio.Event()
         self.closed = False
-        self.created_at = datetime.now(timezone.utc)
+        self.created_at = datetime.now(UTC)
         self.expires_at = self.created_at + timedelta(
             seconds=request.lifespan_in_seconds
         )
         self.browsing_history = []
         self.spotted = False
-        self.recovery_period = datetime.now(timezone.utc)
+        self.recovery_period = datetime.now(UTC)
 
         try:
             self.profile = await Profile.create(request)
-            self.__display = await Display.create(window_size=BROWSER_DEFAULT_WINDOW)
+            self.__display = await Display.create(window_size=windows_size)
             self.__driver = await Driver.create(self.__display, self.profile)
             self.__streamer = Streamer(display=self.__display)
             self.__frame_unpacker = FrameUnpacker(streamer=self.__streamer)
@@ -151,14 +157,14 @@ class Browser:
             return "closing"
         elif self.__lock_get.locked():
             return "requesting"
-        elif self.recovery_period > datetime.now(timezone.utc):
+        elif self.recovery_period > datetime.now(UTC):
             return "recovering"
         else:
             return "idle"
 
     @property
     def remaining_lifespan(self) -> timedelta:
-        return self.expires_at - datetime.now(timezone.utc)
+        return self.expires_at - datetime.now(UTC)
 
     @property
     def expired(self) -> bool:
@@ -168,7 +174,7 @@ class Browser:
         Returns:
             bool: Description.
         """
-        return self.expires_at < datetime.now(timezone.utc)
+        return self.expires_at < datetime.now(UTC)
 
     def stream(self):
         return self.__frame_unpacker.stream()
@@ -217,24 +223,29 @@ class Browser:
         browsing_record = BrowsingRecord(profile_uuid=self.uuid, url=request.url)
         try:
             async with self.__lock_get:
-                delta = (
-                    self.recovery_period - datetime.now(timezone.utc)
-                ).total_seconds()
+                delta = (self.recovery_period - datetime.now(UTC)).total_seconds()
                 if delta > 0.0:
                     await asyncio.sleep(delta)
                 await self.__get(request, browsing_record)
-                self.recovery_period = datetime.now(timezone.utc) + timedelta(
+                self.recovery_period = datetime.now(UTC) + timedelta(
                     milliseconds=recovery_period()
                 )
         except asyncio.CancelledError:
             browsing_record.status = "aborted"
         finally:
-            browsing_record.timestamp = datetime.now(timezone.utc)
+            browsing_record.timestamp = datetime.now(UTC)
             self.browsing_history.append(browsing_record)
         return browsing_record
 
     async def __get(
-        self, request: ScraperScrapeRequest, browsing_record: BrowsingRecord
+        self,
+        request: ScraperScrapeRequest,
+        browsing_record: BrowsingRecord,
+        timeout_driver_get: float = TIMEOUT_DRIVER_GET,
+        timeout_search_cf_challenge: float = TIMEOUT_SEARCH_CF_CHALLENGE,
+        timeout_resolve_cf_challenge: float = TIMEOUT_RESOLVE_CF_CHALLENGE,
+        timeout_lazy_loading: float = TIMEOUT_LAZY_LOADING,
+        timeout_get_content: float = TIMEOUT_GET_CONTENT,
     ) -> None:
         """
         Not thread safe.
@@ -261,8 +272,8 @@ class Browser:
             str(request.url), new_tab=False, new_window=False
         )
         try:
-            tab = await asyncio.wait_for(awaitable, TIMEOUT_DRIVER_GET)
-        except asyncio.TimeoutError:
+            tab = await asyncio.wait_for(awaitable, timeout_driver_get)
+        except TimeoutError:
             browsing_record.status = "failed"
             return
         browsing_record.timedelta_driver_get = loop.time() - start_time
@@ -278,9 +289,9 @@ class Browser:
         start_time = loop.time()
         try:
             found_challenge = await asyncio.wait_for(
-                awaitable, TIMEOUT_SEARCH_CF_CHALLENGE
+                awaitable, timeout_search_cf_challenge
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             found_challenge = False
         browsing_record.timedelta_search_cf_challenge = loop.time() - start_time
 
@@ -289,8 +300,8 @@ class Browser:
             awaitable = verify_cf(tab)
             start_time = loop.time()
             try:
-                await asyncio.wait_for(awaitable, TIMEOUT_RESOLVE_CF_CHALLENGE)
-            except asyncio.TimeoutError:
+                await asyncio.wait_for(awaitable, timeout_resolve_cf_challenge)
+            except TimeoutError:
                 pass
             browsing_record.timedelta_resolve_cf_challenge = loop.time() - start_time
 
@@ -310,8 +321,8 @@ class Browser:
             awaitable = await TabExt.trigger_lazy_loading(tab)
             start_time = loop.time()
             try:
-                await asyncio.wait_for(awaitable, TIMEOUT_LAZY_LOADING)
-            except asyncio.TimeoutError:
+                await asyncio.wait_for(awaitable, timeout_lazy_loading)
+            except TimeoutError:
                 pass
             browsing_record.timedelta_lazy_loading = loop.time() - start_time
 
@@ -319,9 +330,9 @@ class Browser:
         start_time = loop.time()
         try:
             browsing_record.html = await asyncio.wait_for(
-                awaitable, TIMEOUT_GET_CONTENT
+                awaitable, timeout_get_content
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             browsing_record.status = "failed"
             browsing_record.traceback = traceback.format_exc()
             return
@@ -342,23 +353,25 @@ class Browser:
         Wrapped in a task by the initialization method.
         Waits for the closing event.
         """
-        await self.__event_closing.wait()
+        _ = await self.__event_closing.wait()
         await self.__flush_active_tasks()
         await self.__close_components()
         self.closed = True
 
-    async def __flush_active_tasks(self) -> None:
+    async def __flush_active_tasks(
+        self, timeout_kill_cancelled_task: float = TIMEOUT_KILL_CANCELLED_TASK
+    ) -> None:
         """Not thread safe."""
         async with self.__lock_active_tasks:
             snapshot_tasks = self.active_tasks.copy()
         for task in snapshot_tasks:
-            task.cancel()
+            _ = task.cancel()
         try:
-            await asyncio.wait_for(
-                asyncio.gather(*snapshot_tasks, return_exceptions=True),
-                timeout=TIMEOUT_KILL_CANCELLED_TASKS,
+            _ = await asyncio.wait_for(
+                asyncio.gather(*snapshot_tasks, return_exceptions=False),
+                timeout=timeout_kill_cancelled_task,
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             pass
         async with self.__lock_active_tasks:
             for task in snapshot_tasks:
@@ -372,19 +385,19 @@ class Browser:
         Then the frame unpacker, and the streamer.
         Makes sure to kill the display and the profile after the driver to avoid ending in an unproper state prone to detection.
         """
-        start_time = datetime.now(timezone.utc)
+        start_time = datetime.now(UTC)
         logger.info(
             f"Started closing instance {self.profile.uuid} ({self.profile.name})"
         )
         await self.__driver.close()
-        await asyncio.gather(
+        _ = await asyncio.gather(
             asyncio.to_thread(self.__frame_unpacker.kill),
             asyncio.to_thread(self.__streamer.kill),
         )
-        await asyncio.gather(
+        _ = await asyncio.gather(
             self.profile.close(),
             asyncio.to_thread(self.__display.kill),
         )
         logger.info(
-            f"Closed instance {self.profile.uuid} ({self.profile.name}) in {datetime.now(timezone.utc) - start_time}"
+            f"Closed instance {self.profile.uuid} ({self.profile.name}) in {datetime.now(UTC) - start_time}"
         )

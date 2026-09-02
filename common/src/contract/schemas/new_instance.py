@@ -2,7 +2,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, model_validator
 
-from contract.Config import Config
+from contract.config import config
 
 
 class NewInstanceRequest(BaseModel):

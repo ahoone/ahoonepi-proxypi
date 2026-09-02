@@ -1,7 +1,7 @@
 import logging
 import random
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from uuid import UUID, uuid4
 
@@ -255,7 +255,7 @@ class Profile:
         instance = cls(
             uuid=uuid,
             name=name,
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
             user_data_dir=user_data_dir,
             is_temporary=request.is_temporary,
         )

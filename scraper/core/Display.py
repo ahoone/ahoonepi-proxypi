@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 import subprocess
 from typing import ClassVar
@@ -21,7 +23,7 @@ class Display:
             return f":{cls.__origin_display}"
 
     @classmethod
-    async def create(cls, window_size: tuple[int, int]) -> "Display":
+    async def create(cls, window_size: tuple[int, int]) -> Display:
         instance = cls()
         await instance.__initialize(window_size)
         return instance

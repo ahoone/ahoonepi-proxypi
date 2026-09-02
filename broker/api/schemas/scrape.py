@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import UUID
 
 from pydantic import BaseModel, Field, HttpUrl
@@ -14,7 +14,7 @@ class ScrapeRequest(BaseModel):
         ),
     )
     expected_response_time: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc),
+        default_factory=lambda: datetime.now(UTC),
         description=(
             "Time you hope the response to be completed. "
             "By default, the timestamp of the request. "

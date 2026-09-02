@@ -43,7 +43,7 @@ class Driver:
         """Not thread safe."""
         try:
             await asyncio.wait_for(self.driver.stop(), timeout=TIMEOUT_DRIVER_STOP)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             print(f"driver.stop() timed out for {self.__profile_uuid}, forcing kill")
         finally:
             proc = getattr(self.driver, "_process", None)

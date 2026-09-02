@@ -1,6 +1,6 @@
 import traceback
 
-from contract.Config import Config
+from contract.config import config
 from contract.schemas.common import ErrorResponse
 from contract.schemas.new_instance import NewInstanceRequest, NewInstanceResponse
 from fastapi import APIRouter, Body, Depends, HTTPException
@@ -38,10 +38,10 @@ async def new_instance(
             detail="The scraper is restarting",
         )
 
-    if len(scraper.browsers) > Config.MAX_INSTANCES_PER_SCRAPER:
+    if len(scraper.browsers) > config.MAX_INSTANCES_PER_SCRAPER:
         raise HTTPException(
             status_code=409,
-            detail=f"Already too many opened instances {Config.MAX_INSTANCES_PER_SCRAPER}",
+            detail=f"Already too many opened instances {config.MAX_INSTANCES_PER_SCRAPER}",
         )
 
     try:

@@ -35,7 +35,7 @@ class NodeIdentifier:
                 return True
             except ConnectionRefusedError:
                 return True
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 return False
             except OSError:
                 return False
