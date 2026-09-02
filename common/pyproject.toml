@@ -1,7 +1,7 @@
 [project]
 name = "ahoonepi-internal-interface"
 version = "0.1.0"
-requires-python = ">=3.10"
+requires-python = ">=3.10,<3.14"
 dependencies = [
     "pydantic==2.12.5",
     "pydantic_core==2.41.5",

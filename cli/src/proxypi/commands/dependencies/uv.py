@@ -16,11 +16,8 @@ class UV(Dependency):
     def _is_installed() -> bool:
         return shutil.which("uv") is not None
 
-    @staticmethod
     @override
-    def _is_meeting_min_version_required(
-        min_version: tuple[int, ...] = MIN_VERSION,
-    ) -> bool:
+    def _is_meeting_min_version_required(self) -> bool:
         result = subprocess.run(
             ["uv", "--version"],
             capture_output=True,
@@ -32,7 +29,7 @@ class UV(Dependency):
 
         installed = tuple(int(x) for x in installed_version.split("."))
 
-        return installed >= min_version
+        return installed >= self.min_version
 
     @staticmethod
     @override
@@ -56,4 +53,4 @@ class UV(Dependency):
         )
 
 
-uv = UV("uv")
+uv = UV("uv", min_version=MIN_VERSION)

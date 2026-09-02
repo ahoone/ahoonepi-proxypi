@@ -9,7 +9,7 @@ Under the hood it's built on [zendriver](https://github.com/cdpdriver/zendriver)
 ## Why
 
 |           | Residential proxy API        | ahoonepi-proxypi                           |
-|-----------|------------------------------|--------------------------------------------|
+| --------- | ---------------------------- | ------------------------------------------ |
 | Cost      | Per-GB / per-request billing | Hardware you already own                   |
 | Control   | Black box                    | Full source, full data locality            |
 | Detection | Vendor's problem             | Real Chrome, virtual display, self-managed |
@@ -19,11 +19,25 @@ Under the hood it's built on [zendriver](https://github.com/cdpdriver/zendriver)
 
 ![Demo](demo.gif)
 
-*Bringing up the stack and firing a scrape request end-to-end, see [Quickstart](#quickstart) below.*
+_Bringing up the stack and firing a scrape request end-to-end, see [Quickstart](#quickstart) below._
 
 ## Quickstart
 
 This quickstart let's you host the broker and one scraper on a single device.
+
+Install `uv`:
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+Install the `proxypi` CLI through `uv`:
+
+```bash
+git clone https://github.com/ahoone/ahoonepi-proxypi .
+cd ahoonepi-proxypi
+uv tool install cli/.
+```
 
 ```bash
 git clone https://github.com/ahoone/ahoonepi-proxypi
@@ -34,6 +48,7 @@ sudo reboot
 ```
 
 After rebooting:
+
 ```bash
 cd ahoonepi-proxypi
 source .bash_aliases
@@ -45,6 +60,7 @@ xdg-open http://localhost:8080/docs
 ## Usage
 
 Be aware that the project runs for now with high control:
+
 - runs with sudo rights,
 - docker commmand line without sudo,
 - creates a dummy user,

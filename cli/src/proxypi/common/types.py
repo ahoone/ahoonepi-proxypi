@@ -22,22 +22,26 @@ ProxyID = Annotated[int, Field(ge=2, le=config.network_size - 1)]
 
 class Dependency(ABC):
     @final
-    def __init__(self, name: str) -> None:
+    def __init__(
+        self,
+        name: str,
+        *,
+        min_version: tuple[int, ...] = (),
+    ) -> None:
         self.name: str = name
+        self.min_version: tuple[int, ...] = min_version
 
     @staticmethod
     @abstractmethod
     def _is_installed() -> bool: ...
 
-    @staticmethod
     @abstractmethod
-    def _is_meeting_min_version_required(min_version: tuple[int, ...]) -> bool: ...
+    def _is_meeting_min_version_required(self) -> bool: ...
 
+    @property
     @final
-    def is_satisfied(self, min_version: tuple[int, ...]) -> bool:
-        return self._is_installed() and self._is_meeting_min_version_required(
-            min_version
-        )
+    def is_satisfied(self) -> bool:
+        return self._is_installed() and self._is_meeting_min_version_required()
 
     @staticmethod
     @abstractmethod

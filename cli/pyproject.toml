@@ -1,7 +1,7 @@
 [project]
 name = "proxypi-cli"
 version = "0.1.0"
-requires-python = ">=3.10"
+requires-python = ">=3.10,<3.14"
 dependencies = [
     "typer==0.27.1",
     "pydantic==2.12.5",

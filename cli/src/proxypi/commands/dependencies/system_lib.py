@@ -31,6 +31,10 @@ class SystemLib(Dependency):
             ["sudo", "apt-get", "upgrade", "-y"],
             check=True,
         )
+        _ = subprocess.run(
+            ["sudo", "apt-get", "autoremove", "-y"],
+            check=True,
+        )
 
 
 system_lib = SystemLib("system_lib")
