@@ -2,9 +2,9 @@ from typing import Annotated
 
 import typer
 
+from proxypi.common.config import config
 from proxypi.common.constants import RANGE_PORTS
 from proxypi.common.core import listen_ports, listen_proxyids
-from proxypi.config import config
 
 
 def complete_port(incomplete: str) -> list[str]:

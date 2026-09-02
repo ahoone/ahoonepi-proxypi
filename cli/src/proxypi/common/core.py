@@ -5,9 +5,10 @@ from datetime import UTC, datetime, timedelta
 from shlex import quote
 from typing import Literal, TextIO, TypeVar
 
-from proxypi.common.types import Port, ProxyID
-from proxypi.config import config
 from pydantic import FilePath
+
+from proxypi.common.config import config
+from proxypi.common.types import Port, ProxyID
 
 T = TypeVar("T")
 
@@ -71,7 +72,7 @@ ExecuteCommandMode = Literal["hold", "flush_duplicate", "flush_main"]
 async def execute_command(
     bash_command: str,
     port: Port | None = None,
-    timeout: float | int | None = None,
+    timeout: float | None = None,
     mode: ExecuteCommandMode = "hold",
     lighthouse_private_key_path: FilePath = config.lighthouse_private_key_path,
     tcp_connection_timeout: int = config.tcp_connection_timeout,

@@ -1,10 +1,11 @@
 from ipaddress import IPv4Network
 from pathlib import Path
+from typing import override
 
 from pydantic import FilePath, computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
+PROJECT_ROOT = Path(__file__).resolve().parents[4]
 
 
 class Config(BaseSettings):
@@ -33,6 +34,7 @@ class Config(BaseSettings):
     def network_size(self) -> int:
         return self.wireguard_network.num_addresses - 2
 
+    @override
     def __str__(self) -> str:
         return "\n".join(f"{k}={v}" for k, v in self.model_dump().items())
 

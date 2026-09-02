@@ -1,9 +1,10 @@
 from typer import Typer
 
 import proxypi.commands.deployment
+import proxypi.commands.install
 import proxypi.commands.ssh
+from proxypi.common.config import PROJECT_ROOT, config
 from proxypi.common.core import listen_proxyids
-from proxypi.config import PROJECT_ROOT, config
 
 app = Typer()
 
@@ -15,6 +16,7 @@ app = Typer()
 
 app.add_typer(proxypi.commands.ssh.app, name="ssh")
 app.add_typer(proxypi.commands.deployment.app, name="deployment")
+app.add_typer(proxypi.commands.install.app, name="install")
 
 
 @app.command()
