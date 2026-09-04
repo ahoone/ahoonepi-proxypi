@@ -1,13 +1,11 @@
 from collections.abc import Callable
 from typing import Annotated, Literal
 
-from typer import Argument, Context, Typer
+from typer import Argument, Context
 
 from proxypi.commands.dependencies.system_lib import system_lib
 from proxypi.commands.dependencies.uv import uv
 from proxypi.common.types import Dependency
-
-app = Typer()
 
 DEPENDENCIES: list[Dependency] = [
     system_lib,
@@ -34,15 +32,13 @@ def _autocompletion(ctx: Context, incomplete: str) -> list[str]:
     return matches
 
 
-@app.command(name="deps")
-def manage_dependencies(
+def deps(
     mode: Annotated[Literal["install", "upgrade"], Argument()],
     dependencies: Annotated[list[str], Argument(autocompletion=_autocompletion)],
 ):
     """
     Install or upgrade dependencies on local machine.
-    `system_lib` dependency refers to the OS librairies, and includes,
-    other dependencies like WireGuard.
+    `system_lib` dependency refers to the OS librairies, and includes, other dependencies like WireGuard.
     """
     if dependencies == ["all"]:
         dependencies = [d.name for d in DEPENDENCIES]

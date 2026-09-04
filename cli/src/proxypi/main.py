@@ -1,18 +1,22 @@
 from typer import Typer
 
-import proxypi.commands.deploy
-import proxypi.commands.init
-import proxypi.commands.ssh
+from proxypi.commands.connect import connect
+from proxypi.commands.copy_keys import copy_keys
+from proxypi.commands.deps import deps
+from proxypi.commands.load import load
+from proxypi.commands.ping import ping
+from proxypi.commands.tests import tests
 from proxypi.commands.venv import venv
 
 app = Typer()
 
-
-app.add_typer(proxypi.commands.ssh.app, name="ssh")
-app.add_typer(proxypi.commands.deploy.app, name="deploy")
-app.add_typer(proxypi.commands.init.app, name="init")
+app.command()(connect)
+app.command()(copy_keys)
+app.command()(deps)
+app.command()(load)
+app.command()(ping)
+app.command()(tests)
 app.command()(venv)
-
 
 if __name__ == "__main__":
     app()

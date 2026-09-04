@@ -1,7 +1,5 @@
 import asyncio
-import subprocess
 from datetime import timedelta
-from shlex import quote
 from typing import Literal
 
 import typer
@@ -115,41 +113,6 @@ def status():
     Displays the status of the services on all nodes.
     """
     raise NotImplementedError
-
-
-@app.command()
-def run_tests(
-    scraper: bool = False,
-    broker: bool = False,
-    mode: Literal["logs", "flush"] = "flush",
-):
-    if not (scraper or broker):
-        raise typer.BadParameter("you must provide at least one service to restart")
-
-    instructions: list[str] = [
-        f"cd /home/{config.proxypi_user}/{config.git_repository}"
-    ]
-
-    services: list[str] = []
-    if scraper:
-        services.append("/app/tests/tests/test_scraper.py")
-    if broker:
-        services.append("/app/tests/tests/test_broker.py")
-    instructions.append(f'export PYTEST_TARGETS="{" ".join(services)}"')
-
-    if mode == "logs":
-        instructions.append(
-            "docker compose -f tests/docker-compose.yml --env-file .env --env-file config.env up --build -d"
-        )
-        bash_command = " && ".join(instructions)
-        bash_command = f"bash -lc {quote(bash_command)}"
-        _ = subprocess.run(
-            bash_command,
-            shell=True,
-            check=True,
-        )
-    elif mode == "flush":
-        raise NotImplementedError
 
 
 @app.command()

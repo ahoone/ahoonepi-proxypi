@@ -56,8 +56,8 @@ def create_venv_from_toml(subdirectory: Literal["common", "cli"]):
 
 def venv():
     """
-    Creates virtual environments for each component (broker, scraper, common, CLI) for development.
-    Intended to be launch on the IDE's host while the project is on a remote SSH server.
+    Creates virtual environments for each component (broker, scraper, common, CLI, tests) for development.
+    Intended to be launch on the IDE's host while the project is on a remote SSH server (instead of using the remote interpreter option).
     """
     if not uv.is_satisfied:
         raise ImportError("uv is not verifying conditions")
