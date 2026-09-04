@@ -1,4 +1,3 @@
-import subprocess
 from collections.abc import Callable
 from typing import Annotated, Literal
 
@@ -6,7 +5,6 @@ from typer import Argument, Context, Typer
 
 from proxypi.commands.dependencies.system_lib import system_lib
 from proxypi.commands.dependencies.uv import uv
-from proxypi.common.config import PROJECT_ROOT
 from proxypi.common.types import Dependency
 
 app = Typer()
@@ -52,74 +50,3 @@ def manage_dependencies(
     for dependency in dependencies:
         func: Callable[[], bool | None] = getattr(globals()[dependency], mode)
         _ = func()
-
-
-@app.command(name="venv")
-def create_dev_venv():
-    """
-    Creates virtual environments for each component
-    (broker, scraper, common, CLI) for development.
-    """
-    if not uv.is_satisfied:
-        raise ImportError("uv is not verifying conditions")
-
-    def create_broker_venv():
-        _ = subprocess.run(
-            [
-                "uv",
-                "venv",
-                "--no-project",
-                "--clear",
-                "--python",
-                "3.10",
-                "broker/.venv",
-            ],
-            check=True,
-        )
-
-        _ = subprocess.run(
-            [
-                "uv",
-                "pip",
-                "install",
-                "--python",
-                "broker/.venv/bin/python",
-                "-r",
-                "broker/requirements.txt",
-                "-e",
-                "common",
-            ],
-            check=True,
-        )
-
-    def create_scraper_venv():
-        _ = subprocess.run(
-            [
-                "uv",
-                "venv",
-                "--no-project",
-                "--clear",
-                "--python",
-                "3.10",
-                "scraper/.venv",
-            ],
-            check=True,
-        )
-
-        _ = subprocess.run(
-            [
-                "uv",
-                "pip",
-                "install",
-                "--python",
-                "scraper/.venv/bin/python",
-                "-r",
-                "scraper/requirements.txt",
-                "-e",
-                "common",
-            ],
-            check=True,
-        )
-
-    create_broker_venv()
-    create_scraper_venv()

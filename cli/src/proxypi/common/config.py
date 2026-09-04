@@ -2,7 +2,7 @@ from ipaddress import IPv4Network
 from pathlib import Path
 from typing import override
 
-from pydantic import FilePath, computed_field
+from pydantic import computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
@@ -26,7 +26,7 @@ class Config(BaseSettings):
     proxypi_user: str
     git_repository: str
 
-    lighthouse_private_key_path: FilePath = Path.home() / ".ssh" / "id_proxy_access"
+    lighthouse_private_key_path: Path = Path.home() / ".ssh" / "id_proxy_access"
     tcp_connection_timeout: int = 8  # seconds
 
     @computed_field

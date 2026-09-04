@@ -77,7 +77,7 @@ async def execute_command(
     lighthouse_private_key_path: FilePath = config.lighthouse_private_key_path,
     tcp_connection_timeout: int = config.tcp_connection_timeout,
     proxypi_user: str = config.proxypi_user,
-) -> tuple[str, timedelta] | tuple[None, None]:
+) -> tuple[str, timedelta]:
     """
     Summary.
 
