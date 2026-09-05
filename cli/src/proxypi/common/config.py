@@ -27,6 +27,7 @@ class Config(BaseSettings):
     git_repository: str
 
     lighthouse_private_key_path: Path = Path.home() / ".ssh" / "id_proxy_access"
+    lighthouse_public_key_path: Path = Path.home() / ".ssh" / "id_proxy_access.pub"
     tcp_connection_timeout: int = 8  # seconds
     concurrent_conn: int = 20
 

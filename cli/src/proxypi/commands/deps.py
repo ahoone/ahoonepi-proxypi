@@ -3,9 +3,9 @@ from typing import Annotated, Literal
 
 from typer import Argument, Context
 
-from proxypi.commands.dependencies.system_lib import system_lib
-from proxypi.commands.dependencies.uv import uv
 from proxypi.common.types import Dependency
+from proxypi.dependencies.system_lib import system_lib
+from proxypi.dependencies.uv import uv
 
 DEPENDENCIES: list[Dependency] = [
     system_lib,

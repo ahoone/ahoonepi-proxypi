@@ -1,8 +1,10 @@
 import subprocess
 from typing import Literal
 
-from proxypi.commands.dependencies.uv import uv
+from rich import print as rprint
+
 from proxypi.common.config import PROJECT_ROOT
+from proxypi.dependencies.uv import uv
 
 
 def create_venv_from_requirements(
@@ -67,3 +69,5 @@ def venv():
     create_venv_from_requirements("tests")
     create_venv_from_toml("common")
     create_venv_from_toml("cli")
+
+    rprint("[bold green]✓ Venvs created successfully![/bold green]")
