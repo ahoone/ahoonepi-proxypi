@@ -28,6 +28,7 @@ class Config(BaseSettings):
 
     lighthouse_private_key_path: Path = Path.home() / ".ssh" / "id_proxy_access"
     tcp_connection_timeout: int = 8  # seconds
+    concurrent_conn: int = 20
 
     @computed_field
     @property

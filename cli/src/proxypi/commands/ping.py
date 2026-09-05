@@ -7,17 +7,15 @@ from ipaddress import IPv4Address, IPv4Network, IPv6Address
 from typing import Literal
 
 import typer
-from pydantic import BaseModel
-
 from proxypi.common.config import PROJECT_ROOT, config
 from proxypi.common.core import execute_command, listen_ports
 from proxypi.common.types import ExitCodeError, Port
 from proxypi.common.utils import print_table, run_with_spinner, to_table
+from pydantic import BaseModel
 
 app = typer.Typer()
 
 TIMEOUT_PING = 60  # seconds
-CONCURRENT_CALLS = 20
 PING_SAMPLE_SIZE = 4
 
 
@@ -97,7 +95,7 @@ class SSH:
     @classmethod
     @run_with_spinner("Pinging...")
     async def ping_all(
-        cls, timeout: int, concurrent_calls: int = CONCURRENT_CALLS
+        cls, timeout: int, concurrent_calls: int = config.concurrent_conn
     ) -> list[SSHPingResponse]:
         ports = listen_ports()
 
@@ -127,7 +125,7 @@ class VPN:
         downside: bool,
         timeout: int,
         sample_size: int = PING_SAMPLE_SIZE,
-        config_wireguard_network: IPv4Network = config.wireguard_network,
+        vpn_network: IPv4Network = config.wireguard_network,
     ) -> tuple[float, timedelta | None]:
         """
         Returns a couple (latency, loss).
@@ -138,7 +136,7 @@ class VPN:
             bash_command = f"ping -q -c {sample_size} {ipv4_address}"
             target = None
         else:
-            bash_command = f"ping -q -c {sample_size} {config_wireguard_network.network_address + 1}"
+            bash_command = f"ping -q -c {sample_size} {vpn_network.network_address + 1}"
             target = ipv4_address
         try:
             response, _ = await execute_command(
@@ -169,7 +167,7 @@ class VPN:
 
     @staticmethod
     def get_registered_ips(
-        config_wireguard_network: IPv4Network = config.wireguard_network,
+        vpn_network: IPv4Network = config.wireguard_network,
     ) -> list[IPv4Address]:
         response = subprocess.run(
             ["sudo", "wg", "show", "wg0", "allowed-ips"],
@@ -184,8 +182,8 @@ class VPN:
             _, allowed_ip = line.split("\t", 1)
             allowed_ip = ipaddress.IPv4Network(allowed_ip).network_address
             if (
-                allowed_ip in config_wireguard_network
-                and allowed_ip != config_wireguard_network.broadcast_address
+                allowed_ip in vpn_network
+                and allowed_ip != vpn_network.broadcast_address
             ):
                 addresses.append(allowed_ip)
 
@@ -194,7 +192,7 @@ class VPN:
     @classmethod
     @run_with_spinner("Pinging...")
     async def ping_all(
-        cls, timeout: int, concurrent_calls: int = CONCURRENT_CALLS
+        cls, timeout: int, concurrent_calls: int = config.concurrent_conn
     ) -> list[VPNPingResponse]:
 
         sem = asyncio.Semaphore(concurrent_calls)
@@ -202,20 +200,21 @@ class VPN:
         async def ping_and_callback(
             ip: IPv4Address, sem: asyncio.Semaphore
         ) -> VPNPingResponse:
-            downside_loss, downside_latency = await cls.ping(ip, True, timeout)
+            async with sem:
+                downside_loss, downside_latency = await cls.ping(ip, True, timeout)
 
-            if downside_latency is None:
-                upside_loss, upside_latency = None, None
-            else:
-                upside_loss, upside_latency = await cls.ping(ip, False, timeout)
+                if downside_latency is None:
+                    upside_loss, upside_latency = None, None
+                else:
+                    upside_loss, upside_latency = await cls.ping(ip, False, timeout)
 
-            return VPNPingResponse(
-                ipv4_address=ip,
-                downside_loss=downside_loss,
-                downside_latency=downside_latency,
-                upside_loss=upside_loss,
-                upside_latency=upside_latency,
-            )
+                return VPNPingResponse(
+                    ipv4_address=ip,
+                    downside_loss=downside_loss,
+                    downside_latency=downside_latency,
+                    upside_loss=upside_loss,
+                    upside_latency=upside_latency,
+                )
 
         return await asyncio.gather(
             *[ping_and_callback(ip, sem) for ip in cls.get_registered_ips()],

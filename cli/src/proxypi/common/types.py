@@ -22,8 +22,25 @@ Port = Annotated[int, Field(ge=RANGE_PORTS[0], le=RANGE_PORTS[1])]
 ProxyID = Annotated[int, Field(ge=2, le=config.network_size - 1)]
 
 
+def port_to_proxyid(
+    port: Port, ssh_network_base: int = config.ssh_network_base
+) -> ProxyID:
+    return port - ssh_network_base + 2
+
+
+def proxyid_to_port(
+    proxyid: ProxyID, ssh_network_base: int = config.ssh_network_base
+) -> Port:
+    return proxyid + ssh_network_base - 2
+
+
 @dataclass
 class ExitCodeError(Exception):
+    """
+    Very similar to subproccess.CalledProcessError
+    Considering using it here
+    """
+
     bash_command: str
     host: IPv4Address | Port | None
     returncode: int

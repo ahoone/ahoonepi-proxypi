@@ -76,10 +76,10 @@ async def execute_command(
     target: IPv4Address | Port | None = None,
     timeout: float | None = None,
     mode: ExecuteCommandMode = "hold",
+    raise_exit_code: bool = True,
     lighthouse_private_key_path: FilePath = config.lighthouse_private_key_path,
     tcp_connection_timeout: int = config.tcp_connection_timeout,
     proxypi_user: str = config.proxypi_user,
-    raise_exit_code: bool = True,
 ) -> tuple[str, timedelta]:
     """
     Executes command either on the host or on a node.
@@ -90,10 +90,10 @@ async def execute_command(
         target (IPv4Address | Port | None): If None, runs on the host.
         timeout (float | None): If None, runs without timeout. In seconds.
         mode (ExecuteCommandMode): Description, optional (default: "hold").
+        raise_exit_code (bool): If set to `True`, will raise an error if the command exit with a non zero code. (default: True).
         lighthouse_private_key_path (FilePath): Description, optional (default: config.lighthouse_private_key_path).
         tcp_connection_timeout (int): Description, optional (default: config.tcp_connection_timeout).
         proxypi_user (str): Description, optional (default: config.proxypi_user).
-        raise_exit_code (bool): If set to `True`, will raise an error if the command exit with a non zero code. (default: True).
 
     Returns:
         tuple[str, timedelta]: Description.
