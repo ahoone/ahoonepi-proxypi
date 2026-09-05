@@ -37,7 +37,7 @@ def deps(
     dependencies: Annotated[list[str], Argument(autocompletion=_autocompletion)],
 ):
     """
-    Install or upgrade dependencies on local machine.
+    Installs or upgrades dependencies on local machine.
     `system_lib` dependency refers to the OS librairies, and includes, other dependencies like WireGuard.
     """
     if dependencies == ["all"]:

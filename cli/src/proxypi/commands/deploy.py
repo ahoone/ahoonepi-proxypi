@@ -2,16 +2,14 @@ import asyncio
 from datetime import timedelta
 from typing import Literal
 
-import typer
 from pydantic import BaseModel
+from typer import BadParameter
 
-from proxypi.common.config import config
+from proxypi.common.config import PROJECT_ROOT
 from proxypi.common.core import ExecuteCommandMode, execute_command, listen_ports
-from proxypi.common.options import PortOrHostOption
-from proxypi.common.types import Port
+from proxypi.common.options import NodeIDOption
+from proxypi.common.types import Port, node_id_to_port
 from proxypi.common.utils import print_table, run_with_spinner, to_table
-
-app = typer.Typer()
 
 TIMEOUT_RESTART = 200  # seconds
 TIMEOUT_STOP = 30  # seconds
@@ -34,7 +32,7 @@ async def run_docker_instructions_one_target(
     mode: ExecuteCommandMode = "hold",
 ) -> ServiceResponse:
     instructions = [
-        f"cd /home/{config.proxypi_user}/{config.git_repository}",
+        f"cd {PROJECT_ROOT}",
         "source .env",
     ]
 
@@ -107,23 +105,19 @@ async def restart_services_on_all(
     )
 
 
-@app.command()
-def status():
-    """
-    Displays the status of the services on all nodes.
-    """
-    raise NotImplementedError
-
-
-@app.command()
-def manage_services(
+def deploy(
     action: Literal["stop", "restart"] = "restart",
     a: bool = False,
-    port: PortOrHostOption = None,
+    node_id: NodeIDOption = 1,
     scraper: bool = False,
     broker: bool = False,
     timeout: int | None = None,
 ):
+    """
+    Manages the fleet's services with a common input.
+    """
+    port: Port | None = None if node_id == 1 else node_id_to_port(node_id)
+
     if timeout is None:
         if action == "stop":
             timeout = TIMEOUT_STOP
@@ -131,12 +125,10 @@ def manage_services(
             timeout = TIMEOUT_RESTART
 
     if a and port:
-        raise typer.BadParameter(
-            "if you want to restart on all Pis, do not provide a port"
-        )
+        raise BadParameter("if you want to restart on all Pis, do not provide a port")
 
     if not (scraper or broker):
-        raise typer.BadParameter("you must provide at least one service to restart")
+        raise BadParameter("you must provide at least one service to restart")
 
     if a:
         rows: list[ServiceResponse] = asyncio.run(

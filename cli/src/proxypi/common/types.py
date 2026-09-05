@@ -18,20 +18,23 @@ AsyncFunc = Callable[P, Awaitable[T]]
 DataModel = TypeVar("DataModel", bound=BaseModel)
 
 # pydantic flavored, not compatible with typer
+# NodeID = lighthouse + ProxyID
+# ie a ProxyID included in NodeID
 Port = Annotated[int, Field(ge=RANGE_PORTS[0], le=RANGE_PORTS[1])]
+NodeID = Annotated[int, Field(ge=1, le=config.network_size - 1)]
 ProxyID = Annotated[int, Field(ge=2, le=config.network_size - 1)]
 
 
-def port_to_proxyid(
+def port_to_node_id(
     port: Port, ssh_network_base: int = config.ssh_network_base
-) -> ProxyID:
+) -> NodeID:
     return port - ssh_network_base + 2
 
 
-def proxyid_to_port(
-    proxyid: ProxyID, ssh_network_base: int = config.ssh_network_base
+def node_id_to_port(
+    node_id: NodeID, ssh_network_base: int = config.ssh_network_base
 ) -> Port:
-    return proxyid + ssh_network_base - 2
+    return node_id + ssh_network_base - 2
 
 
 @dataclass

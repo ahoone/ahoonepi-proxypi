@@ -3,7 +3,7 @@ from proxypi.common.config import PROJECT_ROOT, config
 
 def conf():
     """
-    Print the current network configuration.
+    Prints the current network configuration.
     """
     print(
         f"Project root: {PROJECT_ROOT}",

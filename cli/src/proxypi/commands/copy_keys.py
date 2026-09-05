@@ -31,7 +31,7 @@ async def copy_one_key(
         )
 
 
-def copy_keys() -> None:
+def copy_keys():
     """
     Retrieves the remote keys.
     """

@@ -3,36 +3,30 @@ from typing import Annotated
 from typer import Argument, Option
 
 from proxypi.common.config import config
-from proxypi.common.constants import RANGE_PORTS
-from proxypi.common.core import listen_ports, listen_proxyids
+from proxypi.common.core import listen_node_ids, listen_proxy_ids
 
 
-def complete_port(incomplete: str) -> list[str]:
-    return [str(port) for port in listen_ports() if str(port).startswith(incomplete)]
+def complete_node_id(incomplete: str) -> list[str]:
+    return [
+        str(node_id)
+        for node_id in listen_node_ids()
+        if str(node_id).startswith(incomplete)
+    ]
 
 
-port_option = Option(
-    min=RANGE_PORTS[0],
-    max=RANGE_PORTS[1],
-    autocompletion=complete_port,
-)
-
-
-PortOption = Annotated[
-    int,
-    port_option,
+NodeIDArgument = Annotated[
+    int, Argument(min=1, max=config.network_size, autocompletion=complete_node_id)
 ]
 
-PortOrHostOption = Annotated[
-    int | None,
-    port_option,
+NodeIDOption = Annotated[
+    int, Option(min=1, max=config.network_size, autocompletion=complete_node_id)
 ]
 
 
 def complete_proxy_id(incomplete: str) -> list[str]:
     return [
         str(proxy_id)
-        for proxy_id in listen_proxyids()
+        for proxy_id in listen_proxy_ids()
         if str(proxy_id).startswith(incomplete)
     ]
 

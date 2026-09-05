@@ -9,7 +9,7 @@ from typing import Literal, TextIO, TypeVar
 from pydantic import FilePath
 
 from proxypi.common.config import config
-from proxypi.common.types import ExitCodeError, Port, ProxyID
+from proxypi.common.types import ExitCodeError, NodeID, Port, ProxyID
 
 T = TypeVar("T")
 
@@ -51,9 +51,13 @@ def listen_ports(
     return found
 
 
-def listen_proxyids() -> list[ProxyID]:
+def listen_proxy_ids() -> list[ProxyID]:
     ports: list[Port] = listen_ports()
     return [port - config.ssh_network_base + 2 for port in ports]
+
+
+def listen_node_ids(lighthouse_id=config.lighthouse_id) -> list[NodeID]:
+    return [lighthouse_id, *listen_proxy_ids()]
 
 
 async def __read_stream(

@@ -6,7 +6,7 @@ from rich import print as rprint
 
 from proxypi.common.config import config
 from proxypi.common.core import execute_command, listen_ports
-from proxypi.common.types import Port, port_to_proxyid
+from proxypi.common.types import Port, port_to_node_id
 from proxypi.common.utils import run_with_spinner
 
 
@@ -42,7 +42,7 @@ async def retrieve_keys(
 
 def sync():
     """
-    Load the proxies' keys in the lighthouse's VPN configuration file.
+    Loads the proxies' keys in the lighthouse's VPN configuration file.
     """
 
     peers = asyncio.run(retrieve_keys())
@@ -53,7 +53,7 @@ def sync():
             continue
 
         attributed_address: IPv4Address = config.wireguard_network[
-            port_to_proxyid(port)
+            port_to_node_id(port)
         ]
 
         if attributed_address in (
