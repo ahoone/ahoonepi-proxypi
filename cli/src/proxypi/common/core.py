@@ -2,13 +2,14 @@ import asyncio
 import sys
 from collections.abc import Awaitable
 from datetime import UTC, datetime, timedelta
+from ipaddress import IPv4Address
 from shlex import quote
 from typing import Literal, TextIO, TypeVar
 
 from pydantic import FilePath
 
 from proxypi.common.config import config
-from proxypi.common.types import Port, ProxyID
+from proxypi.common.types import ExitCodeError, Port, ProxyID
 
 T = TypeVar("T")
 
@@ -71,24 +72,28 @@ ExecuteCommandMode = Literal["hold", "flush_duplicate", "flush_main"]
 
 async def execute_command(
     bash_command: str,
-    port: Port | None = None,
+    *,
+    target: IPv4Address | Port | None = None,
     timeout: float | None = None,
     mode: ExecuteCommandMode = "hold",
     lighthouse_private_key_path: FilePath = config.lighthouse_private_key_path,
     tcp_connection_timeout: int = config.tcp_connection_timeout,
     proxypi_user: str = config.proxypi_user,
+    raise_exit_code: bool = True,
 ) -> tuple[str, timedelta]:
     """
-    Summary.
+    Executes command either on the host or on a node.
+    Handles the inputs and outputs and the timeout.
 
     Args:
         bash_command (str): To give as ready to use, the function encapsulates in `bash -lc '...'`.
-        port (Port | None): If None, runs on the host.
+        target (IPv4Address | Port | None): If None, runs on the host.
         timeout (float | None): If None, runs without timeout. In seconds.
         mode (ExecuteCommandMode): Description, optional (default: "hold").
         lighthouse_private_key_path (FilePath): Description, optional (default: config.lighthouse_private_key_path).
         tcp_connection_timeout (int): Description, optional (default: config.tcp_connection_timeout).
         proxypi_user (str): Description, optional (default: config.proxypi_user).
+        raise_exit_code (bool): If set to `True`, will raise an error if the command exit with a non zero code. (default: True).
 
     Returns:
         tuple[str, timedelta]: Description.
@@ -98,9 +103,14 @@ async def execute_command(
         KeyError: Description.
         RuntimeError: Description.
         TimeoutError: Description.
+        ExitCodeError: Description.
     """
 
     async def wait_for(coro: Awaitable[T]) -> T:
+        """
+        NOT THE ASYNCIO IMPLEMENTATION!
+        WRAPPER!
+        """
         if timeout is None:
             return await coro
         return await asyncio.wait_for(coro, timeout)
@@ -116,9 +126,7 @@ async def execute_command(
 
     bash_command = f"bash -lc {quote(bash_command)}"
 
-    if port is not None:
-        if port not in listen_ports():
-            raise KeyError(f"given {port} is not currently in use") from None
+    if target is not None:
         conn = [
             "ssh",
             "-tt",
@@ -128,10 +136,20 @@ async def execute_command(
             "StrictHostKeyChecking=no",
             "-o",
             f"ConnectTimeout={tcp_connection_timeout}",
-            "-p",
-            str(port),
-            f"{proxypi_user}@localhost",
         ]
+        if isinstance(target, int):
+            if target not in listen_ports():
+                raise KeyError(f"given {target} is not currently in use") from None
+            conn.extend(
+                [
+                    "-p",
+                    str(target),
+                    f"{proxypi_user}@localhost",
+                ]
+            )
+        elif isinstance(target, IPv4Address):
+            conn.append(f"{proxypi_user}@{target}")
+
         proc = await asyncio.create_subprocess_exec(
             *conn,
             bash_command,
@@ -184,11 +202,14 @@ async def execute_command(
             command_stdout = ""
             command_stderr = ""
 
-        if proc.returncode != 0:
-            raise RuntimeError(
-                f"`{bash_command}` failed with "
-                + f"`{proc.returncode}` on host: "
-                + f"{command_stderr.strip()}"
+        if proc.returncode is None:
+            raise RuntimeError("proc does not have a returncode")
+        elif raise_exit_code and proc.returncode != 0:
+            raise ExitCodeError(
+                bash_command=bash_command,
+                host=target or None,
+                returncode=proc.returncode,
+                stderr=command_stderr.strip(),
             )
 
         return (
@@ -200,7 +221,7 @@ async def execute_command(
         proc.terminate()
         _ = await proc.wait()
         raise TimeoutError(
-            f"`{bash_command}` timed out after {timeout}s on host`"
+            f"`{bash_command}` timed out after {timeout}s on {target or 'localhost'}`"
         ) from None
 
     finally:

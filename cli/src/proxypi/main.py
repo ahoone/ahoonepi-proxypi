@@ -1,5 +1,6 @@
 from typer import Typer
 
+from proxypi.commands.conf import conf
 from proxypi.commands.connect import connect
 from proxypi.commands.copy_keys import copy_keys
 from proxypi.commands.deps import deps
@@ -10,6 +11,7 @@ from proxypi.commands.venv import venv
 
 app = Typer()
 
+app.command()(conf)
 app.command()(connect)
 app.command()(copy_keys)
 app.command()(deps)

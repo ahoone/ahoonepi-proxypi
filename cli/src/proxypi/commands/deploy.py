@@ -68,7 +68,7 @@ async def run_docker_instructions_one_target(
 
     try:
         response, duration = await execute_command(
-            bash_command, port=port, timeout=timeout, mode=mode
+            bash_command, target=port, timeout=timeout, mode=mode
         )
         if "ERROR: NODE_ROLE must be" in response:
             return ServiceResponse(port=port, returncode="skipped", duration=duration)

@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Callable
-from typing import Annotated, ParamSpec, TypeVar, final
+from dataclasses import dataclass
+from ipaddress import IPv4Address
+from typing import Annotated, ParamSpec, TypeVar, final, override
 
 from pydantic import BaseModel, Field
 from typer import Abort
@@ -18,6 +20,23 @@ DataModel = TypeVar("DataModel", bound=BaseModel)
 # pydantic flavored, not compatible with typer
 Port = Annotated[int, Field(ge=RANGE_PORTS[0], le=RANGE_PORTS[1])]
 ProxyID = Annotated[int, Field(ge=2, le=config.network_size - 1)]
+
+
+@dataclass
+class ExitCodeError(Exception):
+    bash_command: str
+    host: IPv4Address | Port | None
+    returncode: int
+    stderr: str
+
+    @override
+    def __str__(self) -> str:
+        return (
+            f"Command `{self.bash_command}` failed on"
+            + (f" {self.host}" if self.host else " localhost")
+            + f" with exit code {self.returncode}"
+            + (f":\n{self.stderr}" if self.stderr != "" else " (stderr is empty).")
+        )
 
 
 class Dependency(ABC):
