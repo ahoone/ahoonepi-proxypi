@@ -21,13 +21,13 @@ def info(node_id: NodeIDArgument):
     """
 
     port: Port = node_id_to_port(node_id)
+    target = None if node_id == 1 else port
 
     @run_with_spinner("Requesting...")
     async def inner() -> None:
         bash_command = (
             "printf '%s|%s' $(hostname) $(curl ifconfig.me 2>/dev/null || echo 'N/A')"
         )
-        target = None if node_id == 1 else port
         response, _ = await execute_command(bash_command, target=target)
         hostname, ipv6_address = response.split("|")
 
