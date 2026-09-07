@@ -11,6 +11,7 @@ from proxypi.commands.ram import ram
 from proxypi.commands.status import status
 from proxypi.commands.sync import sync
 from proxypi.commands.tests import tests
+from proxypi.commands.update import update
 from proxypi.commands.venv import venv
 
 app = Typer()
@@ -26,6 +27,7 @@ app.command()(ram)
 app.command()(status)
 app.command()(sync)
 app.command()(tests)
+app.command()(update)
 app.command()(venv)
 
 if __name__ == "__main__":

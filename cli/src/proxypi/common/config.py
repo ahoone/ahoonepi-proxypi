@@ -24,7 +24,6 @@ class Config(BaseSettings):
     ssh_network_base: int
     wireguard_network: IPv4Network
     proxypi_user: str
-    git_repository: str
 
     lighthouse_private_key_path: Path = Path.home() / ".ssh" / "id_proxy_access"
     lighthouse_public_key_path: Path = Path.home() / ".ssh" / "id_proxy_access.pub"

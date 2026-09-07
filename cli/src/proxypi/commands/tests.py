@@ -4,7 +4,7 @@ from typing import Literal
 
 from typer import BadParameter
 
-from proxypi.common.config import config
+from proxypi.common.config import PROJECT_ROOT
 
 
 def tests(
@@ -18,9 +18,7 @@ def tests(
     if not (scraper or broker):
         raise BadParameter("you must provide at least one service to restart")
 
-    instructions: list[str] = [
-        f"cd /home/{config.proxypi_user}/{config.git_repository}"
-    ]
+    instructions: list[str] = [f"cd {PROJECT_ROOT}"]
 
     services: list[str] = []
     if scraper:

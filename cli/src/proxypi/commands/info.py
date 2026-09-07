@@ -20,8 +20,7 @@ def info(node_id: NodeIDArgument):
     Displays information on the given node as a json format used by the broker.
     """
 
-    port: Port = node_id_to_port(node_id)
-    target = None if node_id == 1 else port
+    target = None if node_id == 1 else node_id_to_port(node_id)
 
     @run_with_spinner("Requesting...")
     async def inner() -> None:

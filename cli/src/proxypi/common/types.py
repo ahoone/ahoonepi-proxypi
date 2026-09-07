@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from ipaddress import IPv4Address
-from typing import Annotated, ParamSpec, TypeVar, final, override
+from typing import Annotated, Literal, ParamSpec, TypeVar, final, override
 
 from pydantic import BaseModel, Field
 from typer import Abort
@@ -95,3 +95,6 @@ class Dependency(ABC):
         if not self._is_installed():
             raise Abort(f"you first need to install package {self.name}")
         self._upgrade()
+
+    # @abstractmethod
+    # def status(self) -> Literal["up-to-date", ""]
