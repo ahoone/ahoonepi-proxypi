@@ -23,7 +23,7 @@ def ram(node_id: NodeIDArgument):
     @run_with_spinner("Requesting...")
     async def inner() -> None:
 
-        response, _ = await execute_command("free", target=target)
+        response = (await execute_command("free", target=target)).stdout
 
         first_row = response.split("\n")[1].split()
 

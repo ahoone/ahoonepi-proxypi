@@ -6,7 +6,7 @@ from ipaddress import IPv4Address
 from shlex import quote
 from typing import Literal, TextIO, TypeVar
 
-from pydantic import FilePath
+from pydantic import BaseModel, FilePath
 
 from proxypi.common.config import config
 from proxypi.common.types import ExitCodeError, NodeID, Port, ProxyID
@@ -74,6 +74,13 @@ async def __read_stream(
 ExecuteCommandMode = Literal["hold", "flush_duplicate", "flush_main"]
 
 
+class CommandResponse(BaseModel):
+    returncode: int
+    stdout: str
+    stderr: str
+    duration: timedelta
+
+
 async def execute_command(
     bash_command: str,
     *,
@@ -84,7 +91,7 @@ async def execute_command(
     lighthouse_private_key_path: FilePath = config.lighthouse_private_key_path,
     tcp_connection_timeout: int = config.tcp_connection_timeout,
     proxypi_user: str = config.proxypi_user,
-) -> tuple[str, timedelta]:
+) -> CommandResponse:
     """
     Executes command either on the host or on a node.
     Handles the inputs and outputs and the timeout.
@@ -216,9 +223,11 @@ async def execute_command(
                 stderr=command_stderr.strip(),
             )
 
-        return (
-            command_stdout,
-            end_beacon - start_beacon,
+        return CommandResponse(
+            returncode=proc.returncode,
+            stdout=command_stdout,
+            stderr=command_stderr,
+            duration=end_beacon - start_beacon,
         )
 
     except TimeoutError:

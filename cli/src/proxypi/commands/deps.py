@@ -1,7 +1,7 @@
 from collections.abc import Callable
 from typing import Annotated, Literal
 
-from typer import Argument, Context
+from typer import Argument, Context, Option
 
 from proxypi.common.options import NodeIDOption
 from proxypi.common.types import Dependency, node_id_to_port
@@ -38,6 +38,12 @@ def _autocompletion(ctx: Context, incomplete: str) -> list[str]:
 def deps(
     mode: Annotated[Literal["install", "upgrade", "status"], Argument()],
     dependencies: Annotated[list[str], Argument(autocompletion=_autocompletion)],
+    all_proxies: Annotated[
+        bool,
+        Option(
+            help="If set to `True`, will ignore the node_id and run on all the proxies."
+        ),
+    ] = False,
     node_id: NodeIDOption = 1,
 ):
     """
@@ -45,6 +51,8 @@ def deps(
     `system_lib` dependency refers to the OS librairies, and includes, other dependencies like WireGuard.
     """
     target = None if node_id == 1 else node_id_to_port(node_id)
+
+    # async def inner():
 
     if target is None:
         if dependencies == ["all"]:

@@ -7,7 +7,7 @@ from proxypi.common.types import Port, node_id_to_port
 
 async def git(target: Port | None, *args: str) -> str:
     bash_command = f"git {' '.join(args)}"
-    response, _ = await execute_command(bash_command, target=target, mode="hold")
+    response = (await execute_command(bash_command, target=target, mode="hold")).stdout
     return response
 
 

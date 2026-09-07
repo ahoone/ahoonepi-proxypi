@@ -72,29 +72,30 @@ class Dependency(ABC):
 
     @staticmethod
     @abstractmethod
-    def _is_installed() -> bool: ...
+    async def _is_installed(target: Port | None) -> bool: ...
 
     @abstractmethod
-    def _is_meeting_min_version_required(self) -> bool: ...
+    async def _is_meeting_min_version_required(self, target: Port | None) -> bool: ...
 
-    @property
     @final
-    def is_satisfied(self) -> bool:
-        return self._is_installed() and self._is_meeting_min_version_required()
+    async def is_satisfied(self, target: Port | None) -> bool:
+        return await self._is_installed(
+            target
+        ) and await self._is_meeting_min_version_required(target)
 
     @staticmethod
     @abstractmethod
-    def install() -> None: ...
+    async def install(target: Port | None) -> bool: ...
 
     @staticmethod
     @abstractmethod
-    def _upgrade() -> None: ...
+    async def _upgrade(target: Port | None) -> bool: ...
 
     @final
-    def upgrade(self) -> None:
-        if not self._is_installed():
+    async def upgrade(self, target: Port | None) -> bool:
+        if not await self._is_installed(target):
             raise Abort(f"you first need to install package {self.name}")
-        self._upgrade()
+        return await self._upgrade(target)
 
     # @abstractmethod
     # def status(self) -> Literal["up-to-date", ""]

@@ -27,7 +27,7 @@ def info(node_id: NodeIDArgument):
         bash_command = (
             "printf '%s|%s' $(hostname) $(curl ifconfig.me 2>/dev/null || echo 'N/A')"
         )
-        response, _ = await execute_command(bash_command, target=target)
+        response = (await execute_command(bash_command, target=target)).stdout
         hostname, ipv6_address = response.split("|")
 
         model = InfoResponse(

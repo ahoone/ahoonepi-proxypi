@@ -7,11 +7,12 @@ from ipaddress import IPv4Address, IPv4Network, IPv6Address
 from typing import Literal
 
 import typer
+from pydantic import BaseModel
+
 from proxypi.common.config import PROJECT_ROOT, config
 from proxypi.common.core import execute_command, listen_ports
 from proxypi.common.types import ExitCodeError, Port
 from proxypi.common.utils import print_table, run_with_spinner, to_table
-from pydantic import BaseModel
 
 app = typer.Typer()
 
@@ -48,9 +49,11 @@ class SSH:
 
             bash_command = " ".join(instructions)
 
-            stdout, timedelta_exec = await execute_command(
+            command_response = await execute_command(
                 bash_command, target=port, timeout=timeout
             )
+            stdout = command_response.stdout
+            timedelta_exec = command_response.duration
 
             stdout = stdout.strip().split("|")
             start_internet_beacon = timedelta(microseconds=int(stdout[2]))
@@ -80,7 +83,7 @@ class SSH:
 
         bash_command = " ".join(instructions)
 
-        stdout, _ = await execute_command(bash_command, timeout=timeout)
+        stdout = (await execute_command(bash_command, timeout=timeout)).stdout
 
         stdout = stdout.strip().split("|")
         start_internet_beacon = timedelta(microseconds=int(stdout[1]))
@@ -139,13 +142,13 @@ class VPN:
             bash_command = f"ping -q -c {sample_size} {vpn_network.network_address + 1}"
             target = ipv4_address
         try:
-            response, _ = await execute_command(
+            response = await execute_command(
                 bash_command,
                 target=target,
                 timeout=timeout,
                 mode="hold",
                 raise_exit_code=True,
-            )
+            ).stdout
         except ExitCodeError:
             return (100.0, None)
 
