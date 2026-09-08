@@ -17,7 +17,7 @@ def create_venv_from_requirements(
             "--no-project",
             "--clear",
             "--python",
-            "3.10",
+            "3.11",
             f"{PROJECT_ROOT}/{subdirectory}/.venv",
         ],
         check=True,

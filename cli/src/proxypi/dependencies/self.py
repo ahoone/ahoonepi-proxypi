@@ -1,32 +1,27 @@
 from typing import override
 
-from proxypi.common.config import PROJECT_ROOT
-from proxypi.common.types import Dependency
+from proxypi.common.types import Dependency, Port
 
 
 class Self(Dependency):
     @staticmethod
     @override
-    def _is_installed() -> bool:
+    async def _is_installed(target: Port | None) -> bool:
         return True
 
     @override
-    def _is_meeting_min_version_required(self) -> bool:
+    async def _is_meeting_min_version_required(self, target: Port | None) -> bool:
         return True
 
     @staticmethod
     @override
-    def install() -> None:
-        pass
+    async def _install(target: Port | None) -> bool:
+        return True
 
     @staticmethod
     @override
-    def _upgrade() -> None:
-
-        with open(PROJECT_ROOT / ".git" / "config") as f:
-            lines = f.readlines()
-
-        print(lines)
+    async def _upgrade(target: Port | None) -> bool:
+        return True
 
 
 self = Self("self")

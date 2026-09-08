@@ -1,15 +1,15 @@
 import asyncio
 import sys
 from collections.abc import Awaitable
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from ipaddress import IPv4Address
 from shlex import quote
 from typing import Literal, TextIO, TypeVar
 
-from pydantic import BaseModel, FilePath
+from pydantic import FilePath
 
 from proxypi.common.config import config
-from proxypi.common.types import ExitCodeError, NodeID, Port, ProxyID
+from proxypi.common.types import CommandResponse, ExitCodeError, NodeID, Port, ProxyID
 
 T = TypeVar("T")
 
@@ -72,13 +72,6 @@ async def __read_stream(
 
 
 ExecuteCommandMode = Literal["hold", "flush_duplicate", "flush_main"]
-
-
-class CommandResponse(BaseModel):
-    returncode: int
-    stdout: str
-    stderr: str
-    duration: timedelta
 
 
 async def execute_command(
@@ -150,7 +143,9 @@ async def execute_command(
         ]
         if isinstance(target, int):
             if target not in listen_ports():
-                raise KeyError(f"given {target} is not currently in use") from None
+                raise KeyError(
+                    f"given port `{target}` is not currently in use"
+                ) from None
             conn.extend(
                 [
                     "-p",

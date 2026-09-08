@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from ipaddress import IPv4Address
 from typing import Annotated, Literal, ParamSpec, TypeVar, final, override
 
@@ -26,15 +27,24 @@ ProxyID = Annotated[int, Field(ge=2, le=config.network_size - 1)]
 
 
 def port_to_node_id(
-    port: Port, ssh_network_base: int = config.ssh_network_base
+    port: Port, *, ssh_network_base: int = config.ssh_network_base
 ) -> NodeID:
     return port - ssh_network_base + 2
 
 
 def node_id_to_port(
-    node_id: NodeID, ssh_network_base: int = config.ssh_network_base
+    node_id: NodeID, *, ssh_network_base: int = config.ssh_network_base
 ) -> Port:
+    if NodeID == 1:
+        raise ValueError("this action should not be performed on the lighthouse id")
     return node_id + ssh_network_base - 2
+
+
+class CommandResponse(BaseModel):
+    returncode: int
+    stdout: str
+    stderr: str
+    duration: timedelta
 
 
 @dataclass
@@ -57,6 +67,17 @@ class ExitCodeError(Exception):
             + f" with exit code {self.returncode}"
             + (f":\n{self.stderr}" if self.stderr != "" else " (stderr is empty).")
         )
+
+
+DependencyMode = Literal["install", "upgrade", "status"]
+
+
+class DependencyModeResponse(BaseModel):
+    dependency: str
+    mode: DependencyMode
+    success: bool
+    duration: timedelta
+    target: NodeID
 
 
 class Dependency(ABC):
@@ -85,17 +106,40 @@ class Dependency(ABC):
 
     @staticmethod
     @abstractmethod
-    async def install(target: Port | None) -> bool: ...
+    async def _install(target: Port | None) -> bool: ...
+
+    @final
+    async def install(self, target: Port | None) -> DependencyModeResponse:
+        started_at = datetime.now(UTC)
+        success = await self._install(target)
+        duration = datetime.now(UTC) - started_at
+        return DependencyModeResponse(
+            dependency=self.name,
+            mode="install",
+            success=success,
+            duration=duration,
+            target=port_to_node_id(target) if target else 1,
+        )
 
     @staticmethod
     @abstractmethod
     async def _upgrade(target: Port | None) -> bool: ...
 
     @final
-    async def upgrade(self, target: Port | None) -> bool:
+    async def upgrade(self, target: Port | None) -> DependencyModeResponse:
         if not await self._is_installed(target):
             raise Abort(f"you first need to install package {self.name}")
-        return await self._upgrade(target)
+
+        started_at = datetime.now(UTC)
+        success = await self._upgrade(target)
+        duration = datetime.now(UTC) - started_at
+        return DependencyModeResponse(
+            dependency=self.name,
+            mode="upgrade",
+            success=success,
+            duration=duration,
+            target=port_to_node_id(target) if target else 1,
+        )
 
     # @abstractmethod
     # def status(self) -> Literal["up-to-date", ""]

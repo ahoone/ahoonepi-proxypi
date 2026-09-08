@@ -36,8 +36,8 @@ def copy_keys():
     Retrieves the remote keys.
     """
 
-    async def inner(concurrent_calls: int = config.concurrent_conn) -> None:
-        sem = asyncio.Semaphore(concurrent_calls)
+    async def inner(concurrent_conn: int = config.concurrent_conn) -> None:
+        sem = asyncio.Semaphore(concurrent_conn)
         await asyncio.gather(*[copy_one_key(port, sem) for port in listen_ports()])
 
     asyncio.run(inner())

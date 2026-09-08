@@ -1,33 +1,27 @@
-import shutil
-import subprocess
 from typing import override
 
-import requests
+import httpx
 
 from proxypi.common.core import execute_command
-from proxypi.common.types import Dependency, ExitCodeError
+from proxypi.common.types import Dependency, ExitCodeError, Port
 
-INSTALL_URL: str = "https://astral.sh/uv/install.sh"
-MIN_VERSION: tuple[int, ...] = (0, 12, 7)  # The one with which this was written
+INSTALL_URL: str = "https://releases.astral.sh/installers/uv/latest/uv-installer.sh"
+MIN_VERSION: tuple[int, ...] = (0, 12, 7)  # The version with which this was written
 
 
 class UV(Dependency):
     @staticmethod
     @override
-    async def _is_installed() -> bool:
-        return shutil.which("uv") is not None
+    async def _is_installed(target: Port | None) -> bool:
+        response = await execute_command("uv", target=target, mode="hold")
+
+        return response.stdout == "-bash: uv: command not found"
 
     @override
-    async def _is_meeting_min_version_required(self) -> bool:
-        # response = await
-        result = subprocess.run(
-            ["uv", "--version"],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
+    async def _is_meeting_min_version_required(self, target: Port | None) -> bool:
+        response = await execute_command("uv --version", target=target, mode="hold")
 
-        installed_version = result.stdout.split()[1]
+        installed_version = response.stdout.split()[1]
 
         installed = tuple(int(x) for x in installed_version.split("."))
 
@@ -35,16 +29,28 @@ class UV(Dependency):
 
     @staticmethod
     @override
-    async def install(url: str = INSTALL_URL) -> None:
-        response = requests.get(url)
-        response.raise_for_status()
-        installer = response.content
-        response = await execute_command(installer, raise_exit_code=False)
+    async def _install(target: Port | None, *, url: str = INSTALL_URL) -> bool:
+        """
+        it creates one client per request, that's bad. Should have one for the entire CLI
+        """
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(url)
+            response.raise_for_status()
+            installer = response.text
+            _ = await execute_command(installer, target=target, raise_exit_code=True)
+            return True
+        except httpx.HTTPStatusError:
+            return False
+        except ExitCodeError:
+            return False
 
     @staticmethod
     @override
-    async def _upgrade() -> bool:
-        response = await execute_command("uv self update", raise_exit_code=False)
+    async def _upgrade(target: Port | None) -> bool:
+        response = await execute_command(
+            "uv self update", target=target, raise_exit_code=False
+        )
         return response.returncode
 
 

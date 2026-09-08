@@ -15,6 +15,11 @@ class Config(BaseSettings):
     retrieved through configuration.
     """
 
+    # TO DO: CHECK we are on the lighthouse
+    # many functions accept port or None as an argument
+    # the port identifying a proxy
+    # and None means to run on the host
+
     model_config = SettingsConfigDict(
         extra="ignore",
         env_file=PROJECT_ROOT / "config.env",

@@ -98,11 +98,11 @@ class SSH:
     @classmethod
     @run_with_spinner("Pinging...")
     async def ping_all(
-        cls, timeout: int, concurrent_calls: int = config.concurrent_conn
+        cls, timeout: int, concurrent_conn: int = config.concurrent_conn
     ) -> list[SSHPingResponse]:
         ports = listen_ports()
 
-        sem = asyncio.Semaphore(concurrent_calls)
+        sem = asyncio.Semaphore(concurrent_conn)
 
         rows: list[SSHPingResponse] = await asyncio.gather(
             cls.ping_lighthouse(timeout),
@@ -142,12 +142,14 @@ class VPN:
             bash_command = f"ping -q -c {sample_size} {vpn_network.network_address + 1}"
             target = ipv4_address
         try:
-            response = await execute_command(
-                bash_command,
-                target=target,
-                timeout=timeout,
-                mode="hold",
-                raise_exit_code=True,
+            response = (
+                await execute_command(
+                    bash_command,
+                    target=target,
+                    timeout=timeout,
+                    mode="hold",
+                    raise_exit_code=True,
+                )
             ).stdout
         except ExitCodeError:
             return (100.0, None)
@@ -195,10 +197,10 @@ class VPN:
     @classmethod
     @run_with_spinner("Pinging...")
     async def ping_all(
-        cls, timeout: int, concurrent_calls: int = config.concurrent_conn
+        cls, timeout: int, concurrent_conn: int = config.concurrent_conn
     ) -> list[VPNPingResponse]:
 
-        sem = asyncio.Semaphore(concurrent_calls)
+        sem = asyncio.Semaphore(concurrent_conn)
 
         async def ping_and_callback(
             ip: IPv4Address, sem: asyncio.Semaphore
