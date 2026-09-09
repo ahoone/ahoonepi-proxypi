@@ -18,6 +18,8 @@ AsyncFunc = Callable[P, Awaitable[T]]
 
 DataModel = TypeVar("DataModel", bound=BaseModel)
 
+PosInt = Annotated[int, Field(ge=1)]
+
 # pydantic flavored, not compatible with typer
 # NodeID = lighthouse + ProxyID
 # ie a ProxyID included in NodeID

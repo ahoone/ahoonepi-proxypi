@@ -5,13 +5,19 @@ from typing import Literal
 from pydantic import BaseModel
 from typer import BadParameter
 
-from proxypi.common.config import PROJECT_ROOT
+from proxypi.common.config import PROJECT_ROOT, config
 from proxypi.common.core import ExecuteCommandMode, execute_command, listen_ports
 from proxypi.common.options import NodeIDOption
 from proxypi.common.types import Port, node_id_to_port
-from proxypi.common.utils import print_table, run_with_spinner, to_table
+from proxypi.common.utils import (
+    gather_with_progress,
+    gather_with_semaphore,
+    print_table,
+    run_with_spinner,
+    to_table,
+)
 
-TIMEOUT_RESTART = 200  # seconds
+TIMEOUT_RESTART = 300  # seconds
 TIMEOUT_STOP = 30  # seconds
 
 Action = Literal["stop", "restart"]
@@ -84,27 +90,29 @@ async def run_docker_instructions_one_target(
         )
 
 
-@run_with_spinner("Restarting services...")
+# @(run_with_spinner("Reloading..."))
 async def restart_services_on_all(
     action: Action,
     timeout: int,
     scraper: bool = False,
     broker: bool = False,
+    concurrent_conn: int = config.concurrent_conn,
 ) -> list[ServiceResponse]:
 
-    return await asyncio.gather(
-        *[
-            run_docker_instructions_one_target(
-                action=action,
-                port=port,
-                scraper=scraper,
-                broker=broker,
-                timeout=timeout,
-                mode="hold",
-            )
-            for port in [None, *listen_ports()]
-        ]
-    )
+    tasks = [
+        run_docker_instructions_one_target(
+            action=action,
+            port=port,
+            scraper=scraper,
+            broker=broker,
+            timeout=timeout,
+            mode="hold",
+        )
+        for port in [None, *listen_ports()]
+    ]
+    return await gather_with_progress(*tasks, concurrent_conn=concurrent_conn)
+    # return await gather_with_semaphore(*tasks, concurrent_conn=concurrent_conn)
+    # return await asyncio.gather(*tasks)
 
 
 def deploy(

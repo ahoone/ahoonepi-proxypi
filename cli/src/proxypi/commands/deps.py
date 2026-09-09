@@ -1,11 +1,12 @@
 import asyncio
 from collections.abc import Awaitable, Callable
-from typing import Annotated, TypeVar
+from typing import Annotated
 
 from pydantic import BaseModel, create_model
 from typer import Argument, Context, Option
 
 from proxypi.common.config import config
+from proxypi.common.core import listen_node_ids, listen_proxy_ids
 from proxypi.common.options import NodeIDOption
 from proxypi.common.types import (
     Dependency,
@@ -15,7 +16,11 @@ from proxypi.common.types import (
     Port,
     node_id_to_port,
 )
-from proxypi.common.utils import print_table, to_table
+from proxypi.common.utils import (
+    gather_with_progress,
+    print_table,
+    to_table,
+)
 from proxypi.dependencies.self import self
 from proxypi.dependencies.system_lib import system_lib
 from proxypi.dependencies.uv import uv
@@ -47,18 +52,16 @@ def _autocompletion(ctx: Context, incomplete: str) -> list[str]:
 
 
 async def run_dependencies_mode_on_target(
-    sem: asyncio.Semaphore,
     mode: DependencyMode,
     dependencies: list[str],
     target: Port | None,
 ) -> list[DependencyModeResponse]:
     responses: list[DependencyModeResponse] = []
-    async with sem:
-        for dependency in dependencies:
-            coro: Callable[[Port | None], Awaitable[DependencyModeResponse]] = getattr(
-                globals()[dependency], mode
-            )
-            responses.append(await coro(target))
+    for dependency in dependencies:
+        coro: Callable[[Port | None], Awaitable[DependencyModeResponse]] = getattr(
+            globals()[dependency], mode
+        )
+        responses.append(await coro(target))
     return responses
 
 
@@ -93,30 +96,29 @@ async def run_on_targets(
     concurrent_conn=config.concurrent_conn,
 ) -> list[BaseModel]:
     rows = []
-    sem = asyncio.Semaphore(concurrent_conn)
-    for target in targets:
-        port = node_id_to_port(target) if target != 1 else None
-        response = await run_dependencies_mode_on_target(sem, mode, dependencies, port)
-        rows.append(format_to_dynamic_model(dynamic_model, response))
+    ports = [node_id_to_port(target) if target != 1 else None for target in targets]
+    coros = [run_dependencies_mode_on_target(mode, dependencies, p) for p in ports]
+    responses = await gather_with_progress(*coros, concurrent_conn=concurrent_conn)
+    rows = [format_to_dynamic_model(dynamic_model, r) for r in responses]
     return rows
 
 
 def deps(
     mode: Annotated[DependencyMode, Argument()],
     dependencies: Annotated[list[str], Argument(autocompletion=_autocompletion)],
-    # all_proxies: Annotated[
-    #     bool,
-    #     Option(
-    #         help="If set to `True`, will ignore the node_id and run on all the proxies."
-    #     ),
-    # ] = False,
     node_id: NodeIDOption = 1,
+    all_proxies: Annotated[
+        bool,
+        Option(
+            help="If set to `True`, will ignore the node_id and run on all the proxies."
+        ),
+    ] = False,
 ):
     """
     Installs or upgrades dependencies on local machine.
     `system_lib` dependency refers to the OS librairies, and includes, other dependencies like WireGuard.
     """
-    targets = [node_id]
+    targets = listen_proxy_ids() if all_proxies else [node_id]
 
     if dependencies == ["all"]:
         dependencies = [d.name for d in DEPENDENCIES]

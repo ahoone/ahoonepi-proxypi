@@ -111,6 +111,9 @@ async def execute_command(
         ExitCodeError: Description.
     """
 
+    if target is None and "sudo" in bash_command:
+        raise ValueError("You should not try to make a call to the host with sudo")
+
     async def wait_for(coro: Awaitable[T]) -> T:
         """
         NOT THE ASYNCIO IMPLEMENTATION!
