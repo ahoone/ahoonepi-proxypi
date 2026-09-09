@@ -88,6 +88,7 @@ async def execute_command(
     """
     Executes command either on the host or on a node.
     Handles the inputs and outputs and the timeout.
+    Does not handle stdin (always set to `devnull`).
 
     Args:
         bash_command (str): To give as ready to use, the function encapsulates in `bash -lc '...'`.
@@ -134,6 +135,7 @@ async def execute_command(
         conn = [
             "ssh",
             "-tt",
+            "-n",
             "-i",
             str(lighthouse_private_key_path),
             "-o",
@@ -210,6 +212,8 @@ async def execute_command(
 
         if proc.returncode is None:
             raise RuntimeError("proc does not have a returncode")
+        elif proc.returncode == 1 and "sudo: a password is required" in command_stderr:
+            raise RuntimeError("the remotes should not ask for inputs")
         elif raise_exit_code and proc.returncode != 0:
             raise ExitCodeError(
                 bash_command=bash_command,
