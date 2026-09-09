@@ -10,9 +10,10 @@ class SystemLib(Dependency):
     async def _is_installed(target: Port | None) -> bool:
         return True
 
+    @staticmethod
     @override
-    async def _is_meeting_min_version_required(self, target: Port | None) -> bool:
-        return True
+    async def _get_installed_version(target: Port | None) -> tuple[int, ...]:
+        return ()
 
     @staticmethod
     @override

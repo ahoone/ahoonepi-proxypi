@@ -13,19 +13,19 @@ class UV(Dependency):
     @staticmethod
     @override
     async def _is_installed(target: Port | None) -> bool:
-        response = await execute_command("uv", target=target, mode="hold")
+        response = await execute_command(
+            "uv", target=target, mode="hold", raise_exit_code=False
+        )
 
-        return response.stdout == "-bash: uv: command not found"
+        return response.stdout == ""
 
+    @staticmethod
     @override
-    async def _is_meeting_min_version_required(self, target: Port | None) -> bool:
-        response = await execute_command("uv --version", target=target, mode="hold")
-
-        installed_version = response.stdout.split()[1]
-
-        installed = tuple(int(x) for x in installed_version.split("."))
-
-        return installed >= self.min_version
+    async def _get_installed_version(target: Port | None) -> tuple[int, ...]:
+        response = await execute_command(
+            "uv --version", target=target, mode="hold", raise_exit_code=True
+        )
+        return tuple(int(x) for x in response.stdout.split()[1].split("."))
 
     @staticmethod
     @override
@@ -36,7 +36,7 @@ class UV(Dependency):
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.get(url)
-            response.raise_for_status()
+            _ = response.raise_for_status()
             installer = response.text
             _ = await execute_command(installer, target=target, raise_exit_code=True)
             return True
@@ -48,10 +48,13 @@ class UV(Dependency):
     @staticmethod
     @override
     async def _upgrade(target: Port | None) -> bool:
-        response = await execute_command(
-            "uv self update", target=target, raise_exit_code=False
-        )
-        return response.returncode
+        try:
+            _ = await execute_command(
+                "uv self update", target=target, raise_exit_code=True
+            )
+            return True
+        except ExitCodeError:
+            return False
 
 
 uv = UV("uv", min_version=MIN_VERSION)

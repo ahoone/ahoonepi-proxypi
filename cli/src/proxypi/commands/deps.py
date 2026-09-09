@@ -79,7 +79,7 @@ def format_to_dynamic_model(
     node_id = response[0].target
     entries = dict(
         {"node_id": node_id},
-        **{d.dependency: f"{d.success} in {d.duration}" for d in response},
+        **{d.dependency: str(d) for d in response},
     )
     return dynamic_model(**entries)
 
@@ -116,7 +116,7 @@ def deps(
     Installs or upgrades dependencies on local machine.
     `system_lib` dependency refers to the OS librairies, and includes, other dependencies like WireGuard.
     """
-    targets = [node_id, 2]
+    targets = [node_id]
 
     if dependencies == ["all"]:
         dependencies = [d.name for d in DEPENDENCIES]

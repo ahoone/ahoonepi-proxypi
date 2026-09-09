@@ -78,6 +78,20 @@ class DependencyModeResponse(BaseModel):
     success: bool
     duration: timedelta
     target: NodeID
+    content: str = ""
+
+    @override
+    def __str__(self) -> str:
+        match self.mode:
+            case "install":
+                if self.success:
+                    return f"installed in {self.duration}"
+                else:
+                    return "failed"
+            case "upgrade":
+                return f"upgraded in {self.duration}"
+            case "status":
+                return f"{self.content}"
 
 
 class Dependency(ABC):
@@ -95,8 +109,16 @@ class Dependency(ABC):
     @abstractmethod
     async def _is_installed(target: Port | None) -> bool: ...
 
+    @staticmethod
     @abstractmethod
-    async def _is_meeting_min_version_required(self, target: Port | None) -> bool: ...
+    async def _get_installed_version(target: Port | None) -> tuple[int, ...]: ...
+
+    @final
+    async def _is_meeting_min_version_required(self, target: Port | None) -> bool:
+        installed_version = await self._get_installed_version(target)
+        if len(installed_version) == 0:
+            return True
+        return installed_version >= self.min_version
 
     @final
     async def is_satisfied(self, target: Port | None) -> bool:
@@ -141,5 +163,26 @@ class Dependency(ABC):
             target=port_to_node_id(target) if target else 1,
         )
 
-    # @abstractmethod
-    # def status(self) -> Literal["up-to-date", ""]
+    @final
+    async def status(self, target: Port | None) -> DependencyModeResponse:
+        started_at = datetime.now(UTC)
+        try:
+            installed_version = await self._get_installed_version(target)
+        except ExitCodeError:
+            duration = datetime.now(UTC) - started_at
+            return DependencyModeResponse(
+                dependency=self.name,
+                mode="status",
+                success=False,
+                duration=duration,
+                target=port_to_node_id(target) if target else 1,
+            )
+        duration = datetime.now(UTC) - started_at
+        return DependencyModeResponse(
+            dependency=self.name,
+            mode="status",
+            success=True,
+            duration=duration,
+            target=port_to_node_id(target) if target else 1,
+            content=".".join(str(x) for x in installed_version),
+        )
