@@ -43,6 +43,8 @@ def node_id_to_port(
 
 
 class CommandResponse(BaseModel):
+    bash_command: str
+    target: IPv4Address | Port | None
     returncode: int
     stdout: str
     stderr: str

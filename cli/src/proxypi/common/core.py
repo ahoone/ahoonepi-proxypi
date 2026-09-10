@@ -226,6 +226,8 @@ async def execute_command(
             )
 
         return CommandResponse(
+            target=target,
+            bash_command=bash_command,
             returncode=proc.returncode,
             stdout=command_stdout,
             stderr=command_stderr,

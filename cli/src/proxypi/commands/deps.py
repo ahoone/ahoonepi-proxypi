@@ -6,7 +6,7 @@ from pydantic import BaseModel, create_model
 from typer import Argument, Context, Option
 
 from proxypi.common.config import config
-from proxypi.common.core import listen_node_ids, listen_proxy_ids
+from proxypi.common.core import listen_proxy_ids
 from proxypi.common.options import NodeIDOption
 from proxypi.common.types import (
     Dependency,
@@ -93,7 +93,7 @@ async def run_on_targets(
     dependencies: list[str],
     targets: list[NodeID],
     *,
-    concurrent_conn=config.concurrent_conn,
+    concurrent_conn: int = config.concurrent_conn,
 ) -> list[BaseModel]:
     rows = []
     ports = [node_id_to_port(target) if target != 1 else None for target in targets]
@@ -122,6 +122,9 @@ def deps(
 
     if dependencies == ["all"]:
         dependencies = [d.name for d in DEPENDENCIES]
+
+    if "system_lib" in dependencies and 1 in targets:
+        raise NotImplementedError("sudo password input required on the host")
 
     dynamic_model = get_dynamic_model(dependencies)
 

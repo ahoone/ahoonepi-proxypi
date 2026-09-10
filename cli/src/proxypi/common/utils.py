@@ -1,7 +1,7 @@
 import asyncio
 from collections.abc import Callable
 from functools import wraps
-from typing import Awaitable, ParamSpec, TypeVar, overload
+from typing import Awaitable, ParamSpec, TypeVar
 
 from rich.console import Console
 from rich.progress import (
