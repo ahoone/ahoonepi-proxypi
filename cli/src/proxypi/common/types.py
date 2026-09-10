@@ -3,7 +3,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from ipaddress import IPv4Address
-from typing import Annotated, Literal, ParamSpec, TypeVar, final, override
+from typing import Annotated, Generic, Literal, ParamSpec, TypeVar, final, override
 
 from pydantic import BaseModel, Field
 from typer import Abort
@@ -42,9 +42,12 @@ def node_id_to_port(
     return node_id + ssh_network_base - 2
 
 
-class CommandResponse(BaseModel):
+TTarget = TypeVar("TTarget", bound=IPv4Address | Port | None)
+
+
+class CommandResponse(BaseModel, Generic[TTarget]):
     bash_command: str
-    target: IPv4Address | Port | None
+    target: TTarget
     returncode: int
     stdout: str
     stderr: str

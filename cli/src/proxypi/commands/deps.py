@@ -123,9 +123,6 @@ def deps(
     if dependencies == ["all"]:
         dependencies = [d.name for d in DEPENDENCIES]
 
-    if "system_lib" in dependencies and 1 in targets:
-        raise NotImplementedError("sudo password input required on the host")
-
     dynamic_model = get_dynamic_model(dependencies)
 
     rows = asyncio.run(run_on_targets(dynamic_model, mode, dependencies, targets))

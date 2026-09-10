@@ -9,7 +9,15 @@ from typing import Literal, TextIO, TypeVar
 from pydantic import FilePath
 
 from proxypi.common.config import config
-from proxypi.common.types import CommandResponse, ExitCodeError, NodeID, Port, ProxyID
+from proxypi.common.types import (
+    CommandResponse,
+    ExitCodeError,
+    NodeID,
+    Port,
+    ProxyID,
+    TTarget,
+)
+from proxypi.common.utils import suspend_progress
 
 T = TypeVar("T")
 
@@ -74,21 +82,43 @@ async def __read_stream(
 ExecuteCommandMode = Literal["hold", "flush_duplicate", "flush_main"]
 
 
+async def host_has_sudo() -> bool:
+    proc = await asyncio.create_subprocess_exec(
+        "sudo",
+        "-n",
+        "true",
+        stdin=asyncio.subprocess.DEVNULL,
+        stdout=asyncio.subprocess.DEVNULL,
+        stderr=asyncio.subprocess.DEVNULL,
+    )
+    return await proc.wait() == 0
+
+
+async def host_acquires_sudo() -> None:
+    async with suspend_progress():
+        proc = await asyncio.create_subprocess_exec(
+            "sudo", "-v", stdin=None, stdout=None, stderr=None
+        )
+        if await proc.wait() != 0:
+            raise PermissionError("Failed to acquire sudo privileges.")
+
+
 async def execute_command(
     bash_command: str,
     *,
-    target: IPv4Address | Port | None = None,
+    target: TTarget = None,
     timeout: float | None = None,
     mode: ExecuteCommandMode = "hold",
     raise_exit_code: bool = True,
     lighthouse_private_key_path: FilePath = config.lighthouse_private_key_path,
     tcp_connection_timeout: int = config.tcp_connection_timeout,
     proxypi_user: str = config.proxypi_user,
-) -> CommandResponse:
+) -> CommandResponse[TTarget]:
     """
     Executes command either on the host or on a node.
     Handles the inputs and outputs and the timeout.
     Does not handle stdin (always set to `devnull`).
+    Can ask for the sudo rights on host if the command requires it.
 
     Args:
         bash_command (str): To give as ready to use, the function encapsulates in `bash -lc '...'`.
@@ -111,8 +141,9 @@ async def execute_command(
         ExitCodeError: Description.
     """
 
-    if target is None and "sudo" in bash_command:
-        raise ValueError("You should not try to make a call to the host with sudo")
+    if target is None and "sudo" in bash_command and not await host_has_sudo():
+        print(f"Sudo rights are required on host for command:\n{bash_command}")
+        await host_acquires_sudo()
 
     async def wait_for(coro: Awaitable[T]) -> T:
         """
@@ -137,7 +168,6 @@ async def execute_command(
     if target is not None:
         conn = [
             "ssh",
-            "-tt",
             "-n",
             "-i",
             str(lighthouse_private_key_path),
@@ -146,6 +176,8 @@ async def execute_command(
             "-o",
             f"ConnectTimeout={tcp_connection_timeout}",
         ]
+        conn.append("-tt" if mode == "flush_main" else "-T")
+
         if isinstance(target, int):
             if target not in listen_ports():
                 raise KeyError(
@@ -193,20 +225,22 @@ async def execute_command(
         elif mode == "flush_duplicate":
             stdout_chunks: list[bytes] = []
             stderr_chunks: list[bytes] = []
-            _ = await wait_for(
-                asyncio.gather(
-                    __read_stream(proc.stdout, sys.stdout, stdout_chunks),
-                    __read_stream(proc.stderr, sys.stderr, stderr_chunks),
-                    proc.wait(),
+            async with suspend_progress():
+                _ = await wait_for(
+                    asyncio.gather(
+                        __read_stream(proc.stdout, sys.stdout, stdout_chunks),
+                        __read_stream(proc.stderr, sys.stderr, stderr_chunks),
+                        proc.wait(),
+                    )
                 )
-            )
 
             end_beacon = datetime.now(UTC)
 
             command_stdout = b"".join(stdout_chunks).decode()
             command_stderr = b"".join(stderr_chunks).decode()
         elif mode == "flush_main":
-            _ = await wait_for(proc.wait())
+            async with suspend_progress():
+                _ = await wait_for(proc.wait())
 
             end_beacon = datetime.now(UTC)
 

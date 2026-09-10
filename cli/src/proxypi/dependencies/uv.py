@@ -50,10 +50,15 @@ class UV(Dependency):
     async def _upgrade(target: Port | None) -> bool:
         try:
             _ = await execute_command(
-                "uv self update", target=target, raise_exit_code=True
+                "uv self update",
+                target=target,
+                timeout=60,
+                raise_exit_code=True,
             )
             return True
         except ExitCodeError:
+            return False
+        except TimeoutError:
             return False
 
 
