@@ -6,8 +6,6 @@ from ipaddress import IPv4Address
 from shlex import quote
 from typing import Literal, TextIO, TypeVar
 
-from pydantic import FilePath
-
 from proxypi.common.config import config
 from proxypi.common.types import (
     CommandResponse,
@@ -18,6 +16,7 @@ from proxypi.common.types import (
     TTarget,
 )
 from proxypi.common.utils import suspend_progress
+from pydantic import FilePath
 
 T = TypeVar("T")
 
