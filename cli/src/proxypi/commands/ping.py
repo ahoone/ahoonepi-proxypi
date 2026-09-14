@@ -7,12 +7,12 @@ from ipaddress import IPv4Address, IPv4Network, IPv6Address
 from typing import Literal
 
 import typer
-from pydantic import BaseModel
-
 from proxypi.common.config import PROJECT_ROOT, config
 from proxypi.common.core import execute_command, listen_ports
+from proxypi.common.stdout import CONSOLE, console_print
 from proxypi.common.types import ExitCodeError, Port
-from proxypi.common.utils import print_table, run_with_spinner, to_table
+from proxypi.common.utils import run_with_spinner, to_table
+from pydantic import BaseModel
 
 app = typer.Typer()
 
@@ -238,4 +238,4 @@ def ping(mode: Literal["ssh", "vpn"]):
 
     rows = asyncio.run(coro)
     table = to_table(rows)
-    print_table(table)
+    CONSOLE.print(table)

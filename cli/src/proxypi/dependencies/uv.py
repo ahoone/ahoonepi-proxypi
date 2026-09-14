@@ -38,7 +38,9 @@ class UV(Dependency):
                 response = await client.get(url)
             _ = response.raise_for_status()
             installer = response.text
-            _ = await execute_command(installer, target=target, raise_exit_code=True)
+            _ = await execute_command(
+                installer, target=target, raise_exit_code=True, force_tty_remote=False
+            )
             return True
         except httpx.HTTPStatusError:
             return False
@@ -54,6 +56,7 @@ class UV(Dependency):
                 target=target,
                 timeout=60,
                 raise_exit_code=True,
+                force_tty_remote=False,
             )
             return True
         except ExitCodeError:

@@ -3,7 +3,7 @@ from typing import Annotated
 from typer import Argument, Context, Option
 
 from proxypi.common.config import config
-from proxypi.common.core import listen_node_ids, listen_proxy_ids
+from proxypi.common.listen import listen_node_ids, listen_proxy_ids
 
 
 def complete_node_id(incomplete: str) -> list[str]:

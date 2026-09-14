@@ -1,17 +1,8 @@
 import asyncio
 from collections.abc import Awaitable, Callable
-from contextlib import asynccontextmanager
 from functools import wraps
 from typing import ParamSpec, TypeVar
 
-from proxypi.common.stdout import (
-    STDOUT_HOLDER,
-    STDOUT_HOLDER_LOCK,
-    STDOUT_HOLDER_USERS,
-    STDOUT_LOCK,
-)
-from proxypi.common.types import AsyncFunc, DataModel, PosInt
-from rich.console import Console
 from rich.progress import (
     Progress,
     ProgressColumn,
@@ -24,26 +15,15 @@ from rich.progress import (
 from rich.table import Table
 from rich.text import Text
 
+from proxypi.common.stdout import (
+    drop_terminal_holder,
+    run_on_stdout,
+    set_terminal_holder,
+)
+from proxypi.common.types import AsyncFunc, DataModel, PosInt
+
 P = ParamSpec("P")
 T = TypeVar("T")
-
-
-@asynccontextmanager
-async def suspend_progress():
-    global STDOUT_HOLDER_USERS
-
-    async with STDOUT_HOLDER_LOCK:
-        STDOUT_HOLDER_USERS += 1
-        if STDOUT_HOLDER_USERS == 1 and STDOUT_HOLDER is not None:
-            STDOUT_HOLDER.stop()
-
-    try:
-        yield
-    finally:
-        async with STDOUT_HOLDER_LOCK:
-            STDOUT_HOLDER_USERS -= 1
-            if STDOUT_HOLDER_USERS == 0 and STDOUT_HOLDER is not None:
-                STDOUT_HOLDER.start()
 
 
 def to_table(array: list[DataModel]) -> Table:
@@ -68,28 +48,6 @@ def to_table(array: list[DataModel]) -> Table:
     return table
 
 
-def print_table(table: Table) -> None:
-    console = Console()
-    console.print(table)
-
-
-def get_stdout() -> Callable[[AsyncFunc[P, T]], AsyncFunc[P, T]]:
-    def decorator(coro: AsyncFunc[P, T]) -> AsyncFunc[P, T]:
-
-        @wraps(coro)
-        async def wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
-            if STDOUT_LOCK.locked():
-                raise RuntimeError(
-                    "Multiple tasks should not try to write simultaneously to stdout"
-                )
-            async with STDOUT_LOCK:
-                return await coro(*args, **kwargs)
-
-        return wrapper
-
-    return decorator
-
-
 def run_with_spinner(
     description: str,
 ) -> Callable[[AsyncFunc[P, T]], AsyncFunc[P, T]]:
@@ -98,11 +56,9 @@ def run_with_spinner(
         async_func: AsyncFunc[P, T],
     ) -> AsyncFunc[P, T]:
 
-        @get_stdout()
+        @run_on_stdout()
         @wraps(async_func)
         async def wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
-            timeout = kwargs.get("timeout")
-            global STDOUT_HOLDER
 
             with Progress(
                 SpinnerColumn(),
@@ -110,7 +66,13 @@ def run_with_spinner(
                 TimeRemainingColumn(),
                 transient=True,
             ) as progress:
-                STDOUT_HOLDER = progress
+                set_terminal_holder(progress)
+
+                timeout = kwargs.get("timeout") if "timeout" in kwargs else None
+                if timeout is not None and not isinstance(timeout, float):
+                    raise TypeError(
+                        f"decorated coroutine `timeout` parameter is of wrong type: {type(timeout)}"
+                    )
 
                 try:
                     task = progress.add_task(
@@ -135,7 +97,7 @@ def run_with_spinner(
                             pass
                         progress.update(task, completed=timeout)
                 finally:
-                    STDOUT_HOLDER = None
+                    drop_terminal_holder()
 
         return wrapper
 
@@ -158,7 +120,10 @@ async def gather_with_semaphore(
         async with sem:
             return await coro
 
-    return await asyncio.gather(*[run(c) for c in coros])
+    try:
+        return await asyncio.gather(*[run(c) for c in coros])
+    except asyncio.CancelledError:
+        return []
 
 
 class ThreeStateBarColumn(ProgressColumn):
@@ -186,7 +151,7 @@ class ThreeStateBarColumn(ProgressColumn):
         return bar
 
 
-async def _tracking_exe_coro(
+async def __tracking_exe_coro(
     coro: Awaitable[T],
     progress: Progress,
     progress_lock: asyncio.Lock,
@@ -232,12 +197,15 @@ async def gather_with_tracking(
 
     async def run(coro: Awaitable[T]) -> T:
         async with sem:
-            return await _tracking_exe_coro(coro, progress, progress_lock, task_id)
+            return await __tracking_exe_coro(coro, progress, progress_lock, task_id)
 
-    return await asyncio.gather(*[run(c) for c in coros])
+    try:
+        return await asyncio.gather(*[run(c) for c in coros])
+    except asyncio.CancelledError:
+        return []
 
 
-@get_stdout()
+@run_on_stdout()
 async def gather_with_progress(
     *coros: Awaitable[T],
     concurrent_conn: PosInt,
@@ -246,8 +214,6 @@ async def gather_with_progress(
     There should be only one call at any time of this function.
     The progress bar must be suspendable in case of inputs for sudo.
     """
-
-    global STDOUT_HOLDER
 
     with Progress(
         TextColumn("{task.description}"),
@@ -259,7 +225,7 @@ async def gather_with_progress(
         ),
         transient=True,
     ) as progress:
-        STDOUT_HOLDER = progress
+        set_terminal_holder(progress)
 
         try:
             task_id = progress.add_task(
@@ -276,4 +242,4 @@ async def gather_with_progress(
                 task_id=task_id,
             )
         finally:
-            STDOUT_HOLDER = None
+            drop_terminal_holder()

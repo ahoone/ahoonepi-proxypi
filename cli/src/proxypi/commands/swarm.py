@@ -5,10 +5,12 @@ from pydantic import BaseModel
 from typer import Option
 
 from proxypi.common.config import config
-from proxypi.common.core import execute_command, listen_proxy_ids
+from proxypi.common.core import execute_command
+from proxypi.common.listen import listen_proxy_ids
 from proxypi.common.options import ProxyIDsOption
+from proxypi.common.stdout import CONSOLE
 from proxypi.common.types import CommandResponse, ProxyID
-from proxypi.common.utils import gather_with_progress, print_table, to_table
+from proxypi.common.utils import gather_with_progress, to_table
 
 
 class SwarmRow(BaseModel):
@@ -29,19 +31,22 @@ def swarm(
     """
     Executes bash instructions on targeted proxies.
     """
-    targets = listen_proxy_ids() if not proxy_ids else proxy_ids
 
-    concurrent_conn = config.concurrent_conn
+    async def main():
+        targets = listen_proxy_ids() if not proxy_ids else proxy_ids
 
-    coros = [
-        execute_command(
-            bash_command, target=target, timeout=timeout, raise_exit_code=False
-        )
-        for target in targets
-    ]
-    responses: list[CommandResponse] = asyncio.run(
-        gather_with_progress(*coros, concurrent_conn=concurrent_conn)
-    )
+        concurrent_conn = config.concurrent_conn
+
+        coros = [
+            execute_command(
+                bash_command, target=target, timeout=timeout, raise_exit_code=False
+            )
+            for target in targets
+        ]
+
+        return await gather_with_progress(*coros, concurrent_conn=concurrent_conn)
+
+    responses: list[CommandResponse[ProxyID]] = asyncio.run(main())
     rows = [SwarmRow(port=r.target, success=r.returncode == 0) for r in responses]
     table = to_table(rows)
-    print_table(table)
+    CONSOLE.print(table)

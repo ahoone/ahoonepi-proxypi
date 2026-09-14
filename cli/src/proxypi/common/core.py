@@ -1,84 +1,25 @@
 import asyncio
-import sys
 from collections.abc import Awaitable
 from datetime import UTC, datetime
 from ipaddress import IPv4Address
 from shlex import quote
-from typing import Literal, TextIO, TypeVar
+from typing import Literal, TypeVar
+
+from pydantic import FilePath
 
 from proxypi.common.config import config
+from proxypi.common.listen import listen_ports
+from proxypi.common.stdout import console_stream, holds_terminal
 from proxypi.common.types import (
     CommandResponse,
     ExitCodeError,
-    NodeID,
-    Port,
-    ProxyID,
     TTarget,
 )
-from proxypi.common.utils import suspend_progress
-from pydantic import FilePath
 
 T = TypeVar("T")
 
 
-def listen_ports(
-    ssh_network_base: Port = config.ssh_network_base,
-    network_size: int = config.network_size,
-) -> list[Port]:
-    """
-    Inspects directly the kernel socket table at `/proc/net/tcp`.
-
-    Args:
-        ssh_network_base (Port): Description, optional (default: config.ssh_network_base).
-        network_size (int): Description, optional (default: config.network_size).
-
-    Returns:
-        list[Port]: Description.
-    """
-
-    inspection_range: list[Port] = [x + ssh_network_base for x in range(network_size)]
-
-    with open("/proc/net/tcp") as f:
-        lines = f.readlines()
-
-    header_row = lines[0].split()
-    rows = [dict(zip(header_row, line.split())) for line in lines[1:]]
-
-    found: list[Port] = []
-    for row in rows:
-        address, port = row["local_address"].split(":")
-        address = int(address, 16)
-        port = int(port, 16)
-        # checks the status is LISTEN (cf `include/net/tcp_states.h`)
-        # checks we're on the host
-        if int(row["st"], 16) != 10 or address != 0 or port not in inspection_range:
-            continue
-        found.append(port)
-
-    return found
-
-
-def listen_proxy_ids() -> list[ProxyID]:
-    ports: list[Port] = listen_ports()
-    return [port - config.ssh_network_base + 2 for port in ports]
-
-
-def listen_node_ids(lighthouse_id=config.lighthouse_id) -> list[NodeID]:
-    return [lighthouse_id, *listen_proxy_ids()]
-
-
-async def __read_stream(
-    stream: asyncio.StreamReader,
-    output: TextIO,
-    chunks: list[bytes],
-) -> None:
-    while chunk := await stream.read(4096):
-        chunks.append(chunk)
-        _ = output.buffer.write(chunk)
-        output.buffer.flush()
-
-
-ExecuteCommandMode = Literal["hold", "flush_duplicate", "flush_main"]
+ExecuteCommandMode = Literal["hold", "flush", "flush_and_duplicate"]
 
 
 async def host_has_sudo() -> bool:
@@ -94,7 +35,7 @@ async def host_has_sudo() -> bool:
 
 
 async def host_acquires_sudo() -> None:
-    async with suspend_progress():
+    async with holds_terminal():
         proc = await asyncio.create_subprocess_exec(
             "sudo", "-v", stdin=None, stdout=None, stderr=None
         )
@@ -109,6 +50,7 @@ async def execute_command(
     timeout: float | None = None,
     mode: ExecuteCommandMode = "hold",
     raise_exit_code: bool = True,
+    force_tty_remote: bool = True,
     lighthouse_private_key_path: FilePath = config.lighthouse_private_key_path,
     tcp_connection_timeout: int = config.tcp_connection_timeout,
     proxypi_user: str = config.proxypi_user,
@@ -140,10 +82,6 @@ async def execute_command(
         ExitCodeError: Description.
     """
 
-    if target is None and "sudo" in bash_command and not await host_has_sudo():
-        print(f"Sudo rights are required on host for command:\n{bash_command}")
-        await host_acquires_sudo()
-
     async def wait_for(coro: Awaitable[T]) -> T:
         """
         NOT THE ASYNCIO IMPLEMENTATION!
@@ -153,14 +91,9 @@ async def execute_command(
             return await coro
         return await asyncio.wait_for(coro, timeout)
 
-    if mode in ["hold", "flush_duplicate"]:
-        stdout = asyncio.subprocess.PIPE
-        stderr = asyncio.subprocess.PIPE
-    elif mode == "flush_main":
-        stdout = None
-        stderr = None
-    else:
-        raise ValueError(f"invalid mode: {mode!r}")
+    if target is None and "sudo" in bash_command and not await host_has_sudo():
+        print(f"Sudo rights are required on host for command:\n{bash_command}")
+        await host_acquires_sudo()
 
     bash_command = f"bash -lc {quote(bash_command)}"
 
@@ -175,7 +108,7 @@ async def execute_command(
             "-o",
             f"ConnectTimeout={tcp_connection_timeout}",
         ]
-        conn.append("-tt" if mode == "flush_main" else "-T")
+        conn.append("-tt" if force_tty_remote and mode == "flush" else "-T")
 
         if isinstance(target, int):
             if target not in listen_ports():
@@ -196,16 +129,21 @@ async def execute_command(
             *conn,
             bash_command,
             stdin=asyncio.subprocess.DEVNULL,
-            stdout=stdout,
-            stderr=stderr,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
         )
     else:
         proc = await asyncio.create_subprocess_shell(
             bash_command,
             stdin=asyncio.subprocess.DEVNULL,
-            stdout=stdout,
-            stderr=stderr,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
         )
+
+    if not proc.stdout:
+        raise RuntimeError("proc.stdout was not set")
+    if not proc.stderr:
+        raise RuntimeError("proc.stderr was not set")
 
     command_stdout: str | bytes
     command_stderr: str | bytes
@@ -221,30 +159,36 @@ async def execute_command(
             command_stdout = command_stdout.decode()
             command_stderr = command_stderr.decode()
 
-        elif mode == "flush_duplicate":
-            stdout_chunks: list[bytes] = []
-            stderr_chunks: list[bytes] = []
-            async with suspend_progress():
-                _ = await wait_for(
-                    asyncio.gather(
-                        __read_stream(proc.stdout, sys.stdout, stdout_chunks),
-                        __read_stream(proc.stderr, sys.stderr, stderr_chunks),
-                        proc.wait(),
-                    )
+        elif mode == "flush":
+            _ = await wait_for(
+                asyncio.gather(
+                    console_stream(proc.stdout, str(target)),
+                    console_stream(proc.stderr, str(target)),
+                    proc.wait(),
                 )
-
-            end_beacon = datetime.now(UTC)
-
-            command_stdout = b"".join(stdout_chunks).decode()
-            command_stderr = b"".join(stderr_chunks).decode()
-        elif mode == "flush_main":
-            async with suspend_progress():
-                _ = await wait_for(proc.wait())
+            )
 
             end_beacon = datetime.now(UTC)
 
             command_stdout = ""
             command_stderr = ""
+
+        elif mode == "flush_and_duplicate":
+            stdout_chunks: list[str] = []
+            stderr_chunks: list[str] = []
+
+            _ = await wait_for(
+                asyncio.gather(
+                    console_stream(proc.stdout, str(target), stdout_chunks),
+                    console_stream(proc.stderr, str(target), stderr_chunks),
+                    proc.wait(),
+                )
+            )
+
+            end_beacon = datetime.now(UTC)
+
+            command_stdout = "".join(stdout_chunks)
+            command_stderr = "".join(stderr_chunks)
 
         if proc.returncode is None:
             raise RuntimeError("proc does not have a returncode")

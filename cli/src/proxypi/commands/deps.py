@@ -6,8 +6,9 @@ from pydantic import BaseModel, create_model
 from typer import Argument, Context, Option
 
 from proxypi.common.config import config
-from proxypi.common.core import listen_proxy_ids
+from proxypi.common.listen import listen_proxy_ids
 from proxypi.common.options import NodeIDOption
+from proxypi.common.stdout import CONSOLE
 from proxypi.common.types import (
     Dependency,
     DependencyMode,
@@ -16,11 +17,7 @@ from proxypi.common.types import (
     Port,
     node_id_to_port,
 )
-from proxypi.common.utils import (
-    gather_with_progress,
-    print_table,
-    to_table,
-)
+from proxypi.common.utils import gather_with_progress, to_table
 from proxypi.dependencies.self import self
 from proxypi.dependencies.system_lib import system_lib
 from proxypi.dependencies.uv import uv
@@ -72,7 +69,7 @@ def get_dynamic_model(dependencies: list[str]) -> type[BaseModel]:
 
     return create_model(
         "DynamicModel",
-        **dynamic_columns,
+        **dynamic_columns,  # pyright: ignore[reportCallIssue, reportArgumentType]
     )
 
 
@@ -127,4 +124,4 @@ def deps(
 
     rows = asyncio.run(run_on_targets(dynamic_model, mode, dependencies, targets))
     table = to_table(rows)
-    print_table(table)
+    CONSOLE.print(table)

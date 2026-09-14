@@ -1,30 +1,90 @@
 import asyncio
-from typing import TextIO
+from collections.abc import Callable
+from contextlib import asynccontextmanager
+from functools import wraps
+from typing import Any, ParamSpec, TypeVar
 
 from rich.console import Console
 from rich.progress import Progress
 
+from proxypi.common.types import AsyncFunc
+
 STDOUT_LOCK: asyncio.Lock = asyncio.Lock()
-STDOUT_HOLDER: Progress | None = None
-STDOUT_HOLDER_USERS: int = 0
-STDOUT_HOLDER_LOCK: asyncio.Lock = asyncio.Lock()
-CONSOLE_LOCK: asyncio.Lock = asyncio.Lock()
+TERMINAL_HOLDER: Progress | None = None
+TERMINAL_LOCK: asyncio.Lock = asyncio.Lock()
+CONSOLE = Console()
 
-console = Console()
+P = ParamSpec("P")
+T = TypeVar("T")
 
-async def __format_stream(
+
+def set_terminal_holder(progress: Progress) -> None:
+    global TERMINAL_HOLDER
+    if TERMINAL_HOLDER is not None:
+        raise RuntimeError(
+            "there should not be 2 unrelated progress, this case should have been blocked by decorator `run_on_stdout`"
+        )
+    TERMINAL_HOLDER = progress
+
+
+def drop_terminal_holder() -> None:
+    global TERMINAL_HOLDER
+    TERMINAL_HOLDER = None
+
+
+async def console_print(*args: Any, **kwargs: Any) -> None:
+    async with TERMINAL_LOCK:
+        CONSOLE.print(*args, **kwargs)
+
+
+async def console_stream(
     stream: asyncio.StreamReader,
-    output: TextIO,
-    console_lock: asyncio.Lock = CONSOLE_LOCK,
+    tag: str,
+    duplicata: list[str] | None = None,
 ) -> None:
-    current_line: bytes = b""
-    while chunk := await stream.read(2**12):
-        lines = chunk.split(b"\n")
-        if current_line:
-            lines[0] = current_line + lines[0]
-            current_line = b""
-        if not lines[-1].endswith(b"\n"):
-            current_line = lines[-1]
-            lines.pop()
-        async with console_lock:
-            for line in lines:
+    async for line in stream:
+        line = line.rstrip(b"\n")
+        decoded_line = line.decode(errors="replace")
+        await console_print(f"[bold cyan]{tag}[/] | {decoded_line}")
+        if duplicata is not None:
+            duplicata.append(decoded_line)
+
+
+@asynccontextmanager
+async def holds_terminal():
+    """
+    Give to the current task the exclusive control of the terminal.
+    """
+
+    async with TERMINAL_LOCK:
+        holder = TERMINAL_HOLDER
+
+        if holder is not None:
+            holder.stop()
+        try:
+            yield
+        finally:
+            if holder is not None:
+                holder.start()
+
+
+def run_on_stdout() -> Callable[[AsyncFunc[P, T]], AsyncFunc[P, T]]:
+    """
+    Decorates a function to mark it runs using stdout.
+    Useful for rich's renderables.
+    """
+
+    def decorator(coro: AsyncFunc[P, T]) -> AsyncFunc[P, T]:
+
+        @wraps(coro)
+        async def wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
+            if STDOUT_LOCK.locked():
+                raise RuntimeError(
+                    "Multiple tasks should not try to write simultaneously to stdout"
+                )
+            async with STDOUT_LOCK:
+                return await coro(*args, **kwargs)
+
+        return wrapper
+
+    return decorator

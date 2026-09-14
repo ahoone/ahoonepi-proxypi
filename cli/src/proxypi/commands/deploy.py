@@ -2,20 +2,14 @@ import asyncio
 from datetime import timedelta
 from typing import Literal
 
-from pydantic import BaseModel
-from typer import BadParameter
-
 from proxypi.common.config import PROJECT_ROOT, config
 from proxypi.common.core import ExecuteCommandMode, execute_command, listen_ports
 from proxypi.common.options import NodeIDOption
+from proxypi.common.stdout import console_print
 from proxypi.common.types import Port, node_id_to_port
-from proxypi.common.utils import (
-    gather_with_progress,
-    gather_with_semaphore,
-    print_table,
-    run_with_spinner,
-    to_table,
-)
+from proxypi.common.utils import gather_with_progress, to_table
+from pydantic import BaseModel
+from typer import BadParameter
 
 TIMEOUT_RESTART = 300  # seconds
 TIMEOUT_STOP = 30  # seconds
@@ -72,7 +66,7 @@ async def run_docker_instructions_one_target(
 
     try:
         command_response = await execute_command(
-            bash_command, target=port, timeout=timeout, mode=mode
+            bash_command, target=port, timeout=timeout, mode="flush_and_duplicate"
         )
         response = command_response.stdout
         duration = command_response.duration
@@ -150,7 +144,7 @@ def deploy(
             ),
         )
         table = to_table(rows)
-        print_table(table)
+        console_print(table)
     else:
         _ = asyncio.run(
             run_docker_instructions_one_target(
@@ -159,6 +153,6 @@ def deploy(
                 port=port,
                 scraper=scraper,
                 broker=broker,
-                mode="flush_main",
+                mode="flush",
             )
         )
