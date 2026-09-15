@@ -16,6 +16,7 @@ from rich.table import Table
 from rich.text import Text
 
 from proxypi.common.stdout import (
+    CONSOLE,
     drop_terminal_holder,
     run_on_stdout,
     set_terminal_holder,
@@ -64,6 +65,7 @@ def run_with_spinner(
                 SpinnerColumn(),
                 TextColumn("[progress.description]{task.description}"),
                 TimeRemainingColumn(),
+                console=CONSOLE,
                 transient=True,
             ) as progress:
                 set_terminal_holder(progress)
@@ -223,6 +225,7 @@ async def gather_with_progress(
             "[yellow]{task.fields[running]} running[/] "
             "[grey50]{task.fields[waiting]} waiting[/]"
         ),
+        console=CONSOLE,
         transient=True,
     ) as progress:
         set_terminal_holder(progress)

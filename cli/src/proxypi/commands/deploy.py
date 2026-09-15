@@ -2,14 +2,16 @@ import asyncio
 from datetime import timedelta
 from typing import Literal
 
-from proxypi.common.config import PROJECT_ROOT, config
-from proxypi.common.core import ExecuteCommandMode, execute_command, listen_ports
-from proxypi.common.options import NodeIDOption
-from proxypi.common.stdout import console_print
-from proxypi.common.types import Port, node_id_to_port
-from proxypi.common.utils import gather_with_progress, to_table
 from pydantic import BaseModel
-from typer import BadParameter
+from typer import BadParameter, Context
+
+from proxypi.common.config import PROJECT_ROOT, config
+from proxypi.common.core import ExecuteCommandMode, execute_command
+from proxypi.common.listen import listen_node_ids
+from proxypi.common.options import NodeIDOption
+from proxypi.common.stdout import CONSOLE
+from proxypi.common.types import NodeID, node_id_to_port
+from proxypi.common.utils import gather_with_progress, to_table
 
 TIMEOUT_RESTART = 300  # seconds
 TIMEOUT_STOP = 30  # seconds
@@ -18,19 +20,17 @@ Action = Literal["stop", "restart"]
 
 
 class ServiceResponse(BaseModel):
-    port: Port | None
+    node_id: NodeID
     returncode: Literal["success", "failed", "skipped", "timeout"]
     duration: timedelta | None
 
 
-async def run_docker_instructions_one_target(
+def get_instructions(
     action: Action,
-    timeout: int,
-    port: Port | None = None,
     scraper: bool = False,
     broker: bool = False,
-    mode: ExecuteCommandMode = "hold",
-) -> ServiceResponse:
+) -> str:
+
     instructions = [
         f"cd {PROJECT_ROOT}",
         "source .env",
@@ -62,56 +62,77 @@ async def run_docker_instructions_one_target(
                 "docker compose -f broker/docker-compose.yml --env-file .env --env-file config.env up --build -d",
             )
 
-    bash_command = " && ".join(instructions)
+    return " && ".join(instructions)
+
+
+async def run_docker_instructions_one_target(
+    node_id: NodeID,
+    action: Action,
+    timeout: int,
+    mode: ExecuteCommandMode,
+    scraper: bool = False,
+    broker: bool = False,
+) -> ServiceResponse:
+    port = None if node_id == 1 else node_id_to_port(node_id)
+
+    bash_command = get_instructions(action, scraper, broker)
 
     try:
         command_response = await execute_command(
-            bash_command, target=port, timeout=timeout, mode="flush_and_duplicate"
+            bash_command,
+            target=port,
+            timeout=timeout,
+            mode=mode,
+            capture_stdout=True,
         )
         response = command_response.stdout
         duration = command_response.duration
         if "ERROR: NODE_ROLE must be" in response:
-            return ServiceResponse(port=port, returncode="skipped", duration=duration)
+            return ServiceResponse(
+                node_id=node_id, returncode="skipped", duration=duration
+            )
 
-        return ServiceResponse(port=port, returncode="success", duration=duration)
+        return ServiceResponse(node_id=node_id, returncode="success", duration=duration)
     except RuntimeError:
-        return ServiceResponse(port=port, returncode="failed", duration=None)
+        return ServiceResponse(node_id=node_id, returncode="failed", duration=None)
     except TimeoutError:
         return ServiceResponse(
-            port=port,
+            node_id=node_id,
             returncode="timeout",
             duration=timedelta(seconds=timeout),
         )
 
 
-# @(run_with_spinner("Reloading..."))
-async def restart_services_on_all(
+async def restart_services_on_targets(
+    targets: list[NodeID],
     action: Action,
     timeout: int,
+    mode: ExecuteCommandMode,
     scraper: bool = False,
     broker: bool = False,
     concurrent_conn: int = config.concurrent_conn,
 ) -> list[ServiceResponse]:
 
-    tasks = [
-        run_docker_instructions_one_target(
-            action=action,
-            port=port,
-            scraper=scraper,
-            broker=broker,
-            timeout=timeout,
-            mode="hold",
-        )
-        for port in [None, *listen_ports()]
-    ]
-    return await gather_with_progress(*tasks, concurrent_conn=concurrent_conn)
-    # return await gather_with_semaphore(*tasks, concurrent_conn=concurrent_conn)
-    # return await asyncio.gather(*tasks)
+    return await gather_with_progress(
+        *[
+            run_docker_instructions_one_target(
+                node_id=node_id,
+                action=action,
+                timeout=timeout,
+                mode=mode,
+                scraper=scraper,
+                broker=broker,
+            )
+            for node_id in targets
+        ],
+        concurrent_conn=concurrent_conn,
+    )
 
 
 def deploy(
+    ctx: Context,
     action: Literal["stop", "restart"] = "restart",
-    a: bool = False,
+    all_nodes: bool = False,
     node_id: NodeIDOption = 1,
     scraper: bool = False,
     broker: bool = False,
@@ -120,39 +141,30 @@ def deploy(
     """
     Manages the fleet's services with a common input.
     """
-    port: Port | None = None if node_id == 1 else node_id_to_port(node_id)
 
-    if timeout is None:
-        if action == "stop":
-            timeout = TIMEOUT_STOP
-        elif action == "restart":
-            timeout = TIMEOUT_RESTART
-
-    if a and port:
-        raise BadParameter("if you want to restart on all Pis, do not provide a port")
+    if all_nodes and node_id:
+        raise BadParameter(
+            "if you want to restart on all Pis, do not provide a node_id"
+        )
 
     if not (scraper or broker):
         raise BadParameter("you must provide at least one service to restart")
 
-    if a:
-        rows: list[ServiceResponse] = asyncio.run(
-            restart_services_on_all(
-                action=action,
-                timeout=timeout,
-                scraper=scraper,
-                broker=broker,
-            ),
-        )
-        table = to_table(rows)
-        console_print(table)
-    else:
-        _ = asyncio.run(
-            run_docker_instructions_one_target(
-                action=action,
-                timeout=timeout,
-                port=port,
-                scraper=scraper,
-                broker=broker,
-                mode="flush",
-            )
-        )
+    targets = listen_node_ids() if all_nodes else [node_id]
+    if timeout is None:
+        timeout = TIMEOUT_STOP if action == "stop" else TIMEOUT_RESTART
+    mode = ctx.obj["mode"]
+
+    rows: list[ServiceResponse] = asyncio.run(
+        restart_services_on_targets(
+            targets=targets,
+            action=action,
+            timeout=timeout,
+            mode=mode,
+            scraper=scraper,
+            broker=broker,
+        ),
+    )
+
+    table = to_table(rows)
+    CONSOLE.print(table)

@@ -40,9 +40,15 @@ def listen_ports(
 
 
 def listen_proxy_ids() -> list[ProxyID]:
+    """
+    Does not include the lighthouse, identified by `None`.
+    """
     ports: list[Port] = listen_ports()
     return [port - config.ssh_network_base + 2 for port in ports]
 
 
 def listen_node_ids(lighthouse_id=config.lighthouse_id) -> list[NodeID]:
+    """
+    Includes the lighthouse id.
+    """
     return [lighthouse_id, *listen_proxy_ids()]

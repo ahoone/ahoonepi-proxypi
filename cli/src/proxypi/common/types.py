@@ -37,7 +37,7 @@ def port_to_node_id(
 def node_id_to_port(
     node_id: NodeID, *, ssh_network_base: int = config.ssh_network_base
 ) -> Port:
-    if NodeID == 1:
+    if node_id == 1:
         raise ValueError("this action should not be performed on the lighthouse id")
     return node_id + ssh_network_base - 2
 

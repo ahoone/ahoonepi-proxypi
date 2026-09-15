@@ -1,4 +1,6 @@
-from typer import Typer
+from typing import Annotated
+
+from typer import Context, Option, Typer
 
 from proxypi.commands.conf import conf
 from proxypi.commands.connect import connect
@@ -13,6 +15,7 @@ from proxypi.commands.swarm import swarm
 from proxypi.commands.sync import sync
 from proxypi.commands.tests import tests
 from proxypi.commands.venv import venv
+from proxypi.common.core import ExecuteCommandMode
 
 app = Typer()
 
@@ -29,6 +32,16 @@ app.command()(swarm)
 app.command()(sync)
 app.command()(tests)
 app.command()(venv)
+
+
+@app.callback()
+def main(
+    ctx: Context,
+    mode: Annotated[ExecuteCommandMode, Option(help="")] = "hold",
+):
+    ctx.obj = {}
+    ctx.obj["mode"] = mode
+
 
 if __name__ == "__main__":
     app()

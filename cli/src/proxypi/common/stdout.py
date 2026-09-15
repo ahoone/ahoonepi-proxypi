@@ -43,9 +43,11 @@ async def console_stream(
     duplicata: list[str] | None = None,
 ) -> None:
     async for line in stream:
-        line = line.rstrip(b"\n")
+        line = line.strip()
+        if line == b"":
+            continue
         decoded_line = line.decode(errors="replace")
-        await console_print(f"[bold cyan]{tag}[/] | {decoded_line}")
+        await console_print(f"[bold cyan]{tag: <15}[/] | {decoded_line}")
         if duplicata is not None:
             duplicata.append(decoded_line)
 
