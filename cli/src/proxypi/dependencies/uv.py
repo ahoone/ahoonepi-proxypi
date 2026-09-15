@@ -14,7 +14,7 @@ class UV(Dependency):
     @override
     async def _is_installed(target: Port | None) -> bool:
         response = await execute_command(
-            "uv", target=target, mode="hold", raise_exit_code=False
+            "uv", target=target, capture_stdout=True, raise_exit_code=False
         )
 
         return response.stdout == ""
@@ -23,7 +23,7 @@ class UV(Dependency):
     @override
     async def _get_installed_version(target: Port | None) -> tuple[int, ...]:
         response = await execute_command(
-            "uv --version", target=target, mode="hold", raise_exit_code=True
+            "uv --version", target=target, capture_stdout=True, raise_exit_code=True
         )
         return tuple(int(x) for x in response.stdout.split()[1].split("."))
 
@@ -42,6 +42,8 @@ class UV(Dependency):
                 installer, target=target, raise_exit_code=True, force_tty_remote=False
             )
             return True
+        except httpx.ConnectError:
+            return False
         except httpx.HTTPStatusError:
             return False
         except ExitCodeError:

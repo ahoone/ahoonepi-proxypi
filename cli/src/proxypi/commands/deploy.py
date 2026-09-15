@@ -6,15 +6,15 @@ from pydantic import BaseModel
 from typer import BadParameter, Context
 
 from proxypi.common.config import PROJECT_ROOT, config
-from proxypi.common.core import ExecuteCommandMode, execute_command
+from proxypi.common.core import execute_command
 from proxypi.common.listen import listen_node_ids
 from proxypi.common.options import NodeIDOption
-from proxypi.common.stdout import CONSOLE
+from proxypi.common.stdout import console_print
 from proxypi.common.types import NodeID, node_id_to_port
 from proxypi.common.utils import gather_with_progress, to_table
 
-TIMEOUT_RESTART = 300  # seconds
-TIMEOUT_STOP = 30  # seconds
+DEFAULT_TIMEOUT_RESTART = 300  # seconds
+DEFAULT_TIMEOUT_STOP = 30  # seconds
 
 Action = Literal["stop", "restart"]
 
@@ -69,7 +69,7 @@ async def run_docker_instructions_one_target(
     node_id: NodeID,
     action: Action,
     timeout: int,
-    mode: ExecuteCommandMode,
+    verbose: bool,
     scraper: bool = False,
     broker: bool = False,
 ) -> ServiceResponse:
@@ -82,7 +82,7 @@ async def run_docker_instructions_one_target(
             bash_command,
             target=port,
             timeout=timeout,
-            mode=mode,
+            flush_stdout=verbose,
             capture_stdout=True,
         )
         response = command_response.stdout
@@ -107,7 +107,7 @@ async def restart_services_on_targets(
     targets: list[NodeID],
     action: Action,
     timeout: int,
-    mode: ExecuteCommandMode,
+    verbose: bool,
     scraper: bool = False,
     broker: bool = False,
     concurrent_conn: int = config.concurrent_conn,
@@ -119,7 +119,7 @@ async def restart_services_on_targets(
                 node_id=node_id,
                 action=action,
                 timeout=timeout,
-                mode=mode,
+                verbose=verbose,
                 scraper=scraper,
                 broker=broker,
             )
@@ -152,19 +152,19 @@ def deploy(
 
     targets = listen_node_ids() if all_nodes else [node_id]
     if timeout is None:
-        timeout = TIMEOUT_STOP if action == "stop" else TIMEOUT_RESTART
-    mode = ctx.obj["mode"]
+        timeout = DEFAULT_TIMEOUT_STOP if action == "stop" else DEFAULT_TIMEOUT_RESTART
+    verbose = ctx.obj["verbose"]
 
     rows: list[ServiceResponse] = asyncio.run(
         restart_services_on_targets(
             targets=targets,
             action=action,
             timeout=timeout,
-            mode=mode,
+            verbose=verbose,
             scraper=scraper,
             broker=broker,
         ),
     )
 
     table = to_table(rows)
-    CONSOLE.print(table)
+    console_print(table)

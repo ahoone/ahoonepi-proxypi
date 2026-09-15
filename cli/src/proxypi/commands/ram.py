@@ -4,7 +4,7 @@ from pydantic import BaseModel
 
 from proxypi.common.core import execute_command
 from proxypi.common.options import NodeIDArgument
-from proxypi.common.types import Port, node_id_to_port
+from proxypi.common.types import node_id_to_port
 from proxypi.common.utils import run_with_spinner
 
 
@@ -21,7 +21,7 @@ def ram(node_id: NodeIDArgument):
     target = None if node_id == 1 else node_id_to_port(node_id)
 
     @run_with_spinner("Requesting...")
-    async def inner() -> None:
+    async def main():
 
         response = (await execute_command("free", target=target)).stdout
 
@@ -33,4 +33,4 @@ def ram(node_id: NodeIDArgument):
         )
         print(model.model_dump(mode="json"))
 
-    asyncio.run(inner())
+    asyncio.run(main())

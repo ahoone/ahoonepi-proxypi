@@ -23,7 +23,7 @@ def info(node_id: NodeIDArgument):
     target = None if node_id == 1 else node_id_to_port(node_id)
 
     @run_with_spinner("Requesting...")
-    async def inner() -> None:
+    async def main():
         bash_command = (
             "printf '%s|%s' $(hostname) $(curl ifconfig.me 2>/dev/null || echo 'N/A')"
         )
@@ -38,4 +38,4 @@ def info(node_id: NodeIDArgument):
 
         print(model.model_dump(mode="json"))
 
-    asyncio.run(inner())
+    asyncio.run(main())

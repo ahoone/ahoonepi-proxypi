@@ -8,7 +8,7 @@ from typer import Argument, Context, Option
 from proxypi.common.config import config
 from proxypi.common.listen import listen_proxy_ids
 from proxypi.common.options import NodeIDOption
-from proxypi.common.stdout import CONSOLE
+from proxypi.common.stdout import console_print
 from proxypi.common.types import (
     Dependency,
     DependencyMode,
@@ -124,4 +124,4 @@ def deps(
 
     rows = asyncio.run(run_on_targets(dynamic_model, mode, dependencies, targets))
     table = to_table(rows)
-    CONSOLE.print(table)
+    console_print(table)

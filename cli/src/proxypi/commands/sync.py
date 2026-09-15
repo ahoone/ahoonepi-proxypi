@@ -2,11 +2,11 @@ import asyncio
 import subprocess
 from ipaddress import IPv4Address
 
-from rich import print as rprint
-
 from proxypi.common.config import config
-from proxypi.common.core import execute_command, listen_ports
-from proxypi.common.types import Port, port_to_node_id
+from proxypi.common.core import execute_command
+from proxypi.common.listen import listen_ports
+from proxypi.common.stdout import console_print
+from proxypi.common.types import CommandResponse, Port, port_to_node_id
 from proxypi.common.utils import run_with_spinner
 
 
@@ -15,14 +15,13 @@ async def retrieve_proxy_public_key(
 ) -> tuple[str, Port]:
 
     async with sem:
-        public_key, _ = await execute_command(
+        response: CommandResponse = await execute_command(
             "sudo wg show wg0 public-key",
             target=port,
             timeout=10,
-            mode="hold",
         )
 
-    public_key = public_key.strip()
+    public_key = response.stdout.strip()
 
     return (public_key, port)
 
@@ -45,7 +44,10 @@ def sync():
     Loads the proxies' keys in the lighthouse's VPN configuration file.
     """
 
-    peers = asyncio.run(retrieve_keys())
+    async def main():
+        return await retrieve_keys()
+
+    peers = asyncio.run(main())
 
     for public_key, port in peers:
         if not public_key:
@@ -81,7 +83,7 @@ def sync():
             stderr=subprocess.DEVNULL,
         )
 
-    rprint(
+    console_print(
         "[bold green]✓ VPN configured successfully![/bold green] "
         "Run [bold cyan]sudo wg show[/bold cyan] to check the connection."
     )

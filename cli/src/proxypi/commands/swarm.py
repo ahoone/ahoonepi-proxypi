@@ -8,7 +8,7 @@ from proxypi.common.config import config
 from proxypi.common.core import execute_command
 from proxypi.common.listen import listen_proxy_ids
 from proxypi.common.options import ProxyIDsOption
-from proxypi.common.stdout import CONSOLE
+from proxypi.common.stdout import console_print
 from proxypi.common.types import CommandResponse, ProxyID
 from proxypi.common.utils import gather_with_progress, to_table
 
@@ -49,4 +49,4 @@ def swarm(
     responses: list[CommandResponse[ProxyID]] = asyncio.run(main())
     rows = [SwarmRow(port=r.target, success=r.returncode == 0) for r in responses]
     table = to_table(rows)
-    CONSOLE.print(table)
+    console_print(table)

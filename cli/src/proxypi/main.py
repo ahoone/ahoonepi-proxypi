@@ -15,7 +15,6 @@ from proxypi.commands.swarm import swarm
 from proxypi.commands.sync import sync
 from proxypi.commands.tests import tests
 from proxypi.commands.venv import venv
-from proxypi.common.core import ExecuteCommandMode
 
 app = Typer()
 
@@ -37,10 +36,10 @@ app.command()(venv)
 @app.callback()
 def main(
     ctx: Context,
-    mode: Annotated[ExecuteCommandMode, Option(help="")] = "hold",
+    verbose: Annotated[bool, Option("--verbose", "-v", help="")] = False,
 ):
     ctx.obj = {}
-    ctx.obj["mode"] = mode
+    ctx.obj["verbose"] = verbose
 
 
 if __name__ == "__main__":

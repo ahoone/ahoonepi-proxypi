@@ -3,7 +3,7 @@ from collections.abc import Awaitable
 from datetime import UTC, datetime
 from ipaddress import IPv4Address
 from shlex import quote
-from typing import Literal, TypeVar
+from typing import TypeVar
 
 from pydantic import FilePath
 
@@ -18,9 +18,6 @@ from proxypi.common.types import (
 )
 
 T = TypeVar("T")
-
-
-ExecuteCommandMode = Literal["hold", "flush"]
 
 
 async def host_has_sudo() -> bool:
@@ -49,7 +46,7 @@ async def execute_command(
     *,
     target: TTarget = None,
     timeout: float | None = None,
-    mode: ExecuteCommandMode = "hold",
+    flush_stdout: bool = False,
     capture_stdout: bool = True,
     raise_exit_code: bool = True,
     force_tty_remote: bool = True,
@@ -67,7 +64,7 @@ async def execute_command(
         bash_command (str): To give as ready to use, the function encapsulates in `bash -lc '...'`.
         target (TTarget): If None, runs on the host (default: None).
         timeout (float | None): If None, runs without timeout. Given in seconds (default: None).
-        mode (ExecuteCommandMode): If `hold`: does not stream the output. If `flush`: stream the output to stdout (default: "hold").
+        flush_stdout (bool): If set to `True`, will stream the command output to stdout (default: True).
         raise_exit_code (bool): If set to `True`, will raise an error if the command exit with a non zero code (default: True).
         force_tty_remote (bool): Force the proxies to use enhance logs, but may fail for some program (see `proxypi.dependencies.uv`) (default: True).
         lighthouse_private_key_path (FilePath): Description, optional (default: config.lighthouse_private_key_path).
@@ -154,21 +151,7 @@ async def execute_command(
     end_beacon: datetime
 
     try:
-        if mode == "hold":
-            if capture_stdout:
-                command_stdout, command_stderr = await wait_for(proc.communicate())
-                end_beacon = datetime.now(UTC)
-
-                command_stdout = command_stdout.decode()
-                command_stderr = command_stderr.decode()
-            else:
-                _ = await wait_for(proc.wait())
-                end_beacon = datetime.now(UTC)
-
-                command_stdout = ""
-                command_stderr = ""
-
-        elif mode == "flush":
+        if flush_stdout:
             tag = str(target) if target is not None else "localhost"
 
             if capture_stdout:
@@ -197,6 +180,20 @@ async def execute_command(
                     )
                 )
 
+                end_beacon = datetime.now(UTC)
+
+                command_stdout = ""
+                command_stderr = ""
+
+        else:
+            if capture_stdout:
+                command_stdout, command_stderr = await wait_for(proc.communicate())
+                end_beacon = datetime.now(UTC)
+
+                command_stdout = command_stdout.decode()
+                command_stderr = command_stderr.decode()
+            else:
+                _ = await wait_for(proc.wait())
                 end_beacon = datetime.now(UTC)
 
                 command_stdout = ""

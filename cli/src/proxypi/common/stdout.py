@@ -32,9 +32,13 @@ def drop_terminal_holder() -> None:
     TERMINAL_HOLDER = None
 
 
-async def console_print(*args: Any, **kwargs: Any) -> None:
+def console_print(*args: Any, **kwargs: Any) -> None:
+    console_print(*args, **kwargs)
+
+
+async def async_console_print(*args: Any, **kwargs: Any) -> None:
     async with TERMINAL_LOCK:
-        CONSOLE.print(*args, **kwargs)
+        console_print(*args, **kwargs)
 
 
 async def console_stream(
@@ -47,7 +51,7 @@ async def console_stream(
         if line == b"":
             continue
         decoded_line = line.decode(errors="replace")
-        await console_print(f"[bold cyan]{tag: <15}[/] | {decoded_line}")
+        await async_console_print(f"[bold cyan]{tag: <15}[/] | {decoded_line}")
         if duplicata is not None:
             duplicata.append(decoded_line)
 
