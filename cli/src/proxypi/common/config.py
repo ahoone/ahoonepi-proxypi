@@ -4,8 +4,14 @@ from typing import override
 
 from pydantic import computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from typer import Context
 
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
+# CONFIG_FILEPATH = Path("/etc") / PROJECT_ROOT.name / "config.env"
+CONFIG_FILEPATH = PROJECT_ROOT / "config.env"
+
+print(PROJECT_ROOT.name)
+print(CONFIG_FILEPATH)
 
 
 class Config(BaseSettings):
@@ -22,7 +28,7 @@ class Config(BaseSettings):
 
     model_config = SettingsConfigDict(
         extra="ignore",
-        env_file=PROJECT_ROOT / "config.env",
+        env_file=CONFIG_FILEPATH,
         env_file_encoding="utf-8",
     )
 
@@ -47,4 +53,4 @@ class Config(BaseSettings):
         return "\n".join(f"{k}={v}" for k, v in self.model_dump().items())
 
 
-config = Config()
+config = Config()  # pyright: ignore[reportCallIssue]

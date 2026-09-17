@@ -33,7 +33,7 @@ def drop_terminal_holder() -> None:
 
 
 def console_print(*args: Any, **kwargs: Any) -> None:
-    console_print(*args, **kwargs)
+    CONSOLE.print(*args, **kwargs)
 
 
 async def async_console_print(*args: Any, **kwargs: Any) -> None:

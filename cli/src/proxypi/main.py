@@ -37,6 +37,15 @@ app.command()(venv)
 def main(
     ctx: Context,
     verbose: Annotated[bool, Option("--verbose", "-v", help="")] = False,
+    relative_path: Annotated[
+        bool,
+        Option(
+            "--relative-path",
+            help="Used to indicate the cli is launched from the project root, "
+            + "and not as an stand alone package. "
+            + "Intended to be used in development.",
+        ),
+    ] = False,
 ):
     ctx.obj = {}
     ctx.obj["verbose"] = verbose
