@@ -1,4 +1,4 @@
-from ipaddress import IPv4Network
+from ipaddress import IPv4Address, IPv4Network
 from pathlib import Path
 from typing import override
 
@@ -47,6 +47,11 @@ class Config(BaseSettings):
     @property
     def network_size(self) -> int:
         return self.wireguard_network.num_addresses - 2
+
+    @computed_field
+    @property
+    def vpn_lighthouse_address(self) -> IPv4Address:
+        return self.wireguard_network.network_address + 1
 
     @override
     def __str__(self) -> str:
