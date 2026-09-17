@@ -44,6 +44,12 @@ def main(
             help="Used to indicate the cli is launched from the project root, "
             + "and not as an stand alone package. "
             + "Intended to be used in development.",
+    verbose: Annotated[
+        bool,
+        Option(
+            "--verbose",
+            "-v",
+            help="Enables the live streaming of stdout to the terminal, if available.",
         ),
     ] = False,
 ):

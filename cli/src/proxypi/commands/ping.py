@@ -148,7 +148,6 @@ class VPN:
                     bash_command,
                     target=target,
                     timeout=timeout,
-                    mode="hold",
                     raise_exit_code=True,
                 )
             ).stdout
