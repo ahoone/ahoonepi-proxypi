@@ -2,14 +2,16 @@ from ipaddress import IPv4Address, IPv4Network
 from pathlib import Path
 from typing import override
 
-from pydantic import computed_field
+from pydantic import DirectoryPath, computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from typer import Context
+
+PROJECT_ROOT: DirectoryPath
 
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 # CONFIG_FILEPATH = Path("/etc") / PROJECT_ROOT.name / "config.env"
 CONFIG_FILEPATH = PROJECT_ROOT / "config.env"
 
+print(PROJECT_ROOT)
 print(PROJECT_ROOT.name)
 print(CONFIG_FILEPATH)
 

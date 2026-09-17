@@ -1,6 +1,7 @@
 from typing import override
 
-from proxypi.common.types import Dependency, Port
+from proxypi.common.Dependency import Dependency
+from proxypi.common.types import Port
 
 
 class Self(Dependency):
@@ -14,14 +15,12 @@ class Self(Dependency):
     async def _get_installed_version(target: Port | None) -> tuple[int, ...]:
         return ()
 
-    @staticmethod
     @override
-    async def _install(target: Port | None) -> bool:
+    async def _install(self, target: Port | None) -> bool:
         return True
 
-    @staticmethod
     @override
-    async def _upgrade(target: Port | None) -> bool:
+    async def _upgrade(self, target: Port | None) -> bool:
         return True
 
 

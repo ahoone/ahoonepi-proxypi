@@ -1,7 +1,8 @@
 from typing import override
 
 from proxypi.common.core import execute_command
-from proxypi.common.types import Dependency, ExitCodeError, Port
+from proxypi.common.Dependency import Dependency
+from proxypi.common.types import ExitCodeError, Port
 
 
 class SystemLib(Dependency):
@@ -15,18 +16,14 @@ class SystemLib(Dependency):
     async def _get_installed_version(target: Port | None) -> tuple[int, ...]:
         return ()
 
-    @staticmethod
     @override
-    async def _install(target: Port | None) -> bool:
+    async def _install(self, target: Port | None) -> bool:
         return True
 
-    @staticmethod
     @override
-    async def _upgrade(target: Port | None) -> bool:
+    async def _upgrade(self, target: Port | None) -> bool:
         try:
-            _ = await execute_command(
-                "sudo apt-get update", target=target, raise_exit_code=True
-            )
+            await self._apt_update(target)
             _ = await execute_command(
                 "sudo apt-get upgrade -y", target=target, raise_exit_code=True
             )

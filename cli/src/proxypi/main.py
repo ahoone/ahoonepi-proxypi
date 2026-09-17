@@ -36,14 +36,6 @@ app.command()(venv)
 @app.callback()
 def main(
     ctx: Context,
-    verbose: Annotated[bool, Option("--verbose", "-v", help="")] = False,
-    relative_path: Annotated[
-        bool,
-        Option(
-            "--relative-path",
-            help="Used to indicate the cli is launched from the project root, "
-            + "and not as an stand alone package. "
-            + "Intended to be used in development.",
     verbose: Annotated[
         bool,
         Option(

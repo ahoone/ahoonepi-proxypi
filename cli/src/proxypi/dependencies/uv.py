@@ -3,7 +3,8 @@ from typing import override
 import httpx
 
 from proxypi.common.core import execute_command
-from proxypi.common.types import Dependency, ExitCodeError, Port
+from proxypi.common.Dependency import Dependency
+from proxypi.common.types import ExitCodeError, Port
 
 INSTALL_URL: str = "https://releases.astral.sh/installers/uv/latest/uv-installer.sh"
 MIN_VERSION: tuple[int, ...] = (0, 12, 7)  # The version with which this was written
@@ -13,11 +14,17 @@ class UV(Dependency):
     @staticmethod
     @override
     async def _is_installed(target: Port | None) -> bool:
-        response = await execute_command(
-            "uv", target=target, capture_stdout=True, raise_exit_code=False
-        )
+        try:
+            response = await execute_command(
+                "uv",
+                target=target,
+                capture_stdout=True,
+                raise_exit_code=True,
+            )
 
-        return response.stdout == ""
+            return response.stdout == ""
+        except ExitCodeError:
+            return False
 
     @staticmethod
     @override
@@ -27,9 +34,8 @@ class UV(Dependency):
         )
         return tuple(int(x) for x in response.stdout.split()[1].split("."))
 
-    @staticmethod
     @override
-    async def _install(target: Port | None, *, url: str = INSTALL_URL) -> bool:
+    async def _install(self, target: Port | None, *, url: str = INSTALL_URL) -> bool:
         """
         it creates one client per request, that's bad. Should have one for the entire CLI
         """
@@ -49,9 +55,8 @@ class UV(Dependency):
         except ExitCodeError:
             return False
 
-    @staticmethod
     @override
-    async def _upgrade(target: Port | None) -> bool:
+    async def _upgrade(self, target: Port | None) -> bool:
         try:
             _ = await execute_command(
                 "uv self update",

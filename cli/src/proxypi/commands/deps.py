@@ -6,25 +6,21 @@ from pydantic import BaseModel, create_model
 from typer import Argument, Context, Option
 
 from proxypi.common.config import config
+from proxypi.common.Dependency import Dependency, DependencyMode, DependencyModeResponse
 from proxypi.common.listen import listen_proxy_ids
 from proxypi.common.options import NodeIDOption
 from proxypi.common.stdout import console_print
-from proxypi.common.types import (
-    Dependency,
-    DependencyMode,
-    DependencyModeResponse,
-    NodeID,
-    Port,
-    node_id_to_port,
-)
+from proxypi.common.types import NodeID, Port, node_id_to_port
 from proxypi.common.utils import gather_with_progress, to_table
 from proxypi.dependencies.self import self
 from proxypi.dependencies.system_lib import system_lib
 from proxypi.dependencies.uv import uv
+from proxypi.dependencies.wireguard_tools import wireguard_tools
 
 DEPENDENCIES: list[Dependency] = [
     system_lib,
     uv,
+    wireguard_tools,
     self,
 ]
 

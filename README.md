@@ -25,11 +25,13 @@ _Bringing up the stack and firing a scrape request end-to-end, see [Quickstart](
 
 This quickstart let's you host the broker and one scraper on a single device.
 
-Install `uv`:
+### One command install
 
 ```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
+curl -sSL https://raw.githubusercontent.com/ahoone/ahoonepi-proxypi/main/install.sh | bash
 ```
+
+### Copy the repository yourself
 
 Install the `proxypi` CLI through `uv`:
 
