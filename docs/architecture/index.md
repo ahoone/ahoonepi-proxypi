@@ -36,10 +36,12 @@ There are 4 users to consider on the lighthouse:
 - `LIGTHOUSE_SERVICE_USER`, which only purpose is to own the the lighthouse' private keys and make them accessible to the user without `sudo`,
 - the running user, that uses the CLI...
 
-The permissions to consider:
+The files' permissions to consider on the **host**:
 
 - the CLI is installed through `uv` to `~/.local/share/uv/tools/ahoonepi-proxypi`,
 - the repository is installed to `/opt/ahoonepi-proxypi` and is owned by `root`,
 - the config files are saved in `/etc/ahoonepi-proxypi`,
-- the proxies' public keys in `~/.ssh` of the `LIGHTHOUSE_SERVICE_USER`,
-- the lighthouse's private keys in `/var/lib/ahoonepi-proxypi` and is owned by `LIGHTHOUSE_SERVICE_USER`.
+- the proxies' SSH public keys in `~/.ssh` of the `LIGHTHOUSE_SERVICE_USER`,
+- the lighthouse's SSH private keys in `/var/lib/ahoonepi-proxypi` and is owned by `LIGHTHOUSE_SERVICE_USER`,
+- the proxies' WireGuard public keys in `/etc/wireguard`,
+- the lighthouse WireGuard private key in `/etc/wireguard`.

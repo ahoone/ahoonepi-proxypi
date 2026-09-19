@@ -9,8 +9,6 @@ source "$SCRIPT_DIR/proxypi/ui.sh"
 
 set -euo pipefail
 
-sudo apt-get install wireguard wireguard-tools
-
 if sudo test -f /etc/wireguard/private.key; then
     echo Private key already exists!
 else
