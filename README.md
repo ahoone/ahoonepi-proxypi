@@ -6,6 +6,8 @@
 
 Under the hood it's built on [zendriver](https://github.com/cdpdriver/zendriver) (the actively maintained continuation of [nodriver](https://github.com/ultrafunkamsterdam/nodriver)), so each request runs through a real, persistent, undetected browser instance rather than a bare HTTP client. Jobs are load-balanced across the fleet and tracked for Cloudflare/anti-bot artifacts so blocked nodes back off automatically.
 
+`ahoonepi-proxypi` is designed to keep control on hardware that you don't necesseraly can't physically access. On the opposite of `Ansible`, this software needs to be **initiated** on proxies, but then it does not require any deamon running there. The only things `ahoonepi-proxypi` is providing is a **standard** way of using SSH reverse tunnel and `WireGuard` connections. Then, the CLI provides basic utilities.
+
 ## Why
 
 |           | Residential proxy API        | ahoonepi-proxypi                           |
@@ -28,7 +30,7 @@ This quickstart let's you host the broker and one scraper on a single device.
 ### One command install
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/ahoone/ahoonepi-proxypi/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/ahoone/ahoonepi-proxypi/main/install.sh | bash
 ```
 
 ### Copy the repository yourself
