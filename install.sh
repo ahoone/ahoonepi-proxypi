@@ -43,13 +43,13 @@ preflight
 ####################################################################################################
 
 
+# https://gist.github.com/JBlond/2fea43a3049b38287e5e9cefc87b2124
 CLEAR='\e[0m'
 COL_YELLOW='\e[0;33m'
 COL_BOLD_RED='\e[1;31m'
 COL_BOLD_GREEN='\e[1;32m'
 TICK="[${COL_BOLD_GREEN}✓${CLEAR}]"
 CROSS="[${COL_BOLD_RED}✗${CLEAR}]"
-INFO="[i]"
 
 
 ####################################################################################################
@@ -59,13 +59,13 @@ SCRIPT_PATH="${BASH_SOURCE[0]:-}"  # empty when piped, real path when run from a
 
 takeoff() {
     if [[ "${EUID}" -eq 0 ]]; then
-        printf "  %b Starting the installation...\n" "${INFO}"
+        printf "  [i] Starting the installation...\n"
         return
     elif ! command -v sudo >/dev/null 2>&1; then
-        printf "  %b %bCommand sudo does not exist%b\n" "${INFO}" "${COL_BOLD_RED}" "${CLEAR}"
+        printf "  [i] %bCommand sudo does not exist%b\n" "${COL_BOLD_RED}" "${CLEAR}"
         printf "      The installer can not elevate its privileges\n"
     elif sudo -v; then
-        printf "  %b Restarting the installer as root...\n" "${INFO}"
+        printf "  [i]  Restarting the installer as root...\n"
         if [[ -f "$SCRIPT_PATH" ]]; then
             exec sudo env PROXYPI_BRANCH="$BRANCH" bash "$SCRIPT_PATH"
         else
@@ -73,7 +73,7 @@ takeoff() {
             exit $?
         fi
     else
-        printf "  %b %bScript called with non-root privileges%b\n" "${INFO}" "${COL_BOLD_RED}" "${CLEAR}"
+        printf "  [i] %bScript called with non-root privileges%b\n" "${COL_BOLD_RED}" "${CLEAR}"
         printf "      %bahoonepi-proxypi%b requires elevated privileges to be installed\n" "${COL_BOLD_RED}" "${CLEAR}"
         printf "      Please check the installer for any concerns regarding this requirement\n"
         printf "      Make sure to download this script from a trusted source\n"
@@ -87,10 +87,30 @@ takeoff
 ####################################################################################################
 ####################################################################################################
 
+# PROCEEDS TO ADD THE CURRENT USER TO PROXYPI_OPERATORS GROUP ?
+landing() {
+    if [[ "${EUID}" -ne 0 ]]; then
+        printf "  [i] Starting the installation...\n"
+        return
+}
+
+landing
+
+####################################################################################################
+####################################################################################################
 
 
-# THIS SCRIPTS SHOULD BE RUN AS ROOT
+# Creates users (but those depends on the role):
+#   LIGHTHOUSE: dummy_user, service_user
+#   PROXY: proxypi_user (admin)
+#
+# maybe I could use the dummy user on both sides to maintain the ssh tunnel
+# and using ssh connect points to the service_user
+
+# makes the installations
+
 # THEN THE POST-INSTALL SCRIPT WILL RUN AS NON-ROOT
+# if the user user is non-root
 
 
 check_group_exists() {
